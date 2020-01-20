@@ -15,3 +15,10 @@ Note: For the following Installation steps please ensure pip is run with adminis
     python -m pip install kivy.deps.angle
     python -m pip install kivy
     ```
+
+### Server
+1. Flask installation
+    ```
+    python -m pip install flask
+    ```
+             
