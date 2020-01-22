@@ -1,0 +1,15 @@
+<MyScreenManager>:
+    SimpleScreen:
+
+<SimpleScreen>:
+    status_label: status_label
+    BoxLayout:
+        orientation: "vertical"
+        padding: 20
+        Label:
+            id: status_label
+            text: "NULL"
+        Button:
+            id: btn_heartbeat
+            text: "Check Heartbeat"
+            on_press: root.heartbeat_request()
