@@ -1,0 +1,55 @@
+<ProjectCard@BoxLayout>:
+    orientation: "vertical"
+    spacing: 16
+    BoxLayout:
+        canvas:
+            Color:
+                rgba: 1, 0, 0, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Label:
+            text: "IMAGE"
+
+    BoxLayout:
+        size_hint: (1, 0.35)
+        canvas:
+            Color:
+                rgba: 1, 0, 0, 1
+            Rectangle:
+                pos: self.pos
+                size: self.size
+        Label:
+
+            text: "NAME"
+
+<ProjectViewWindow@GridLayout>:
+    col_default_width: 150
+    col_force_default: True
+    row_default_height: 200
+    row_force_default: True
+
+    spacing: (16, 16)
+    padding: (16, 16, 16, 16)
+    cols: int((self.width - self.padding[0]) / (150 + self.spacing[0]))
+
+<ProjectScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        ActionBar:
+            pos_hint: {'top':1}
+            ActionView:
+                use_separator: True
+                ActionPrevious:
+                    title: 'Example App'
+                    with_previous: False
+        ProjectViewWindow:
+            ProjectCard:
+            ProjectCard:
+            ProjectCard:
+            ProjectCard:
+            ProjectCard:
+            ProjectCard:
+            ProjectCard:
+            ProjectCard:
+            ProjectCard:
