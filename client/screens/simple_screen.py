@@ -18,7 +18,7 @@ class SimpleScreen(Screen):
     status_label = ObjectProperty(None)
 
     def heartbeat_request(self, *args):
-        UrlRequest(ClientConfig.SERVER_URL, self.handle_heartbeat)
+        UrlRequest(ClientConfig.SERVER_URL + "heartbeat", self.handle_heartbeat)
 
     def handle_heartbeat(self, req, result):
         self.status_label.text = str("Last Heartbeat: " + str(result))
