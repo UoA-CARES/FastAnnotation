@@ -6,7 +6,8 @@ from flask_negotiate import produces, consumes
 from datetime import datetime
 from server.server_config import ServerConfig
 from database.database import Database
-from mysql.connector.errors import IntegrityError
+from mysql.connector.errors import DatabaseError
+from mysql.connector.errors import ProgrammingError
 
 app = Flask(__name__)
 
@@ -22,7 +23,7 @@ def heartbeat():
 @app.route("/project", methods=['GET'])
 @produces('application/json')
 def get_projects():
-    results = fadb.query("SELECT project_id from project")
+    results = fadb.query("SELECT project_id FROM project")
     results = [x[0] for x in results]
     results = {'ids': results}
     # Return all Project ids
@@ -32,7 +33,7 @@ def get_projects():
 @app.route("/project/<int:id>", methods=['GET'])
 @produces('application/json')
 def get_project(id):
-    query = "SELECT * from project "
+    query = "SELECT * FROM project "
     query += "WHERE project_id = %s"
     results = fadb.query(query, (id,))
     return jsonify(fadb.rows_to_json('project', results))
@@ -58,10 +59,10 @@ def add_project():
             fadb.query(query, tuple(item.values()))
             id = fadb.get_last_row_id()
             success_ids.append(id)
-        except IntegrityError as e:
+        except DatabaseError as e:
             error_msgs.append(
                 {"request": item, "err_code": e.errno, "err_msg": e.msg})
-        except BaseException:
+        except BaseException as e:
             error_msgs.append(
                 {"request": item, "err_code": 500, "err_msg": "Unknown Server Fault."})
 
@@ -75,6 +76,21 @@ def add_project():
         response = jsonify({"Created Ids": success_ids,
                             "Bad Requests": error_msgs})
         response.status_code = 201
+
+    return response
+
+
+@app.route("/project/<int:id>", methods=['DELETE'])
+def del_project(id):
+    query = "DELETE FROM project WHERE project_id = %s"
+    try:
+        fadb.query(query, (id,))
+    except DatabaseError as e:
+        response = jsonify({"err_code": e.errno, "err_msg": e.msg})
+        response.status_code = 400
+    else:
+        response = jsonify(success=True)
+        response.status_code = 200
 
     return response
 
