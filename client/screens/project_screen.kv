@@ -1,4 +1,28 @@
-<ProjectCard@BoxLayout>:
+<ControlBar>:
+    orientation: "horizontal"
+    size_hint_y: None
+    width: root.width
+    height: 64
+    padding: (16, 16, 16, 8)
+    spacing: 16
+    Button:
+        size_hint_x: None
+        width: 150
+        text: "Add"
+    Button:
+        size_hint_x: None
+        width: 150
+        text: "Delete"
+    Button:
+        id: btn_refresh_project
+        size_hint_x: None
+        width: 150
+        text: "Refresh"
+        on_press: root.trigger_project_refresh()
+
+<ProjectCard>:
+    title: self.title
+    image: self.image
     orientation: "vertical"
     spacing: 16
     BoxLayout:
@@ -9,7 +33,7 @@
                 pos: self.pos
                 size: self.size
         Label:
-            text: "IMAGE"
+            text: root.image
 
     BoxLayout:
         size_hint: (1, 0.35)
@@ -21,19 +45,21 @@
                 size: self.size
         Label:
 
-            text: "NAME"
+            text: root.title
 
-<ProjectViewWindow@GridLayout>:
+<ProjectViewWindow>:
     col_default_width: 150
     col_force_default: True
     row_default_height: 200
     row_force_default: True
 
-    spacing: (16, 16)
-    padding: (16, 16, 16, 16)
+    spacing: 16
+    padding: (16, 8, 16, 16)
     cols: int((self.width - self.padding[0]) / (150 + self.spacing[0]))
 
 <ProjectScreen>:
+    control_bar: control_bar
+    project_view_window: project_view_window
     BoxLayout:
         orientation: "vertical"
         ActionBar:
@@ -43,13 +69,7 @@
                 ActionPrevious:
                     title: 'Example App'
                     with_previous: False
+        ControlBar:
+            id: control_bar
         ProjectViewWindow:
-            ProjectCard:
-            ProjectCard:
-            ProjectCard:
-            ProjectCard:
-            ProjectCard:
-            ProjectCard:
-            ProjectCard:
-            ProjectCard:
-            ProjectCard:
+            id: project_view_window

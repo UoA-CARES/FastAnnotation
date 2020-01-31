@@ -20,17 +20,14 @@ def heartbeat():
     return jsonify(response)
 
 
-@app.route("/project", methods=['GET'])
+@app.route("/projects", methods=['GET'])
 @produces('application/json')
 def get_projects():
-    results = fadb.query("SELECT project_id FROM project")
-    results = [x[0] for x in results]
-    results = {'ids': results}
-    # Return all Project ids
-    return jsonify(results)
+    results = fadb.query("SELECT * FROM project")
+    return jsonify(fadb.rows_to_json('project', results))
 
 
-@app.route("/project/<int:id>", methods=['GET'])
+@app.route("/projects/<int:id>", methods=['GET'])
 @produces('application/json')
 def get_project(id):
     query = "SELECT * FROM project "
@@ -39,7 +36,7 @@ def get_project(id):
     return jsonify(fadb.rows_to_json('project', results))
 
 
-@app.route("/project", methods=['POST'])
+@app.route("/projects", methods=['POST'])
 @consumes('application/json')
 def add_project():
     content = request.get_json()
@@ -80,7 +77,7 @@ def add_project():
     return response
 
 
-@app.route("/project/<int:id>", methods=['DELETE'])
+@app.route("/projects/<int:id>", methods=['DELETE'])
 def del_project(id):
     query = "DELETE FROM project WHERE project_id = %s"
     try:

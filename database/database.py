@@ -79,7 +79,7 @@ class Database:
                        for x in self.query(query, (self.config.DATABASE_NAME,))]
         for name in table_names:
             query = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
-            query += "WHERE TABLE_NAME = \"%s\" "
+            query += "WHERE TABLE_NAME = %s "
             query += "ORDER BY ORDINAL_POSITION"
             column_names = [x[0] for x in self.query(query, (name,))]
             self.table_types[name] = column_names
