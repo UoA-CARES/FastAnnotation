@@ -9,6 +9,3 @@ CREATE TABLE `fadb`.`project` (
   PRIMARY KEY (`project_id`),
   UNIQUE KEY `project_id_UNIQUE` (`project_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
-INSERT INTO `fadb`.`project` (`project_id`,`project_name`,`last_uploaded`,`unlabeled_count`,`labeled_count`) VALUES (1,'Test','2020-01-23 23:29:38',0,0);
-INSERT INTO `fadb`.`project` (`project_id`,`project_name`,`last_uploaded`,`unlabeled_count`,`labeled_count`) VALUES (2,'Test2','2020-01-23 23:31:12',0,0);
