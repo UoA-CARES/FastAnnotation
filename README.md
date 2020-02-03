@@ -26,6 +26,7 @@ Note: For the following Installation steps please ensure pip is run with adminis
 1. Flask installation
     ```
     python -m pip install flask
+    python -m pip install flask_negotiate
     ```
 
 2. MySql Installation
