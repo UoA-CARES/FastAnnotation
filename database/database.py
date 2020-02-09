@@ -11,9 +11,7 @@ class Database:
             user=self.config.DATABASE_USER,
             passwd=self.config.DATABASE_PASSWORD,
         )
-        self.db_cursor = self.db.cursor()
         self._generate_table_types()
-        self.db_cursor.close()
         self.db.close()
 
         self.db = mysql.connector.connect(
@@ -23,17 +21,21 @@ class Database:
             database=self.config.DATABASE_NAME
         )
         self.db.autocommit = True
-        self.db_cursor = self.db.cursor()
 
-    def get_last_row_id(self):
-        return self.db_cursor.lastrowid
+    def __del__(self):
+        self.db.close()
 
     def query(self, query_string, params=None):
-        self.db_cursor.execute(query_string, params)
+        print("QUERY")
+        cursor = self.db.cursor()
+        cursor.execute(query_string, params)
         try:
-            return self.db_cursor.fetchall()
+            result = cursor.fetchall()
         except InterfaceError:
-            return []
+            result = []
+        id = cursor.lastrowid
+        cursor.close()
+        return result, id
 
     def rows_to_json(self, table_name, rows):
         if table_name not in self.table_types:
@@ -76,11 +78,11 @@ class Database:
         query = "SELECT DISTINCT TABLE_NAME FROM INFORMATION_SCHEMA.COLUMNS "
         query += "WHERE TABLE_SCHEMA = %s"
         table_names = [x[0]
-                       for x in self.query(query, (self.config.DATABASE_NAME,))]
+                       for x in self.query(query, (self.config.DATABASE_NAME,))[0]]
         for name in table_names:
             query = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
             query += "WHERE TABLE_NAME = %s "
             query += "ORDER BY ORDINAL_POSITION"
-            column_names = [x[0] for x in self.query(query, (name,))]
+            column_names = [x[0] for x in self.query(query, (name,))[0]]
             self.table_types[name] = column_names
         return

@@ -23,7 +23,7 @@ def heartbeat():
 @app.route("/projects", methods=['GET'])
 @produces('application/json')
 def get_projects():
-    results = fadb.query("SELECT * FROM project")
+    results = fadb.query("SELECT * FROM project")[0]
     return jsonify(fadb.rows_to_json('project', results))
 
 
@@ -32,7 +32,7 @@ def get_projects():
 def get_project(id):
     query = "SELECT * FROM project "
     query += "WHERE project_id = %s"
-    results = fadb.query(query, (id,))
+    results = fadb.query(query, (id,))[0]
     return jsonify(fadb.rows_to_json('project', results))
 
 
@@ -53,8 +53,7 @@ def add_project():
         query += ",".join(["%s"] * len(item))
         query += ");"
         try:
-            fadb.query(query, tuple(item.values()))
-            id = fadb.get_last_row_id()
+            _, id = fadb.query(query, tuple(item.values()))
             success_ids.append(id)
         except DatabaseError as e:
             error_msgs.append(

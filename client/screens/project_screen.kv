@@ -31,6 +31,34 @@
         id: text_field
         text: root.default_text
 
+<DeleteProjectPopup>:
+    size_hint: None, None
+    size: app.root.width/2, app.root.height/2
+    auto_dismiss: True
+    title: "Delete Project"
+    message: ""
+    confirmation_callback: None
+    BoxLayout:
+        padding: 8
+        spacing: 8
+        orientation: 'vertical'
+        Label:
+            text: root.message
+        AnchorLayout:
+            anchor_x: 'center'
+            anchor_y: 'bottom'
+            BoxLayout:
+                orientation: 'horizontal'
+                padding: 8
+                spacing: 8
+                Button:
+                    size_hint: (0.3, 0.2)
+                    text: 'Delete'
+                    on_release: root.confirmation_callback(); root.dismiss()
+                Button:
+                    size_hint: (0.3, 0.2)
+                    text: 'Cancel'
+                    on_release: root.dismiss()
 
 <AddProjectPopup>:
     size_hint: None, None
@@ -85,11 +113,12 @@
         on_release: root.trigger_project_refresh()
 
 <ProjectCard>:
+    project_name: self.project_name
+    project_id: self.project_id
+    image: self.image
     FloatLayout:
         BoxLayout:
             pos_hint:{"x": 0.00, "y": 0.00}
-            project_name: self.project_name
-            image: self.image
             orientation: "vertical"
             spacing: 16
 
@@ -117,7 +146,7 @@
             pos_hint:{"x": 0.9, "y": 0.9}
             size_hint: (0.1, 0.1)
             text: "X"
-            on_release: root.delete_card()
+            on_release: root.confirm_delete_project()
 
 <ProjectViewWindow>:
     col_default_width: 150
