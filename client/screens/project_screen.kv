@@ -1,5 +1,3 @@
-#from kivy.factory.Factory import Factory
-
 <Alert>:
     size_hint: None, None
     size: app.root.width/3, app.root.height/3
@@ -138,14 +136,14 @@
                 Label:
                     text: root.project_name
             ProgressBar:
-                max: 100
-                value: 50
+                max: root.total_images
+                value: root.labeled_images
                 size_hint: (1, 0.15)
             Label:
                 id: last_update_label
                 size_hint: (1, 0.2)
                 markup: True
-                font_size: "14dp"
+                font_size: "13dp"
                 text: "Updated [b][color=3AD6E7]5 minutes[/color][/b] ago"
 
 
@@ -156,9 +154,9 @@
             on_release: root.confirm_delete_project()
 
 <ProjectViewWindow>:
-    col_default_width: 180
+    col_default_width: 150
     col_force_default: True
-    row_default_height: 250
+    row_default_height: 200
     row_force_default: True
 
     spacing: 16
@@ -175,7 +173,7 @@
             ActionView:
                 use_separator: True
                 ActionPrevious:
-                    title: 'Example App'
+                    title: 'Select a Project'
                     with_previous: False
         ControlBar:
             id: control_bar
