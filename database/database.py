@@ -12,9 +12,10 @@ class Database:
             'host': self.config.DATABASE_HOST,
             'user': self.config.DATABASE_USER,
             'password': self.config.DATABASE_PASSWORD,
-            'autocommit': True
+            'autocommit': True,
+            'time_zone': self.config.DATABASE_TIMEZONE
         }
-        
+
         self.db_pool = mysql.connector.pooling.MySQLConnectionPool(
             pool_name="db_pool", pool_size=self.config.DATABASE_POOL_SIZE, **self.db_config)
         self._generate_table_types()

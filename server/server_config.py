@@ -4,3 +4,5 @@ class ServerConfig:
     DATABASE_PASSWORD = "root"
     DATABASE_NAME = "fadb"
     DATABASE_POOL_SIZE = 5
+
+    DATABASE_TIMEZONE = '+00:00'

@@ -1,15 +1,30 @@
 from flask import Flask
 from flask import jsonify
 from flask import request
-from flask import abort
 from flask_negotiate import produces, consumes
 from datetime import datetime
 from server.server_config import ServerConfig
 from database.database import Database
 from mysql.connector.errors import DatabaseError
-from mysql.connector.errors import ProgrammingError
+from flask.json import JSONEncoder
+from datetime import date
+
+
+class CustomJSONEncoder(JSONEncoder):
+    def default(self, obj):
+        try:
+            if isinstance(obj, date):
+                return datetime.timestamp(obj)
+            iterable = iter(obj)
+        except TypeError:
+            pass
+        else:
+            return list(iterable)
+        return JSONEncoder.default(self, obj)
+
 
 app = Flask(__name__)
+app.json_encoder = CustomJSONEncoder
 
 fadb = Database(ServerConfig())
 
