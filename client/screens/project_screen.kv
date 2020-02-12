@@ -1,0 +1,176 @@
+#from kivy.factory.Factory import Factory
+
+<Alert>:
+    size_hint: None, None
+    size: app.root.width/3, app.root.height/3
+    auto_dismiss: True
+    alert_message: ''
+    alert_title: ''
+    BoxLayout:
+        orientation: 'vertical'
+        Label:
+            text: root.alert_message
+            text_size: self.size
+        AnchorLayout:
+            anchor_x: 'center'
+            anchor_y: 'bottom'
+            Button:
+                size_hint: (0.3, 0.2)
+                text: 'Ok'
+                on_release: root.dismiss()
+
+
+<LabelInput@BoxLayout>:
+    orientation: 'horizontal'
+    default_text: 'default'
+    label_text: 'default label'
+    text_field: text_field
+    Label:
+        text: root.label_text
+    TextInput:
+        id: text_field
+        text: root.default_text
+
+<DeleteProjectPopup>:
+    size_hint: None, None
+    size: app.root.width/2, app.root.height/2
+    auto_dismiss: True
+    title: "Delete Project"
+    message: ""
+    confirmation_callback: None
+    BoxLayout:
+        padding: 8
+        spacing: 8
+        orientation: 'vertical'
+        Label:
+            text: root.message
+        AnchorLayout:
+            anchor_x: 'center'
+            anchor_y: 'bottom'
+            BoxLayout:
+                orientation: 'horizontal'
+                padding: 8
+                spacing: 8
+                Button:
+                    size_hint: (0.3, 0.2)
+                    text: 'Delete'
+                    on_release: root.confirmation_callback(); root.dismiss()
+                Button:
+                    size_hint: (0.3, 0.2)
+                    text: 'Cancel'
+                    on_release: root.dismiss()
+
+<AddProjectPopup>:
+    size_hint: None, None
+    size: app.root.width/2, app.root.height/2
+    auto_dismiss: False
+    title: "Add New Project"
+    BoxLayout:
+        padding: 8
+        spacing: 8
+        orientation: 'vertical'
+        LabelInput:
+            id: project_name
+            size_hint_y: 0.2
+            label_text: "Project Name"
+        AnchorLayout:
+            anchor_x: 'center'
+            anchor_y: 'bottom'
+            BoxLayout:
+                orientation: 'horizontal'
+                padding: 8
+                spacing: 8
+                Button:
+                    size_hint: (0.3, 0.2)
+                    text: 'Add'
+                    on_release: root.add_project(project_name=project_name.text_field.text)
+                Button:
+                    size_hint: (0.3, 0.2)
+                    text: 'Cancel'
+                    on_release: root.dismiss()
+
+<ControlBar>:
+    orientation: "horizontal"
+    size_hint_y: None
+    width: root.width
+    height: 64
+    padding: (16, 16, 16, 8)
+    spacing: 16
+    Button:
+        size_hint_x: None
+        width: 150
+        text: "Add"
+        on_release: root.open_add_project_popup()
+    Button:
+        size_hint_x: None
+        width: 150
+        text: "Delete"
+    Button:
+        id: btn_refresh_project
+        size_hint_x: None
+        width: 150
+        text: "Refresh"
+        on_release: root.trigger_project_refresh()
+
+<ProjectCard>:
+    project_name: self.project_name
+    project_id: self.project_id
+    image: self.image
+    FloatLayout:
+        BoxLayout:
+            pos_hint:{"x": 0.00, "y": 0.00}
+            orientation: "vertical"
+            spacing: 16
+
+            BoxLayout:
+                canvas:
+                    Color:
+                        rgba: 1, 0, 0, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+                Label:
+                    text: root.image
+
+            BoxLayout:
+                size_hint: (1, 0.35)
+                canvas:
+                    Color:
+                        rgba: 1, 0, 0, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+                Label:
+                    text: root.project_name
+        Button:
+            pos_hint:{"x": 0.9, "y": 0.9}
+            size_hint: (0.1, 0.1)
+            text: "X"
+            on_release: root.confirm_delete_project()
+
+<ProjectViewWindow>:
+    col_default_width: 150
+    col_force_default: True
+    row_default_height: 200
+    row_force_default: True
+
+    spacing: 16
+    padding: (16, 8, 16, 16)
+    cols: int((self.width - self.padding[0]) / (150 + self.spacing[0]))
+
+<ProjectScreen>:
+    control_bar: control_bar
+    project_view_window: project_view_window
+    BoxLayout:
+        orientation: "vertical"
+        ActionBar:
+            pos_hint: {'top':1}
+            ActionView:
+                use_separator: True
+                ActionPrevious:
+                    title: 'Example App'
+                    with_previous: False
+        ControlBar:
+            id: control_bar
+        ProjectViewWindow:
+            id: project_view_window

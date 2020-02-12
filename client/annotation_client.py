@@ -1,7 +1,7 @@
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager
 
-from client.screens.simple_screen import SimpleScreen
+from client.screens.project_screen import ProjectScreen
 
 
 class MyScreenManager(ScreenManager):
@@ -12,10 +12,10 @@ class MyScreenManager(ScreenManager):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.add_widget(SimpleScreen())
+        self.add_widget(ProjectScreen())
 
 
-class SimpleClientApp(App):
+class AnnotationClientApp(App):
     """
     The launch point for the application itself.
     """
@@ -25,4 +25,4 @@ class SimpleClientApp(App):
 
 
 if __name__ == "__main__":
-    SimpleClientApp().run()
+    AnnotationClientApp().run()
