@@ -6,11 +6,9 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.popup import Popup
 from kivy.uix.screenmanager import Screen
-from kivy.clock import Clock
 from kivy.properties import ObjectProperty, StringProperty, NumericProperty
 from kivy.network.urlrequest import UrlRequest
 from datetime import datetime
-
 from client.client_config import ClientConfig
 from client.definitions import SCREEN_DIR
 import client.utils as utils

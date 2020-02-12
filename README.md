@@ -27,6 +27,10 @@ Note: For the following Installation steps please ensure pip is run with adminis
     ```
     python -m pip install flask
     python -m pip install flask_negotiate
+<<<<<<< HEAD
+=======
+    python -m pip install mysql-connector-python
+>>>>>>> develop
     ```
 
 2. MySql Installation

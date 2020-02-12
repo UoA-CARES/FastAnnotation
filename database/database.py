@@ -1,13 +1,12 @@
-import mysql.connector
-from mysql.connector import pooling
 from mysql.connector.errors import InterfaceError
+from mysql.connector import pooling
+import mysql.connector
 
 
 class Database:
     def __init__(self, config):
         self.table_types = {}
         self.config = config
-
         self.db_config = {
             'host': self.config.DATABASE_HOST,
             'user': self.config.DATABASE_USER,
