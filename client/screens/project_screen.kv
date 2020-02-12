@@ -1,5 +1,3 @@
-#from kivy.factory.Factory import Factory
-
 <Alert>:
     size_hint: None, None
     size: app.root.width/3, app.root.height/3
@@ -102,10 +100,6 @@
         text: "Add"
         on_release: root.open_add_project_popup()
     Button:
-        size_hint_x: None
-        width: 150
-        text: "Delete"
-    Button:
         id: btn_refresh_project
         size_hint_x: None
         width: 150
@@ -116,32 +110,37 @@
     project_name: self.project_name
     project_id: self.project_id
     image: self.image
+    total_images: self.total_images
+    labeled_images: self.labeled_images
+    last_update_time: self.last_update_time
+    last_update_label: last_update_label
     FloatLayout:
         BoxLayout:
             pos_hint:{"x": 0.00, "y": 0.00}
             orientation: "vertical"
-            spacing: 16
-
+            canvas:
+                Color:
+                    rgba: 1, 0, 0, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
             BoxLayout:
-                canvas:
-                    Color:
-                        rgba: 1, 0, 0, 1
-                    Rectangle:
-                        pos: self.pos
-                        size: self.size
                 Label:
                     text: root.image
-
             BoxLayout:
-                size_hint: (1, 0.35)
-                canvas:
-                    Color:
-                        rgba: 1, 0, 0, 1
-                    Rectangle:
-                        pos: self.pos
-                        size: self.size
+                size_hint: (1, 0.3)
                 Label:
                     text: root.project_name
+            ProgressBar:
+                max: root.total_images
+                value: root.labeled_images
+                size_hint: (1, 0.15)
+            Label:
+                id: last_update_label
+                size_hint: (1, 0.2)
+                markup: True
+                font_size: "13dp"
+                text: "Updated [b][color=3AD6E7]5 minutes[/color][/b] ago"
         Button:
             pos_hint:{"x": 0.9, "y": 0.9}
             size_hint: (0.1, 0.1)
@@ -156,7 +155,7 @@
 
     spacing: 16
     padding: (16, 8, 16, 16)
-    cols: int((self.width - self.padding[0]) / (150 + self.spacing[0]))
+    cols: int((self.width - self.padding[0]) / (self.col_default_width + self.spacing[0]))
 
 <ProjectScreen>:
     control_bar: control_bar
@@ -168,7 +167,7 @@
             ActionView:
                 use_separator: True
                 ActionPrevious:
-                    title: 'Example App'
+                    title: 'Select a Project'
                     with_previous: False
         ControlBar:
             id: control_bar
