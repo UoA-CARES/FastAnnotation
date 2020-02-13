@@ -1,22 +1,16 @@
-import os
 import json
-from kivy.lang import Builder
-from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.popup import Popup
-from kivy.uix.screenmanager import Screen
-from kivy.properties import ObjectProperty, StringProperty, NumericProperty
-from kivy.network.urlrequest import UrlRequest
 from datetime import datetime
-from client.client_config import ClientConfig
-from client.definitions import SCREEN_DIR
-import client.utils as utils
 
+from kivy.app import App
+from kivy.network.urlrequest import UrlRequest
+from kivy.uix.screenmanager import Screen
+
+import client.utils as utils
+from client.client_config import ClientConfig
 from client.screens.common import *
 
 # Load corresponding kivy file
-Builder.load_file(os.path.join(SCREEN_DIR, 'project_screen.kv'))
+Builder.load_file(os.path.join(SCREEN_DIR, 'project_select_screen.kv'))
 
 
 class DeleteProjectPopup(Popup):

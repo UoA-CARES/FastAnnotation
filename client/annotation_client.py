@@ -1,7 +1,7 @@
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager
 
-from client.screens.project_screen import ProjectScreen
+from client.screens.project_select_screen import ProjectScreen
 
 
 class MyScreenManager(ScreenManager):
