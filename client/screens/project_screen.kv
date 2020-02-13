@@ -1,34 +1,3 @@
-<Alert>:
-    size_hint: None, None
-    size: app.root.width/3, app.root.height/3
-    auto_dismiss: True
-    alert_message: ''
-    alert_title: ''
-    BoxLayout:
-        orientation: 'vertical'
-        Label:
-            text: root.alert_message
-            text_size: self.size
-        AnchorLayout:
-            anchor_x: 'center'
-            anchor_y: 'bottom'
-            Button:
-                size_hint: (0.3, 0.2)
-                text: 'Ok'
-                on_release: root.dismiss()
-
-
-<LabelInput@BoxLayout>:
-    orientation: 'horizontal'
-    default_text: 'default'
-    label_text: 'default label'
-    text_field: text_field
-    Label:
-        text: root.label_text
-    TextInput:
-        id: text_field
-        text: root.default_text
-
 <DeleteProjectPopup>:
     size_hint: None, None
     size: app.root.width/2, app.root.height/2
@@ -148,14 +117,9 @@
             on_release: root.confirm_delete_project()
 
 <ProjectViewWindow>:
-    col_default_width: 150
-    col_force_default: True
-    row_default_height: 200
-    row_force_default: True
+    tile_width: 150
+    tile_height: 200
 
-    spacing: 16
-    padding: (16, 8, 16, 16)
-    cols: int((self.width - self.padding[0]) / (self.col_default_width + self.spacing[0]))
 
 <ProjectScreen>:
     control_bar: control_bar

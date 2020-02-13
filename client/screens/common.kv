@@ -1,0 +1,41 @@
+<Alert>:
+    size_hint: None, None
+    size: app.root.width/3, app.root.height/3
+    auto_dismiss: True
+    alert_message: ''
+    alert_title: ''
+    BoxLayout:
+        orientation: 'vertical'
+        Label:
+            text: root.alert_message
+            text_size: self.size
+        AnchorLayout:
+            anchor_x: 'center'
+            anchor_y: 'bottom'
+            Button:
+                size_hint: (0.3, 0.2)
+                text: 'Ok'
+                on_release: root.dismiss()
+
+
+<LabelInput@BoxLayout>:
+    orientation: 'horizontal'
+    default_text: 'default'
+    label_text: 'default label'
+    text_field: text_field
+    Label:
+        text: root.label_text
+    TextInput:
+        id: text_field
+        text: root.default_text
+
+<TileView@GridLayout>:
+    tile_width: 0
+    tile_height: 0
+    col_default_width: self.tile_width
+    col_force_default: True
+    row_default_height: self.tile_height
+    row_force_default: True
+    spacing: 16
+    padding: 16
+    cols: int((self.width - self.padding[0]) / (self.col_default_width + self.spacing[0]))

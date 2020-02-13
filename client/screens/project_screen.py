@@ -13,17 +13,10 @@ from client.client_config import ClientConfig
 from client.definitions import SCREEN_DIR
 import client.utils as utils
 
+from client.screens.common import *
+
 # Load corresponding kivy file
 Builder.load_file(os.path.join(SCREEN_DIR, 'project_screen.kv'))
-
-
-class Alert(Popup):
-    alert_message = StringProperty('')
-    pass
-
-
-class LabelInput(BoxLayout):
-    text_field = ObjectProperty(None)
 
 
 class DeleteProjectPopup(Popup):
@@ -81,7 +74,7 @@ class ControlBar(BoxLayout):
         self.parent.parent.ids.project_view_window.refresh_projects()
 
 
-class ProjectViewWindow(GridLayout):
+class ProjectViewWindow(TileView):
     def add_card(
             self,
             name,
