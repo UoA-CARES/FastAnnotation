@@ -185,7 +185,7 @@ class ProjectCard(BoxLayout):
         pop_up.open()
 
 
-class ProjectScreen(Screen):
+class ProjectSelectScreen(Screen):
     project_view_window = ObjectProperty(None)
     control_bar = ObjectProperty(None)
 

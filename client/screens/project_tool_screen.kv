@@ -1,0 +1,25 @@
+<ProjectToolScreen>:
+    BoxLayout:
+        orientation: "vertical"
+        ActionBar:
+            pos_hint: {'top':1}
+            ActionView:
+                use_separator: True
+                ActionPrevious:
+                    title: 'PROJECT NAME'
+                    with_previous: False
+                ActionButton:
+                    text: "Edit"
+                    on_release: print("Edit Project")
+                ActionButton:
+                    text: "Delete"
+                    on_release: print("Delete Project")
+        TileView:
+            tile_width: 150
+            tile_height: 150
+            padding: 32
+            spacing: 32
+            Button:
+                text: "Add Images"
+            Button:
+                text: "View Images"

@@ -1,7 +1,8 @@
 from kivy.app import App
 from kivy.uix.screenmanager import ScreenManager
 
-from client.screens.project_select_screen import ProjectScreen
+from client.screens.project_select_screen import ProjectSelectScreen
+from client.screens.project_tool_screen import ProjectToolScreen
 
 
 class MyScreenManager(ScreenManager):
@@ -12,7 +13,8 @@ class MyScreenManager(ScreenManager):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.add_widget(ProjectScreen())
+        self.add_widget(ProjectToolScreen())
+        self.add_widget(ProjectSelectScreen())
 
 
 class AnnotationClientApp(App):
