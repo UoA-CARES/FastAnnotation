@@ -9,3 +9,14 @@ CREATE TABLE `fadb`.`project` (
   PRIMARY KEY (`project_id`),
   UNIQUE KEY `project_id_UNIQUE` (`project_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `image` (
+  `image_id` int NOT NULL AUTO_INCREMENT,
+  `file_path` varchar(260) NOT NULL,
+  `project_fid` int NOT NULL,
+  PRIMARY KEY (`image_id`),
+  UNIQUE KEY `image_id_UNIQUE` (`image_id`),
+  UNIQUE KEY `file_path_UNIQUE` (`file_path`),
+  KEY `project_id_idx` (`project_fid`),
+  CONSTRAINT `project_id` FOREIGN KEY (`project_fid`) REFERENCES `project` (`project_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
