@@ -1,4 +1,5 @@
 <ProjectToolScreen>:
+    action_previous: action_previous
     BoxLayout:
         orientation: "vertical"
         ActionBar:
@@ -6,7 +7,8 @@
             ActionView:
                 use_separator: True
                 ActionPrevious:
-                    title: 'PROJECT NAME'
+                    id: action_previous
+                    title: 'UNKNOWN'
                     with_previous: False
                 ActionButton:
                     text: "Edit"
@@ -21,6 +23,6 @@
             spacing: 32
             Button:
                 text: "Add Images"
-                on_release: root.open_file_chooser()
+                on_release: root.upload_images()
             Button:
                 text: "View Images"

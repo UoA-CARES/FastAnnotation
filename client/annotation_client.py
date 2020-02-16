@@ -1,4 +1,5 @@
 from kivy.app import App
+from kivy.properties import StringProperty, NumericProperty
 from kivy.uix.screenmanager import ScreenManager
 
 from client.screens.project_select_screen import ProjectSelectScreen
@@ -21,6 +22,9 @@ class AnnotationClientApp(App):
     """
     The launch point for the application itself.
     """
+
+    current_project_name = StringProperty("")
+    current_project_id = NumericProperty(0)
 
     def build(self):
         return MyScreenManager()
