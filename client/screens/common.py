@@ -3,15 +3,15 @@ import os
 from kivy.lang import Builder
 from kivy.properties import ObjectProperty, StringProperty, NumericProperty
 from kivy.uix.actionbar import ActionItem
-from kivy.uix.button import Button
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.popup import Popup
 
-from definitions import SCREEN_DIR
+from client.client_config import ClientConfig
 
 # Load corresponding kivy file
-Builder.load_file(os.path.join(SCREEN_DIR, 'common.kv'))
+Builder.load_file(os.path.join(ClientConfig.SCREEN_DIR, 'common.kv'))
 
 
 class Alert(Popup):

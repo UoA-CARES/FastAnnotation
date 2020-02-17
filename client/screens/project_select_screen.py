@@ -6,11 +6,13 @@ from kivy.network.urlrequest import UrlRequest
 from kivy.uix.screenmanager import Screen
 
 import client.utils as utils
-from client.client_config import ClientConfig
 from client.screens.common import *
 
 # Load corresponding kivy file
-Builder.load_file(os.path.join(SCREEN_DIR, 'project_select_screen.kv'))
+Builder.load_file(
+    os.path.join(
+        ClientConfig.SCREEN_DIR,
+        'project_select_screen.kv'))
 
 
 class DeleteProjectPopup(Popup):
@@ -189,5 +191,15 @@ class ProjectSelectScreen(Screen):
     project_view_window = ObjectProperty(None)
     control_bar = ObjectProperty(None)
 
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.app = App.get_running_app()
+
     def on_enter(self, *args):
         self.project_view_window.refresh_projects()
+
+    def enter_project(self, name, id, *args):
+        self.app.current_project_name = name
+        self.app.current_project_id = id
+
+        self.app.sm.current = "ProjectTool"

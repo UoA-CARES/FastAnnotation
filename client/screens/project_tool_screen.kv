@@ -9,7 +9,8 @@
                 ActionPrevious:
                     id: action_previous
                     title: 'UNKNOWN'
-                    with_previous: False
+                    with_previous: True
+                    on_release: app.show_home()
                 ActionButton:
                     text: "Edit"
                     on_release: print("Edit Project")

@@ -14,8 +14,8 @@ class MyScreenManager(ScreenManager):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.add_widget(ProjectToolScreen())
-        self.add_widget(ProjectSelectScreen())
+        self.add_widget(ProjectSelectScreen(name="ProjectSelect"))
+        self.add_widget(ProjectToolScreen(name="ProjectTool"))
 
 
 class AnnotationClientApp(App):
@@ -25,9 +25,19 @@ class AnnotationClientApp(App):
 
     current_project_name = StringProperty("")
     current_project_id = NumericProperty(0)
+    sm = None
 
     def build(self):
-        return MyScreenManager()
+        self.sm = MyScreenManager()
+        return self.sm
+
+    def show_project_tools(self, name, id):
+        self.current_project_name = name
+        self.current_project_id = id
+        self.sm.current = "ProjectTool"
+
+    def show_home(self):
+        self.sm.current = "ProjectSelect"
 
 
 if __name__ == "__main__":
