@@ -44,7 +44,7 @@ class ProjectToolScreen(Screen):
             msg = "The following errors occurred:\n"
             for err in result['errors']:
                 msg += "%d: %s\n" % (err["err_code"], err["err_msg"])
-        popup.alert_message = msg * 5
+        popup.alert_message = msg
         popup.open()
 
     def on_enter(self, *args):
