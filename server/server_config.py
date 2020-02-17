@@ -1,7 +1,7 @@
 import os
 
-from definitions import ROOT_DIR
 from database.database import Database
+from definitions import ROOT_DIR
 
 
 class ServerConfig:
@@ -9,10 +9,11 @@ class ServerConfig:
     DATABASE_USER = "root"
     DATABASE_PASSWORD = "root"
     DATABASE_NAME = "fadb"
-    DATABASE_POOL_SIZE = 5
+    DATABASE_POOL_SIZE = 3
     DATABASE_TIMEZONE = '+00:00'
 
     DATA_ROOT_DIR = os.path.join(ROOT_DIR, "database", "DATA")
+    DEFAULT_IMAGE_EXT = ".jpg"
 
 
 class DatabaseInstance:

@@ -30,7 +30,7 @@ class AddProjectPopup(Popup):
             on_fail=self._add_project_failure)
 
     def _add_project_success(self, request, result):
-        for id in result['Created Ids']:
+        for id in result['ids']:
             utils.get_project_by_id(id,
                                     on_success=self._create_card_success,
                                     on_fail=self._add_project_failure)

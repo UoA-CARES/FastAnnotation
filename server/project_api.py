@@ -1,4 +1,6 @@
 import base64
+import os
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -9,6 +11,7 @@ from flask_negotiate import produces, consumes
 from mysql.connector.errors import DatabaseError
 
 from server.server_config import DatabaseInstance
+from server.server_config import ServerConfig
 
 project_blueprint = Blueprint('project_blueprint', __name__)
 
@@ -58,14 +61,14 @@ def add_project():
                 {"request": item, "err_code": 500, "err_msg": "Unknown Server Fault."})
 
     if not error_msgs:
-        response = jsonify({"Created Ids": success_ids})
+        response = jsonify({"ids": success_ids})
         response.status_code = 201
     elif not success_ids:
-        response = jsonify({"Bad Requests": error_msgs})
+        response = jsonify({"errors": error_msgs})
         response.status_code = 400
     else:
-        response = jsonify({"Created Ids": success_ids,
-                            "Bad Requests": error_msgs})
+        response = jsonify({"ids": success_ids,
+                            "errors": error_msgs})
         response.status_code = 201
 
     return response
@@ -97,18 +100,51 @@ def get_project_images(id):
     return response
 
 
-@project_blueprint.route("<int:id>/images", methods=['POST'])
+@project_blueprint.route("<int:pid>/images", methods=['POST'])
 @consumes('application/json')
-def add_project_images(id):
+def add_project_images(pid):
     content = request.get_json()
 
     if not isinstance(content, list):
         content = [content]
 
+    success_ids = []
+    error_msgs = []
     for row in content:
         array = np.fromstring(base64.b64decode(row["image"]), np.uint8)
         img = cv2.imdecode(array, cv2.IMREAD_COLOR)
+        img_dir = os.path.join(
+            ServerConfig.DATA_ROOT_DIR,
+            "images",
+            str(pid))
+        Path(img_dir).mkdir(parents=True, exist_ok=True)
+        img_path = os.path.join(
+            img_dir,
+            row["name"] +
+            ServerConfig.DEFAULT_IMAGE_EXT)
 
+        query = "INSERT INTO image (project_fid, image_path, image_name) "
+        query += "VALUES (%s, %s, %s);"
+        try:
+            _, id = db.query(query, (pid, img_path, row["name"]))
+        except DatabaseError as e:
+            msg = "Unknown Error"
+            if e.errno == 1062:
+                msg = "Uploaded file already exists called %s" % row["name"]
+            error_msgs.append({"err_code": e.errno, "err_msg": msg})
+        else:
+            cv2.imwrite(img_path, img)
+            success_ids.append(id)
+            print(query)
 
-
-    return jsonify(True)
+    if not error_msgs:
+        response = jsonify({"ids": success_ids})
+        response.status_code = 201
+    elif not success_ids:
+        response = jsonify({"errors": error_msgs})
+        response.status_code = 400
+    else:
+        response = jsonify({"ids": success_ids,
+                            "errors": error_msgs})
+        response.status_code = 201
+    return response

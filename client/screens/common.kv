@@ -5,9 +5,14 @@
     alert_message: ''
     BoxLayout:
         orientation: 'vertical'
-        Label:
-            text: root.alert_message
-            text_size: self.size
+        ScrollView:
+            do_scroll_x: False
+            do_scroll_y: True
+            Label:
+                text: root.alert_message
+                size_hint_y: None
+                height: self.texture_size[1]
+                text_size: self.width, None
         AnchorLayout:
             anchor_x: 'center'
             anchor_y: 'bottom'

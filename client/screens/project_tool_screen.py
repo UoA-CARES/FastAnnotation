@@ -5,7 +5,6 @@ from kivy.app import App
 from kivy.uix.screenmanager import Screen
 
 import client.utils as utils
-from client.client_config import ClientConfig
 from client.screens.common import *
 from definitions import ROOT_DIR
 
@@ -39,7 +38,13 @@ class ProjectToolScreen(Screen):
 
     def _upload_images_failure(self, request, result):
         popup = Alert()
-        popup.alert_message = "Failed to upload the requested images"
+        popup.title = 'Failed to upload images'
+        msg = ""
+        if request.resp_status == 400:
+            msg = "The following errors occurred:\n"
+            for err in result['errors']:
+                msg += "%d: %s\n" % (err["err_code"], err["err_msg"])
+        popup.alert_message = msg * 5
         popup.open()
 
     def on_enter(self, *args):
