@@ -6,7 +6,7 @@ from kivy.network.urlrequest import UrlRequest
 from kivy.uix.screenmanager import Screen
 
 from client.client_config import ClientConfig
-from client.definitions import SCREEN_DIR
+from definitions import SCREEN_DIR
 
 
 # Load corresponding kivy file

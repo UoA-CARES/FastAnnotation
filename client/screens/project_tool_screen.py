@@ -5,11 +5,15 @@ from kivy.app import App
 from kivy.uix.screenmanager import Screen
 
 import client.utils as utils
-from client.definitions import ROOT_DIR
+from client.client_config import ClientConfig
 from client.screens.common import *
+from definitions import ROOT_DIR
 
 # Load corresponding kivy file
-Builder.load_file(os.path.join(SCREEN_DIR, 'project_tool_screen.kv'))
+Builder.load_file(
+    os.path.join(
+        ClientConfig.SCREEN_DIR,
+        'project_tool_screen.kv'))
 
 
 class ProjectToolScreen(Screen):

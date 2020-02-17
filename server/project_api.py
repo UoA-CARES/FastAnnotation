@@ -108,7 +108,7 @@ def add_project_images(id):
     for row in content:
         array = np.fromstring(base64.b64decode(row["image"]), np.uint8)
         img = cv2.imdecode(array, cv2.IMREAD_COLOR)
-        cv2.imshow(row["name"], img)
-        cv2.waitKey()
+
+
 
     return jsonify(True)

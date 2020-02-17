@@ -1,3 +1,6 @@
+import os
+
+from definitions import ROOT_DIR
 from database.database import Database
 
 
@@ -8,6 +11,8 @@ class ServerConfig:
     DATABASE_NAME = "fadb"
     DATABASE_POOL_SIZE = 5
     DATABASE_TIMEZONE = '+00:00'
+
+    DATA_ROOT_DIR = os.path.join(ROOT_DIR, "database", "DATA")
 
 
 class DatabaseInstance:

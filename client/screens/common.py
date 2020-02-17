@@ -8,7 +8,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.popup import Popup
 
-from client.definitions import SCREEN_DIR
+from definitions import SCREEN_DIR
 
 # Load corresponding kivy file
 Builder.load_file(os.path.join(SCREEN_DIR, 'common.kv'))
