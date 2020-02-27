@@ -1,5 +1,4 @@
 <ProjectToolScreen>:
-    action_previous: action_previous
     BoxLayout:
         orientation: "vertical"
         ActionBar:
@@ -7,8 +6,7 @@
             ActionView:
                 use_separator: True
                 ActionPrevious:
-                    id: action_previous
-                    title: 'UNKNOWN'
+                    title: app.current_project_name
                     with_previous: True
                     on_release: app.show_home()
                 ActionButton:
@@ -27,3 +25,4 @@
                 on_release: root.upload_images()
             Button:
                 text: "View Images"
+                on_release: app.show_image_viewer()

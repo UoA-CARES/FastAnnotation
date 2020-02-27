@@ -148,3 +148,18 @@ def add_project_images(pid):
                             "errors": error_msgs})
         response.status_code = 201
     return response
+
+
+@project_blueprint.route("<int:pid>/images/all", methods=['GET'])
+@produces('application/json')
+def get_all_project_images(pid):
+    query = "SELECT image_path FROM image WHERE project_fid = %s;"
+    result, _ = db.query(query, (pid,))
+
+    body = []
+    for path in result:
+        with open(path[0], "rb") as img_file:
+            encoded_image = base64.b64encode(img_file.read())
+        body.append({'name': os.path.basename(path[0]), 'image': encoded_image.decode('utf-8')})
+    return jsonify(body)
+

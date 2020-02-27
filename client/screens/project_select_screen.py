@@ -19,7 +19,6 @@ class DeleteProjectPopup(Popup):
     title = StringProperty("")
     message = StringProperty("")
     confirmation_callback = ObjectProperty(None)
-    pass
 
 
 class AddProjectPopup(Popup):

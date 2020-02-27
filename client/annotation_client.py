@@ -4,6 +4,7 @@ from kivy.uix.screenmanager import ScreenManager
 
 from client.screens.project_select_screen import ProjectSelectScreen
 from client.screens.project_tool_screen import ProjectToolScreen
+from client.screens.image_view_screen import ImageViewScreen
 
 
 class MyScreenManager(ScreenManager):
@@ -16,6 +17,7 @@ class MyScreenManager(ScreenManager):
         super().__init__(**kwargs)
         self.add_widget(ProjectSelectScreen(name="ProjectSelect"))
         self.add_widget(ProjectToolScreen(name="ProjectTool"))
+        self.add_widget(ImageViewScreen(name="ImageView"))
 
 
 class AnnotationClientApp(App):
@@ -38,6 +40,9 @@ class AnnotationClientApp(App):
 
     def show_home(self):
         self.sm.current = "ProjectSelect"
+
+    def show_image_viewer(self):
+        self.sm.current = "ImageView"
 
 
 if __name__ == "__main__":

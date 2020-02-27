@@ -16,8 +16,6 @@ Builder.load_file(
 
 
 class ProjectToolScreen(Screen):
-    action_previous = ObjectProperty(None)
-
     def __init__(self, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
@@ -46,7 +44,3 @@ class ProjectToolScreen(Screen):
                 msg += "%d: %s\n" % (err["err_code"], err["err_msg"])
         popup.alert_message = msg
         popup.open()
-
-    def on_enter(self, *args):
-        self.app.current_project_id = 31
-        self.action_previous.title = self.app.current_project_name

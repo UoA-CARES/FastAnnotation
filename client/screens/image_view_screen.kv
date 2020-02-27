@@ -1,0 +1,33 @@
+<ImageViewScreen>:
+    tile_view: tile_view
+    BoxLayout:
+        orientation: "vertical"
+        ActionBar:
+            pos_hint: {'top':1}
+            ActionView:
+                use_separator: True
+                ActionPrevious:
+                    title: app.current_project_name
+                    with_previous: True
+                    on_release: app.show_project_tools(app.current_project_name, app.current_project_id)
+        TileView:
+            id: tile_view
+            tile_width: 150
+            tile_height: 150
+            padding: 32
+            spacing: 32
+
+<Thumbnail>:
+    cust_texture: self.cust_texture
+    orientation: "vertical"
+    canvas:
+        Color:
+            rgba: 0.8, 0.8, 0.8, 0.8
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    Image:
+        texture: root.cust_texture
+        keep_ratio: True
+        pos: self.pos
+        size: self.size
