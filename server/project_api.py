@@ -135,7 +135,15 @@ def add_project_images(pid):
         else:
             cv2.imwrite(img_path, img)
             success_ids.append(id)
-            print(query)
+
+    # Increment unlabeled image count
+    if len(success_ids) > 0:
+        query = "UPDATE project SET unlabeled_count = unlabeled_count + %s WHERE project_id = %s"
+        try:
+            db.query(query, (len(success_ids), pid))
+        except DatabaseError as e:
+            msg = "Unknown Error"
+            error_msgs.append({"err_code": e.errno, "err_msg": msg})
 
     if not error_msgs:
         response = jsonify({"ids": success_ids})
@@ -160,6 +168,6 @@ def get_all_project_images(pid):
     for path in result:
         with open(path[0], "rb") as img_file:
             encoded_image = base64.b64encode(img_file.read())
-        body.append({'name': os.path.basename(path[0]), 'image': encoded_image.decode('utf-8')})
+        body.append({'name': os.path.basename(
+            path[0]), 'image': encoded_image.decode('utf-8')})
     return jsonify(body)
-

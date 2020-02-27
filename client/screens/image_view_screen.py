@@ -1,9 +1,4 @@
-import io
-
-import cv2
-import numpy as np
 from kivy.app import App
-from kivy.uix.image import CoreImage
 from kivy.uix.screenmanager import Screen
 
 import client.utils as utils
