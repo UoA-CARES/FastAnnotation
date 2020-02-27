@@ -1,6 +1,6 @@
-from mysql.connector.errors import InterfaceError
-from mysql.connector import pooling
 import mysql.connector
+from mysql.connector import pooling
+from mysql.connector.errors import InterfaceError
 
 
 class Database:
@@ -22,18 +22,18 @@ class Database:
         self.db_pool.set_config(**self.db_config)
 
     def query(self, query_string, params=None):
-        print("Query Start")
         connection = self.db_pool.get_connection()
         cursor = connection.cursor()
-        cursor.execute(query_string, params)
         try:
-            result = cursor.fetchall()
-        except InterfaceError:
-            result = []
-        id = cursor.lastrowid
-        cursor.close()
-        connection.close()
-        print("Query Done")
+            cursor.execute(query_string, params)
+            try:
+                result = cursor.fetchall()
+            except InterfaceError:
+                result = []
+            id = cursor.lastrowid
+        finally:
+            cursor.close()
+            connection.close()
         return result, id
 
     def rows_to_json(self, table_name, rows):

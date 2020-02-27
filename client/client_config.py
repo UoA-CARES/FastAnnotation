@@ -1,3 +1,8 @@
+import os
+
+from definitions import ROOT_DIR
+
+
 class ClientConfig:
     """ A collection of constants utilized by the client """
 
@@ -10,3 +15,5 @@ class ClientConfig:
     SECONDS_PER_YEAR = SECONDS_PER_DAY * 365
 
     CLIENT_HIGHLIGHT_1 = "3AD6E7"
+
+    SCREEN_DIR = os.path.join(ROOT_DIR, 'client', 'screens')

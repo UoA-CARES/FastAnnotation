@@ -1,34 +1,3 @@
-<Alert>:
-    size_hint: None, None
-    size: app.root.width/3, app.root.height/3
-    auto_dismiss: True
-    alert_message: ''
-    alert_title: ''
-    BoxLayout:
-        orientation: 'vertical'
-        Label:
-            text: root.alert_message
-            text_size: self.size
-        AnchorLayout:
-            anchor_x: 'center'
-            anchor_y: 'bottom'
-            Button:
-                size_hint: (0.3, 0.2)
-                text: 'Ok'
-                on_release: root.dismiss()
-
-
-<LabelInput@BoxLayout>:
-    orientation: 'horizontal'
-    default_text: 'default'
-    label_text: 'default label'
-    text_field: text_field
-    Label:
-        text: root.label_text
-    TextInput:
-        id: text_field
-        text: root.default_text
-
 <DeleteProjectPopup>:
     size_hint: None, None
     size: app.root.width/2, app.root.height/2
@@ -114,50 +83,49 @@
     labeled_images: self.labeled_images
     last_update_time: self.last_update_time
     last_update_label: last_update_label
-    FloatLayout:
-        BoxLayout:
-            pos_hint:{"x": 0.00, "y": 0.00}
-            orientation: "vertical"
-            canvas:
-                Color:
-                    rgba: 1, 0, 0, 1
-                Rectangle:
-                    pos: self.pos
-                    size: self.size
+    Button:
+        on_release: app.show_project_tools(root.project_name, root.project_id)
+        FloatLayout:
+            size: root.size
+            pos: root.pos
             BoxLayout:
+                pos_hint:{"x": 0.00, "y": 0.00}
+                orientation: "vertical"
+                canvas:
+                    Color:
+                        rgba: 1, 0, 0, 1
+                    Rectangle:
+                        pos: self.pos
+                        size: self.size
+                BoxLayout:
+                    Label:
+                        text: root.image
+                BoxLayout:
+                    size_hint: (1, 0.3)
+                    Label:
+                        text: root.project_name
+                ProgressBar:
+                    max: root.total_images
+                    value: root.labeled_images
+                    size_hint: (1, 0.15)
                 Label:
-                    text: root.image
-            BoxLayout:
-                size_hint: (1, 0.3)
-                Label:
-                    text: root.project_name
-            ProgressBar:
-                max: root.total_images
-                value: root.labeled_images
-                size_hint: (1, 0.15)
-            Label:
-                id: last_update_label
-                size_hint: (1, 0.2)
-                markup: True
-                font_size: "13dp"
-                text: "Updated [b][color=3AD6E7]5 minutes[/color][/b] ago"
-        Button:
-            pos_hint:{"x": 0.9, "y": 0.9}
-            size_hint: (0.1, 0.1)
-            text: "X"
-            on_release: root.confirm_delete_project()
+                    id: last_update_label
+                    size_hint: (1, 0.2)
+                    markup: True
+                    font_size: "13dp"
+                    text: "Updated [b][color=3AD6E7]5 minutes[/color][/b] ago"
+            Button:
+                pos_hint:{"x": 0.9, "y": 0.9}
+                size_hint: (0.1, 0.1)
+                text: "X"
+                on_release: root.confirm_delete_project()
 
 <ProjectViewWindow>:
-    col_default_width: 150
-    col_force_default: True
-    row_default_height: 200
-    row_force_default: True
+    tile_width: 150
+    tile_height: 200
 
-    spacing: 16
-    padding: (16, 8, 16, 16)
-    cols: int((self.width - self.padding[0]) / (self.col_default_width + self.spacing[0]))
 
-<ProjectScreen>:
+<ProjectSelectScreen>:
     control_bar: control_bar
     project_view_window: project_view_window
     BoxLayout:

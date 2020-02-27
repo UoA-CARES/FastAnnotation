@@ -1,36 +1,24 @@
-import os
 import json
-from kivy.lang import Builder
-from kivy.app import App
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.popup import Popup
-from kivy.uix.screenmanager import Screen
-from kivy.properties import ObjectProperty, StringProperty, NumericProperty
-from kivy.network.urlrequest import UrlRequest
 from datetime import datetime
-from client.client_config import ClientConfig
-from client.definitions import SCREEN_DIR
+
+from kivy.app import App
+from kivy.network.urlrequest import UrlRequest
+from kivy.uix.screenmanager import Screen
+
 import client.utils as utils
+from client.screens.common import *
 
 # Load corresponding kivy file
-Builder.load_file(os.path.join(SCREEN_DIR, 'project_screen.kv'))
-
-
-class Alert(Popup):
-    alert_message = StringProperty('')
-    pass
-
-
-class LabelInput(BoxLayout):
-    text_field = ObjectProperty(None)
+Builder.load_file(
+    os.path.join(
+        ClientConfig.SCREEN_DIR,
+        'project_select_screen.kv'))
 
 
 class DeleteProjectPopup(Popup):
     title = StringProperty("")
     message = StringProperty("")
     confirmation_callback = ObjectProperty(None)
-    pass
 
 
 class AddProjectPopup(Popup):
@@ -41,7 +29,7 @@ class AddProjectPopup(Popup):
             on_fail=self._add_project_failure)
 
     def _add_project_success(self, request, result):
-        for id in result['Created Ids']:
+        for id in result['ids']:
             utils.get_project_by_id(id,
                                     on_success=self._create_card_success,
                                     on_fail=self._add_project_failure)
@@ -81,7 +69,7 @@ class ControlBar(BoxLayout):
         self.parent.parent.ids.project_view_window.refresh_projects()
 
 
-class ProjectViewWindow(GridLayout):
+class ProjectViewWindow(TileView):
     def add_card(
             self,
             name,
@@ -198,9 +186,19 @@ class ProjectCard(BoxLayout):
         pop_up.open()
 
 
-class ProjectScreen(Screen):
+class ProjectSelectScreen(Screen):
     project_view_window = ObjectProperty(None)
     control_bar = ObjectProperty(None)
 
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.app = App.get_running_app()
+
     def on_enter(self, *args):
         self.project_view_window.refresh_projects()
+
+    def enter_project(self, name, id, *args):
+        self.app.current_project_name = name
+        self.app.current_project_id = id
+
+        self.app.sm.current = "ProjectTool"
