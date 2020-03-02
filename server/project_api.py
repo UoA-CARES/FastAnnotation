@@ -89,15 +89,41 @@ def del_project(id):
     return response
 
 
-@project_blueprint.route("<int:id>/images", methods=['GET'])
+@project_blueprint.route("<int:pid>/images", methods=['GET'])
 @produces('application/json')
-def get_project_images(id):
+def get_project_images(pid):
     query = "SELECT image_id FROM fadb.image "
     query += "WHERE project_fid = %s"
-    results, _ = db.query(query, (id,))
+    results, _ = db.query(query, (pid,))
     response = jsonify({"ids": results})
     response.status_code = 200
     return response
+
+
+@project_blueprint.route("<int:pid>/images/next", methods=['GET'])
+@produces('application/json')
+def get_next_image(pid):
+    query = "SELECT image_path, image_ext FROM image "
+    query += "WHERE project_fid = %s "
+    query += " and is_locked = 1 and is_labelled = 1 "
+    query += "ORDER BY image_name asc"
+    results, _ = db.query(query, (pid,))
+
+    body = []
+
+    if results:
+        path, ext = results
+        with open(path[0], "rb") as img_file:
+            encoded_image = base64.b64encode(img_file.read())
+        body.append(
+            {
+                'name': os.path.basename(path[0]),
+                'image': encoded_image.decode('utf-8'),
+                'extension': ext
+            }
+        )
+
+    return jsonify(body)
 
 
 @project_blueprint.route("<int:pid>/images", methods=['POST'])
