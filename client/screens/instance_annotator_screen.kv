@@ -77,12 +77,18 @@
         height: 50
         on_release: app.root.current_screen.refresh_image_queue()
 
+
 <ImageQueue>:
+    queue: queue
     cols: 1
     Label:
         text: "Image Queue"
         size_hint_y: None
         height: 50
+    GridLayout:
+        id: queue
+        cols: 1
+
 
 <ImageQueueItem>:
     image_name: self.image_name

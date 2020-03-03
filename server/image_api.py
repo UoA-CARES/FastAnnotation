@@ -1,9 +1,10 @@
-import os
 import base64
 
 from flask import Blueprint
-from flask_negotiate import produces, consumes
 from flask import jsonify
+from flask import request
+from flask_negotiate import produces, consumes
+
 from server.server_config import DatabaseInstance
 
 image_blueprint = Blueprint('image_blueprint', __name__)
@@ -59,4 +60,52 @@ def get_image_meta_by_id(iid):
     body = {"err": "Resource not found."}
     response = jsonify(body)
     response.status = 404
+    return response
+
+
+@image_blueprint.route("<int:iid>/lock", methods=['PUT'])
+@produces('application/json')
+def lock_image_by_id(iid):
+    query = "SELECT image_name, image_ext, is_locked, is_labelled FROM image "
+    query += "WHERE image_id = %s"
+
+    result, _ = db.query(query, (iid,))
+    if not result:
+        body = {"err": "Resource not found."}
+        response = jsonify(body)
+        response.status_code = 404
+        return response
+
+    name, ext, is_locked, is_labelled = result[0]
+
+    if bool(is_locked):
+        body = {"err": "Resource is already locked."}
+        response = jsonify(body)
+        response.status_code = 403
+        return response
+
+    query = "UPDATE image SET is_locked = b'1' WHERE image_id = %s"
+    db.query(query, (iid,))
+    response = jsonify({"success": True, "id": iid})
+    response.status_code = 200
+    return response
+
+
+@image_blueprint.route("<int:iid>/unlock", methods=['PUT'])
+@produces('application/json')
+def unlock_image_by_id(iid):
+    query = "SELECT image_name, image_ext, is_locked, is_labelled FROM image "
+    query += "WHERE image_id = %s"
+
+    result, _ = db.query(query, (iid,))
+    if not result:
+        body = {"err": "Resource not found."}
+        response = jsonify(body)
+        response.status_code = 404
+        return response
+
+    query = "UPDATE image SET is_locked = b'0' WHERE image_id = %s"
+    db.query(query, (iid,))
+    response = jsonify({"success": True, "id": iid})
+    response.status_code = 200
     return response

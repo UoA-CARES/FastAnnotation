@@ -44,7 +44,7 @@ class Database:
             cursor.execute(query_string, params)
             try:
                 result = cursor.fetchall()
-            except InterfaceError:
+            except InterfaceError as ex:
                 result = []
             id = cursor.lastrowid
         finally:

@@ -16,6 +16,7 @@ class InstanceAnnotatorScreen(Screen):
     left_control = ObjectProperty(None)
     right_control = ObjectProperty(None)
     image_canvas = ObjectProperty(None)
+    current_image_id = NumericProperty(0)
 
     def __init__(self, **kw):
         super().__init__(**kw)
@@ -28,6 +29,7 @@ class InstanceAnnotatorScreen(Screen):
 
     def refresh_image_queue(self):
         print("Refreshing Image Queue")
+        self.right_control.image_queue.queue.clear_widgets()
         utils.get_project_images(
             self.app.current_project_id,
             on_success=self.right_control.image_queue.handle_image_ids)
@@ -36,8 +38,22 @@ class InstanceAnnotatorScreen(Screen):
         if image_id < 0:
             image_id = 278
             print("Load next Image")
-        utils.get_image_by_id(image_id,on_success=self.image_canvas.handle_image_request)
+        utils.get_image_lock_by_id(image_id,
+                                   on_success=self.handle_image_lock_success,
+                                   on_fail=self.handle_image_lock_fail)
 
+    def handle_image_lock_success(self, request, result):
+        locked_id = result["id"]
+        print("Locked Image %d" % locked_id)
+        utils.get_image_by_id(
+            locked_id,
+            on_success=self.image_canvas.handle_image_request)
+
+    def handle_image_lock_fail(self, request, result):
+        popup = Alert()
+        popup.title = "Image unavailable"
+        popup.alert_message = "Image is already locked, please try again later."
+        popup.open()
 
 
 class LeftControlColumn(BoxLayout):
@@ -46,6 +62,7 @@ class LeftControlColumn(BoxLayout):
 
 class ImageCanvas(BoxLayout):
     image = ObjectProperty(None)
+    image_id = NumericProperty(0)
 
     def handle_image_request(self, request, result):
         img_bytes = utils.decode_image(result["image"])
@@ -69,6 +86,8 @@ class ImageQueueControl(GridLayout):
 
 
 class ImageQueue(GridLayout):
+    queue = ObjectProperty(None)
+
     def handle_image_ids(self, request, result):
         for image_id in result["ids"]:
             utils.get_image_meta_by_id(
@@ -81,9 +100,8 @@ class ImageQueue(GridLayout):
         item = ImageQueueItem()
         item.image_name = name
         item.image_id = id
-        self.add_widget(item)
+        self.queue.add_widget(item)
 
 
 class ImageQueueItem(BoxLayout):
     image_name = StringProperty("")
-    image_id = NumericProperty(0)
