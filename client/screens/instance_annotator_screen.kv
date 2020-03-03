@@ -31,6 +31,21 @@
     Button:
 
 <ImageCanvas>:
+    image: image
+    canvas:
+        Color:
+            rgba: 0.8, 0.8, 0.8, 0.8
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    ScrollView:
+        size: root.size
+        Image:
+            id: image
+            keep_ratio: True
+            size: root.size
+            size_hint:(None, None)
+
 
 <RightControlColumn>:
     image_queue: image_queue

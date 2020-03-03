@@ -1,3 +1,4 @@
+import numpy as np
 from kivy.app import App
 from kivy.uix.screenmanager import Screen
 
@@ -22,6 +23,8 @@ class InstanceAnnotatorScreen(Screen):
 
     def on_enter(self, *args):
         self.refresh_image_queue()
+        empty_image = np.zeros((2000, 2000, 3), np.uint8)
+        self.image_canvas.load_image(utils.mat2texture(empty_image))
 
     def refresh_image_queue(self):
         print("Refreshing Image Queue")
@@ -31,9 +34,10 @@ class InstanceAnnotatorScreen(Screen):
 
     def load_image(self, image_id=-1):
         if image_id < 0:
+            image_id = 278
             print("Load next Image")
-        else:
-            print("Load specific Image")
+        utils.get_image_by_id(image_id,on_success=self.image_canvas.handle_image_request)
+
 
 
 class LeftControlColumn(BoxLayout):
@@ -41,7 +45,19 @@ class LeftControlColumn(BoxLayout):
 
 
 class ImageCanvas(BoxLayout):
-    pass
+    image = ObjectProperty(None)
+
+    def handle_image_request(self, request, result):
+        img_bytes = utils.decode_image(result["image"])
+        texture = utils.bytes2texture(img_bytes, "jpg")
+        self.load_image(texture)
+
+    def load_image(self, texture):
+        self.image.texture = texture
+        self.image.size = texture.size
+
+    def get_image(self):
+        return self.image_texture
 
 
 class RightControlColumn(BoxLayout):
