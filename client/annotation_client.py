@@ -5,6 +5,7 @@ from kivy.uix.screenmanager import ScreenManager
 from client.screens.project_select_screen import ProjectSelectScreen
 from client.screens.project_tool_screen import ProjectToolScreen
 from client.screens.image_view_screen import ImageViewScreen
+from client.screens.instance_annotator_screen import InstanceAnnotatorScreen
 
 
 class MyScreenManager(ScreenManager):
@@ -18,6 +19,7 @@ class MyScreenManager(ScreenManager):
         self.add_widget(ProjectSelectScreen(name="ProjectSelect"))
         self.add_widget(ProjectToolScreen(name="ProjectTool"))
         self.add_widget(ImageViewScreen(name="ImageView"))
+        self.add_widget(InstanceAnnotatorScreen(name="InstanceAnnotator"))
 
 
 class AnnotationClientApp(App):
@@ -43,6 +45,9 @@ class AnnotationClientApp(App):
 
     def show_image_viewer(self):
         self.sm.current = "ImageView"
+
+    def open_instance_annotator(self):
+        self.sm.current = "InstanceAnnotator"
 
 
 if __name__ == "__main__":

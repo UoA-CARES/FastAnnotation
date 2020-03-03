@@ -94,36 +94,12 @@ def del_project(id):
 def get_project_images(pid):
     query = "SELECT image_id FROM fadb.image "
     query += "WHERE project_fid = %s"
-    results, _ = db.query(query, (pid,))
-    response = jsonify({"ids": results})
-    response.status_code = 200
-    return response
-
-
-@project_blueprint.route("<int:pid>/images/next", methods=['GET'])
-@produces('application/json')
-def get_next_image(pid):
-    query = "SELECT image_path, image_ext FROM image "
-    query += "WHERE project_fid = %s "
     query += " and is_locked = 1 and is_labelled = 1 "
     query += "ORDER BY image_name asc"
     results, _ = db.query(query, (pid,))
-
-    body = []
-
-    if results:
-        path, ext = results
-        with open(path[0], "rb") as img_file:
-            encoded_image = base64.b64encode(img_file.read())
-        body.append(
-            {
-                'name': os.path.basename(path[0]),
-                'image': encoded_image.decode('utf-8'),
-                'extension': ext
-            }
-        )
-
-    return jsonify(body)
+    response = jsonify({"ids": [x[0] for x in results]})
+    response.status_code = 200
+    return response
 
 
 @project_blueprint.route("<int:pid>/images", methods=['POST'])
@@ -182,18 +158,3 @@ def add_project_images(pid):
                             "errors": error_msgs})
         response.status_code = 201
     return response
-
-
-@project_blueprint.route("<int:pid>/images/all", methods=['GET'])
-@produces('application/json')
-def get_all_project_images(pid):
-    query = "SELECT image_path FROM image WHERE project_fid = %s;"
-    result, _ = db.query(query, (pid,))
-
-    body = []
-    for path in result:
-        with open(path[0], "rb") as img_file:
-            encoded_image = base64.b64encode(img_file.read())
-        body.append({'name': os.path.basename(
-            path[0]), 'image': encoded_image.decode('utf-8')})
-    return jsonify(body)

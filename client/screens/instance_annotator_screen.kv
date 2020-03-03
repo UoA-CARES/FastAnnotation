@@ -1,0 +1,79 @@
+#:import utils kivy.utils
+
+<InstanceAnnotatorScreen>:
+    left_control: left_control
+    right_control: right_control
+    image_canvas: image_canvas
+    BoxLayout:
+        orientation: "vertical"
+        ActionBar:
+            pos_hint: {'top':1}
+            ActionView:
+                use_separator: True
+                ActionPrevious:
+                    title: app.current_project_name
+                    with_previous: True
+                    on_release: app.show_project_tools(app.current_project_name, app.current_project_id)
+        BoxLayout:
+            orientation: "horizontal"
+            LeftControlColumn:
+                id: left_control
+                size_hint_x: 350 / root.width
+            ImageCanvas:
+                id: image_canvas
+            RightControlColumn:
+                image_queue: image_queue
+                id: right_control
+                size_hint_x: 350 / root.width
+                ImageQueueControl:
+                    size_hint_y: 400 / root.height
+                    size_hint_x: 1
+                ImageQueue:
+                    id: image_queue
+
+<LeftControlColumn@BoxLayout>:
+    orientation: "vertical"
+    Button:
+
+<ImageCanvas>:
+
+<RightControlColumn@BoxLayout>:
+    orientation: "vertical"
+    canvas:
+        Color:
+            rgba: utils.get_color_from_hex("#0c273b")
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+<ImageQueueControl@GridLayout>:
+    cols: 1
+    padding: 16
+    spacing: 16
+    Button:
+        text: "Next"
+        size_hint_y: None
+        height: 50
+        on_release: app.root.current_screen.load_image()
+    Button:
+        text: "Refresh"
+        size_hint_y: None
+        height: 50
+        on_release: app.root.current_screen.refresh_image_queue()
+
+<ImageQueue@GridLayout>:
+    cols: 1
+    Label:
+        text: "Image Queue"
+        size_hint_y: None
+        height: 50
+
+
+<ImageQueueItem@BoxLayout>:
+    image_name: self.image_name
+    image_id: self.image_id
+    size_hint_y: None
+    height: 50
+    Button:
+        text: root.image_name
+        on_release: app.root.current_screen.load_image(self.image_id)

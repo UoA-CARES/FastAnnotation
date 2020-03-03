@@ -99,7 +99,19 @@ def add_project_images(project_id, image_paths, on_success=None, on_fail=None):
 
 def get_project_images(project_id, on_success=None, on_fail=None):
     route = ClientConfig.SERVER_URL + "projects/" + \
-        str(project_id) + "/images/all"
+        str(project_id) + "/images"
+    headers = {"Accept": "application/json"}
+    UrlRequest(
+        route,
+        req_headers=headers,
+        method="GET",
+        on_success=on_success,
+        on_failure=on_fail,
+        on_error=on_fail)
+
+
+def get_image_by_id(image_id, on_success=None, on_fail=None):
+    route = ClientConfig.SERVER_URL + "images/" + str(image_id)
     headers = {"Accept": "application/json"}
     UrlRequest(
         route,

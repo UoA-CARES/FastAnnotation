@@ -7,6 +7,7 @@ from flask.json import JSONEncoder
 
 from database.database import Database
 from server.project_api import project_blueprint
+from server.image_api import image_blueprint
 from server.server_config import ServerConfig
 
 
@@ -26,6 +27,7 @@ class CustomJSONEncoder(JSONEncoder):
 app = Flask(__name__)
 app.json_encoder = CustomJSONEncoder
 app.register_blueprint(project_blueprint, url_prefix='/projects')
+app.register_blueprint(image_blueprint, url_prefix='/images')
 app.config["db"] = Database(ServerConfig())
 
 
