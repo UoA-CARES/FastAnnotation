@@ -122,6 +122,18 @@ def get_image_by_id(image_id, on_success=None, on_fail=None):
         on_error=on_fail)
 
 
+def get_image_meta_by_id(image_id, on_success=None, on_fail=None):
+    route = ClientConfig.SERVER_URL + "images/" + str(image_id) + "/meta"
+    headers = {"Accept": "application/json"}
+    UrlRequest(
+        route,
+        req_headers=headers,
+        method="GET",
+        on_success=on_success,
+        on_failure=on_fail,
+        on_error=on_fail)
+
+
 def encode_image(img_path):
     with open(img_path, "rb") as img_file:
         encoded_image = base64.b64encode(img_file.read())

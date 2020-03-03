@@ -22,22 +22,18 @@
             ImageCanvas:
                 id: image_canvas
             RightControlColumn:
-                image_queue: image_queue
                 id: right_control
                 size_hint_x: 350 / root.width
-                ImageQueueControl:
-                    size_hint_y: 400 / root.height
-                    size_hint_x: 1
-                ImageQueue:
-                    id: image_queue
 
-<LeftControlColumn@BoxLayout>:
+
+<LeftControlColumn>:
     orientation: "vertical"
     Button:
 
 <ImageCanvas>:
 
-<RightControlColumn@BoxLayout>:
+<RightControlColumn>:
+    image_queue: image_queue
     orientation: "vertical"
     canvas:
         Color:
@@ -45,8 +41,13 @@
         Rectangle:
             pos: self.pos
             size: self.size
+    ImageQueueControl:
+        size_hint_y: 400 / root.height
+        size_hint_x: 1
+    ImageQueue:
+        id: image_queue
 
-<ImageQueueControl@GridLayout>:
+<ImageQueueControl>:
     cols: 1
     padding: 16
     spacing: 16
@@ -61,19 +62,18 @@
         height: 50
         on_release: app.root.current_screen.refresh_image_queue()
 
-<ImageQueue@GridLayout>:
+<ImageQueue>:
     cols: 1
     Label:
         text: "Image Queue"
         size_hint_y: None
         height: 50
 
-
-<ImageQueueItem@BoxLayout>:
+<ImageQueueItem>:
     image_name: self.image_name
     image_id: self.image_id
     size_hint_y: None
     height: 50
     Button:
         text: root.image_name
-        on_release: app.root.current_screen.load_image(self.image_id)
+        on_release: app.root.current_screen.load_image(root.image_id)

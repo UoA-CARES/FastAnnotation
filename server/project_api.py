@@ -94,7 +94,7 @@ def del_project(id):
 def get_project_images(pid):
     query = "SELECT image_id FROM fadb.image "
     query += "WHERE project_fid = %s"
-    query += " and is_locked = 1 and is_labelled = 1 "
+    query += " and is_locked = 0 and is_labelled = 0 "
     query += "ORDER BY image_name asc"
     results, _ = db.query(query, (pid,))
     response = jsonify({"ids": [x[0] for x in results]})

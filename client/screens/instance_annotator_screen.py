@@ -1,5 +1,7 @@
+from kivy.app import App
 from kivy.uix.screenmanager import Screen
 
+import client.utils as utils
 from client.screens.common import *
 
 # Load corresponding kivy file
@@ -14,14 +16,24 @@ class InstanceAnnotatorScreen(Screen):
     right_control = ObjectProperty(None)
     image_canvas = ObjectProperty(None)
 
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.app = App.get_running_app()
+
+    def on_enter(self, *args):
+        self.refresh_image_queue()
+
+    def refresh_image_queue(self):
+        print("Refreshing Image Queue")
+        utils.get_project_images(
+            self.app.current_project_id,
+            on_success=self.right_control.image_queue.handle_image_ids)
+
     def load_image(self, image_id=-1):
         if image_id < 0:
             print("Load next Image")
         else:
             print("Load specific Image")
-
-    def refresh_image_queue(self):
-        print("Refreshing Image Queue")
 
 
 class LeftControlColumn(BoxLayout):
@@ -41,6 +53,14 @@ class ImageQueueControl(GridLayout):
 
 
 class ImageQueue(GridLayout):
+    def handle_image_ids(self, request, result):
+        for image_id in result["ids"]:
+            utils.get_image_meta_by_id(
+                image_id, on_success=self.handle_image_meta)
+
+    def handle_image_meta(self, request, result):
+        self.add_item(result["name"], result["id"])
+
     def add_item(self, name, id):
         item = ImageQueueItem()
         item.image_name = name
@@ -48,6 +68,6 @@ class ImageQueue(GridLayout):
         self.add_widget(item)
 
 
-class ImageQueueItem(Button):
+class ImageQueueItem(BoxLayout):
     image_name = StringProperty("")
     image_id = NumericProperty(0)
