@@ -12,6 +12,70 @@ image_blueprint = Blueprint('image_blueprint', __name__)
 db = DatabaseInstance()
 
 
+@image_blueprint.route("", methods=['GET'])
+@produces('application/json')
+@consumes('application/json')
+def get_bulk_images():
+    content = request.get_json()
+    if "ids" not in content:
+        response = jsonify({"err": "Submitted content does not fit expected structure"})
+        response.status_code = 400
+        return response
+
+    image_ids = content["ids"]
+
+    query = "SELECT image_id, image_path, image_name, image_ext FROM image "
+    query += "WHERE image_id in ("
+    query += ','.join(["%s"] * len(image_ids))
+    query += ")"
+    result, _ = db.query(query, tuple(image_ids))
+
+    body = []
+
+    for row in result:
+        iid, path, name, ext = row
+        if ext == '.jpg':
+            with open(path, "rb") as img_file:
+                encoded_image = base64.b64encode(img_file.read())
+            body.append({
+                'name': name,
+                'image': encoded_image.decode('utf-8')
+            })
+    return jsonify(body)
+
+
+@image_blueprint.route("meta", methods=['GET'])
+@produces('application/json')
+@consumes('application/json')
+def get_bulk_image_metas():
+    content = request.get_json()
+    if "ids" not in content:
+        response = jsonify({"err": "Submitted content does not fit expected structure"})
+        response.status_code = 400
+        return response
+
+    image_ids = content["ids"]
+
+    query = "SELECT image_id, image_name, image_ext, is_locked, is_labelled FROM image "
+    query += "WHERE image_id in ("
+    query += ','.join(["%s"] * len(image_ids))
+    query += ")"
+    result, _ = db.query(query, tuple(image_ids))
+
+    body = []
+
+    for row in result:
+        iid, name, ext, is_locked, is_labelled = row
+        body.append({
+            'id': iid,
+            'name': name,
+            'ext': ext,
+            'is_locked': bool(is_locked),
+            'is_labelled': bool(is_labelled)
+        })
+    return jsonify(body)
+
+
 @image_blueprint.route("<int:iid>", methods=['GET'])
 @produces('application/json')
 def get_image_by_id(iid):

@@ -91,11 +91,31 @@ def del_project(id):
 
 @project_blueprint.route("<int:pid>/images", methods=['GET'])
 @produces('application/json')
+@consumes('application/json')
 def get_project_images(pid):
+    content = request.get_json()
+
     query = "SELECT image_id FROM fadb.image "
     query += "WHERE project_fid = %s"
-    query += " and is_locked = 0 and is_labelled = 0 "
-    query += "ORDER BY image_name asc"
+
+    if "filter" in content:
+        filter_details = content["filter"]
+        for key in filter_details:
+            if key in ServerConfig.IMAGE_FILTER_MAP and filter_details[
+                    key] in ServerConfig.IMAGE_FILTER_MAP[key]:
+                query += " and " + \
+                    ServerConfig.IMAGE_FILTER_MAP[key][filter_details[key]]
+
+    if "order" in content:
+        order = content["order"]
+        if "by" in order:
+            if order["by"] in ServerConfig.IMAGE_ORDER_BY_MAP:
+                query += " ORDER BY " + \
+                    ServerConfig.IMAGE_ORDER_BY_MAP[order["by"]]
+                if "ascending" in order:
+                    query += " asc" if bool(order["ascending"]) else "desc"
+                else:
+                    query += " asc"
     results, _ = db.query(query, (pid,))
     response = jsonify({"ids": [x[0] for x in results]})
     response.status_code = 200

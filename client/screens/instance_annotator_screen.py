@@ -11,6 +11,11 @@ Builder.load_file(
         ClientConfig.SCREEN_DIR,
         'instance_annotator_screen.kv'))
 
+# TODO:
+# Need to draw signal diagrams to optimze flows for UI interactions
+# Might need to optimize REST calls
+# Figure out how images will be represented when open
+
 
 class InstanceAnnotatorScreen(Screen):
     left_control = ObjectProperty(None)
@@ -30,8 +35,19 @@ class InstanceAnnotatorScreen(Screen):
     def refresh_image_queue(self):
         print("Refreshing Image Queue")
         self.right_control.image_queue.queue.clear_widgets()
+        filter_details = {
+            "filter": {
+                "locked": False,
+                "labelled": False
+            },
+            "order": {
+                "by": "name",
+                "ascending": True
+            }
+        }
         utils.get_project_images(
             self.app.current_project_id,
+            filter_details=filter_details,
             on_success=self.right_control.image_queue.handle_image_ids)
 
     def load_image(self, image_id=-1):
@@ -89,12 +105,12 @@ class ImageQueue(GridLayout):
     queue = ObjectProperty(None)
 
     def handle_image_ids(self, request, result):
-        for image_id in result["ids"]:
-            utils.get_image_meta_by_id(
-                image_id, on_success=self.handle_image_meta)
+        utils.get_image_metas_by_ids(
+            result["ids"], on_success=self.handle_image_meta)
 
     def handle_image_meta(self, request, result):
-        self.add_item(result["name"], result["id"])
+        for row in result:
+            self.add_item(row["name"], row["id"])
 
     def add_item(self, name, id):
         item = ImageQueueItem()
