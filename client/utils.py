@@ -118,8 +118,9 @@ def get_project_images(
         on_error=on_fail)
 
 
-def get_image_lock_by_id(image_id, on_success=None, on_fail=None):
-    route = ClientConfig.SERVER_URL + "images/" + str(image_id) + "/lock"
+def get_image_lock_by_id(image_id, lock=True, on_success=None, on_fail=None):
+    route = ClientConfig.SERVER_URL + "images/" + str(image_id)
+    route += "/lock" if lock else "/unlock"
     headers = {"Accept": "application/json"}
     UrlRequest(
         route,

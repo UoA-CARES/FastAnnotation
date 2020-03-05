@@ -14,6 +14,7 @@ class ClientConfig:
     SECONDS_PER_MONTH = SECONDS_PER_DAY * 30
     SECONDS_PER_YEAR = SECONDS_PER_DAY * 365
 
-    CLIENT_HIGHLIGHT_1 = "3AD6E7"
+    CLIENT_HIGHLIGHT_1 = "#3AD6E7"
+    CLIENT_DARK_3 = "#0C273B"
 
     SCREEN_DIR = os.path.join(ROOT_DIR, 'client', 'screens')

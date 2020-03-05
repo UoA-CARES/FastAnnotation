@@ -91,6 +91,7 @@ def get_image_by_id(iid):
             with open(path, "rb") as img_file:
                 encoded_image = base64.b64encode(img_file.read())
             body.append({
+                'id': iid,
                 'name': name,
                 'image': encoded_image.decode('utf-8')
             })

@@ -1,4 +1,5 @@
 #:import utils kivy.utils
+#:import config client.client_config.ClientConfig
 
 <InstanceAnnotatorScreen>:
     left_control: left_control
@@ -49,6 +50,7 @@
 
 <RightControlColumn>:
     image_queue: image_queue
+    image_queue_control: image_queue_control
     orientation: "vertical"
     canvas:
         Color:
@@ -57,12 +59,14 @@
             pos: self.pos
             size: self.size
     ImageQueueControl:
+        id: image_queue_control
         size_hint_y: 400 / root.height
         size_hint_x: 1
     ImageQueue:
         id: image_queue
 
 <ImageQueueControl>:
+    btn_save: btn_save
     cols: 1
     padding: 16
     spacing: 16
@@ -71,6 +75,13 @@
         size_hint_y: None
         height: 50
         on_release: app.root.current_screen.load_image()
+    Button:
+        id: btn_save
+        text: "Save"
+        size_hint_y: None
+        height: 50
+        disabled: True
+        on_release: app.root.current_screen.save_image()
     Button:
         text: "Refresh"
         size_hint_y: None
@@ -93,8 +104,12 @@
 <ImageQueueItem>:
     image_name: self.image_name
     image_id: self.image_id
+    image_locked: self.image_locked
+    button_hex: self.button_hex
+    button_color: self.button_color
     size_hint_y: None
     height: 50
     Button:
         text: root.image_name
+        background_color: root.button_color
         on_release: app.root.current_screen.load_image(root.image_id)
