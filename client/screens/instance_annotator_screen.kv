@@ -104,12 +104,14 @@
 <ImageQueueItem>:
     image_name: self.image_name
     image_id: self.image_id
+    image_open: self.image_open
     image_locked: self.image_locked
-    button_hex: self.button_hex
     button_color: self.button_color
+
     size_hint_y: None
     height: 50
     Button:
         text: root.image_name
         background_color: root.button_color
         on_release: app.root.current_screen.load_image(root.image_id)
+        disabled: root.image_locked

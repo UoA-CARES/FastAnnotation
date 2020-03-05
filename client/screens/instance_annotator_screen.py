@@ -24,11 +24,11 @@ class WindowState:
             image_id=-1,
             image_name="",
             image_texture=None,
-            image_locked=False):
+            image_opened=False):
         self.image_id = image_id
         self.image_name = image_name
         self.image_texture = image_texture
-        self.image_locked = image_locked
+        self.image_opened = image_opened
 
         if not self.image_texture:
             empty_image = np.zeros((2000, 2000, 3), np.uint8)
@@ -50,44 +50,40 @@ class InstanceAnnotatorScreen(Screen):
         if new_state.image_id is not -1:
             self.window_cache[new_state.image_id] = new_state
 
-        if new_state.image_locked:
+        if new_state.image_opened:
             self.right_control.image_queue.mark_item(
-                new_state.image_id, locked=True)
+                new_state.image_id, opened=True)
 
-        self.right_control.image_queue_control.btn_save.disabled = not new_state.image_locked
+        self.right_control.image_queue_control.btn_save.disabled = not new_state.image_opened
         self.current_state = new_state
 
     def clear_stale_window_states(self):
         stale_keys = []
         for key in self.window_cache:
-            if not self.window_cache[key].image_locked:
+            if not self.window_cache[key].image_opened:
                 stale_keys.append(key)
 
         for key in stale_keys:
             self.window_cache.pop(key, None)
 
     def on_enter(self, *args):
-        self.refresh_image_queue()
         self.image_canvas.refresh_image()
+        self.refresh_image_queue()
 
     def refresh_image_queue(self):
         print("Refreshing Image Queue")
         # clear queue of stale items
         self.clear_stale_window_states()
 
-        self.right_control.image_queue.queue.clear_widgets()
+        self.right_control.image_queue.clear()
         for state in self.window_cache.values():
-            if state.image_locked:
+            if state.image_opened:
                 self.right_control.image_queue.add_item(
                     state.image_name,
                     state.image_id,
-                    locked=True)
+                    opened=True)
 
         filter_details = {
-            "filter": {
-                "locked": False,
-                "labelled": False
-            },
             "order": {
                 "by": "name",
                 "ascending": True
@@ -104,7 +100,7 @@ class InstanceAnnotatorScreen(Screen):
             print("Load next Image")
 
         if image_id in self.window_cache:
-            self.window_cache[image_id].image_locked = True
+            self.window_cache[image_id].image_opened = True
             self.load_window_state(self.window_cache[image_id])
             self.image_canvas.refresh_image()
             return
@@ -135,7 +131,7 @@ class InstanceAnnotatorScreen(Screen):
     def handle_image_unlock_success(self, request, result):
         unlocked_id = result["id"]
         print("Locked Image %d" % unlocked_id)
-        self.window_cache[unlocked_id].image_locked = False
+        self.window_cache[unlocked_id].image_opened = False
         self.right_control.image_queue.mark_item(unlocked_id, locked=False)
         self.right_control.image_queue_control.btn_save.disabled = True
 
@@ -146,7 +142,7 @@ class InstanceAnnotatorScreen(Screen):
             image_id=result["id"],
             image_name=result["name"],
             image_texture=texture,
-            image_locked=True)
+            image_opened=True)
         self.load_window_state(new_state)
         self.image_canvas.refresh_image()
 
@@ -175,27 +171,35 @@ class ImageQueueControl(GridLayout):
 
 class ImageQueue(GridLayout):
     queue = ObjectProperty(None)
+    queue_item_dict = {}
 
-    def mark_item(self, image_id, locked=True):
-        for w in self.queue.children:
-            if w.image_id == image_id:
-                w.lock(locked)
+    def clear(self):
+        self.queue.clear_widgets()
+        self.queue_item_dict.clear()
+
+    def mark_item(self, image_id, locked=False, opened=False):
+        if image_id not in self.queue_item_dict:
+            return
+        self.queue_item_dict[image_id].set_status(lock=locked, opened=opened)
 
     def handle_image_ids(self, request, result):
+        # No need to handle existing ids
+        new_ids = [x for x in result["ids"]
+                   if x not in self.queue_item_dict.keys()]
         utils.get_image_metas_by_ids(
-            result["ids"], on_success=self.handle_image_meta)
+            new_ids, on_success=self.handle_image_meta)
 
     def handle_image_meta(self, request, result):
         for row in result:
-            self.add_item(row["name"], row["id"])
+            self.add_item(row["name"], row["id"], locked=row["is_locked"])
 
-    def add_item(self, name, id, locked=False):
+    def add_item(self, name, image_id, locked=False, opened=False):
         item = ImageQueueItem()
         item.image_name = name
-        item.image_id = id
-        item.image_locked = locked
-        item.lock(locked)
+        item.image_id = image_id
+        item.set_status(lock=locked, opened=opened)
         self.queue.add_widget(item)
+        self.queue_item_dict[image_id] = item
 
 
 class ImageQueueItem(BoxLayout):
@@ -203,11 +207,13 @@ class ImageQueueItem(BoxLayout):
     button_color = ObjectProperty(
         kivy.utils.get_color_from_hex(
             ClientConfig.CLIENT_DARK_3))
+    image_open = BooleanProperty(False)
     image_locked = BooleanProperty(False)
 
-    def lock(self, lock=True):
+    def set_status(self, opened=False, lock=False):
+        self.image_open = opened
         self.image_locked = lock
-        if lock:
+        if opened:
             self.button_color = kivy.utils.get_color_from_hex(
                 ClientConfig.CLIENT_HIGHLIGHT_1)
         else:
