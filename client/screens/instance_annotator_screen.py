@@ -1,11 +1,14 @@
 import kivy.utils
 import numpy as np
 from kivy.app import App
-from kivy.graphics import Color, Ellipse
-from kivy.uix.screenmanager import Screen
-from kivy.uix.image import Image
-from kivy.core.window import Window
 from kivy.clock import Clock
+from kivy.core.window import Window
+from kivy.graphics import Color, Ellipse, Fbo, Rectangle, ClearBuffers, ClearColor
+from kivy.uix.image import Image
+from kivy.uix.screenmanager import Screen
+from kivy.properties import ListProperty
+
+import random
 
 import client.utils as utils
 from client.screens.common import *
@@ -184,30 +187,50 @@ class LayerView(BoxLayout):
     pass
 
 
-class DrawableImage(Image):
-    def on_touch_down(self, touch):
-        with self.canvas:
-            Color(1, 1, 0)
-            d = 30.
-            Ellipse(pos=(touch.x - d / 2, touch.y - d / 2), size=(d, d))
-        return super(Image, self).on_touch_down(touch)
+class DrawableLayer(MouseDrawnTool):
+    fbo = ObjectProperty(None)
+    col = ObjectProperty((1, 1, 1, 1))
+    pen_size = NumericProperty(10)
 
-    def on_touch_move(self, touch):
+    def init_tool_options(self):
+        self.tool_options["color"] = self.col
+        self.tool_options["pen_size"] = self.pen_size
+
+    def refresh_layer(self, size):
+        self.canvas.clear()
         with self.canvas:
-            Color(1, 1, 0)
-            d = 30.
+            # create the fbo
+            self.fbo = Fbo(size=size)
+            Rectangle(size=size, texture=self.fbo.texture)
+
+    def on_touch_down_hook(self, touch):
+        with self.fbo:
+            Color(1, 1, 1)
+            d = self.tool_options["pen_size"]
             Ellipse(pos=(touch.x - d / 2, touch.y - d / 2), size=(d, d))
-        return super(Image, self).on_touch_move(touch)
+
+    def on_touch_move_hook(self, touch):
+        self.on_touch_down_hook(touch)
+
+    def on_touch_up_hook(self, touch):
+        self.tool_options["color"] = (
+            random.uniform(
+                0, 1), random.uniform(
+                0, 1), random.uniform(
+                0, 1), random.uniform(
+                    0, 1))
 
 
 class ImageCanvas(BoxLayout):
     image = ObjectProperty(None)
+    drawable_layer = ObjectProperty(None)
 
     def refresh_image(self):
         print("refreshing")
         window_state = App.get_running_app().root.current_screen.current_state
         self.image.texture = window_state.image_texture
         self.image.size = window_state.image_texture.size
+        self.drawable_layer.refresh_layer(size=window_state.image_texture.size)
 
 
 class RightControlColumn(BoxLayout):

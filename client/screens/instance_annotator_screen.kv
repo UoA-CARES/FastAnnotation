@@ -52,8 +52,10 @@
 <LayerView>:
     Button:
 
+
 <ImageCanvas>:
     image: image
+    drawable_layer: drawable_layer
     canvas:
         Color:
             rgba: 0.8, 0.8, 0.8, 0.8
@@ -62,12 +64,23 @@
             size: self.size
     ScrollView:
         size: root.size
-        DrawableImage:
+        Image:
             id: image
             keep_ratio: True
             size: root.size
             pos: root.pos
             size_hint:(None, None)
+            opacity: 1.0
+            FloatLayout:
+                DrawableLayer:
+                    id: drawable_layer
+
+<DrawableLayer>:
+    canvas.before:
+        Color:
+            rgba: self.tool_options["color"]
+
+
 
 
 <RightControlColumn>:
