@@ -1,7 +1,7 @@
 import os
 
 from kivy.lang import Builder
-from kivy.properties import ObjectProperty, StringProperty, NumericProperty
+from kivy.properties import ObjectProperty, StringProperty, NumericProperty, BooleanProperty
 from kivy.uix.actionbar import ActionItem
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button

@@ -1,6 +1,9 @@
 import mysql.connector
 from mysql.connector import pooling
 from mysql.connector.errors import InterfaceError
+from mysql.connector.errors import PoolError
+
+import time
 
 
 class Database:
@@ -21,14 +24,27 @@ class Database:
         self.db_config['database'] = self.config.DATABASE_NAME
         self.db_pool.set_config(**self.db_config)
 
-    def query(self, query_string, params=None):
-        connection = self.db_pool.get_connection()
+    def query(self, query_string, params=None, timeout=3):
+        t0 = time.time()
+        t1 = t0
+        while (t1 - t0) < timeout:
+            t1 = time.time()
+            try:
+                connection = self.db_pool.get_connection()
+            except PoolError:
+                print("Retrying Connection..")
+                time.sleep(1)
+                continue
+            else:
+                break
+        print("Connection Made")
+
         cursor = connection.cursor()
         try:
             cursor.execute(query_string, params)
             try:
                 result = cursor.fetchall()
-            except InterfaceError:
+            except InterfaceError as ex:
                 result = []
             id = cursor.lastrowid
         finally:

@@ -89,13 +89,35 @@ def del_project(id):
     return response
 
 
-@project_blueprint.route("<int:id>/images", methods=['GET'])
+@project_blueprint.route("<int:pid>/images", methods=['GET'])
 @produces('application/json')
-def get_project_images(id):
+@consumes('application/json')
+def get_project_images(pid):
+    content = request.get_json()
+
     query = "SELECT image_id FROM fadb.image "
     query += "WHERE project_fid = %s"
-    results, _ = db.query(query, (id,))
-    response = jsonify({"ids": results})
+
+    if "filter" in content:
+        filter_details = content["filter"]
+        for key in filter_details:
+            if key in ServerConfig.IMAGE_FILTER_MAP and filter_details[
+                    key] in ServerConfig.IMAGE_FILTER_MAP[key]:
+                query += " and " + \
+                    ServerConfig.IMAGE_FILTER_MAP[key][filter_details[key]]
+
+    if "order" in content:
+        order = content["order"]
+        if "by" in order:
+            if order["by"] in ServerConfig.IMAGE_ORDER_BY_MAP:
+                query += " ORDER BY " + \
+                    ServerConfig.IMAGE_ORDER_BY_MAP[order["by"]]
+                if "ascending" in order:
+                    query += " asc" if bool(order["ascending"]) else "desc"
+                else:
+                    query += " asc"
+    results, _ = db.query(query, (pid,))
+    response = jsonify({"ids": [x[0] for x in results]})
     response.status_code = 200
     return response
 
@@ -156,18 +178,3 @@ def add_project_images(pid):
                             "errors": error_msgs})
         response.status_code = 201
     return response
-
-
-@project_blueprint.route("<int:pid>/images/all", methods=['GET'])
-@produces('application/json')
-def get_all_project_images(pid):
-    query = "SELECT image_path FROM image WHERE project_fid = %s;"
-    result, _ = db.query(query, (pid,))
-
-    body = []
-    for path in result:
-        with open(path[0], "rb") as img_file:
-            encoded_image = base64.b64encode(img_file.read())
-        body.append({'name': os.path.basename(
-            path[0]), 'image': encoded_image.decode('utf-8')})
-    return jsonify(body)

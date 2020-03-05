@@ -1,0 +1,117 @@
+#:import utils kivy.utils
+#:import config client.client_config.ClientConfig
+
+<InstanceAnnotatorScreen>:
+    left_control: left_control
+    right_control: right_control
+    image_canvas: image_canvas
+    BoxLayout:
+        orientation: "vertical"
+        ActionBar:
+            pos_hint: {'top':1}
+            ActionView:
+                use_separator: True
+                ActionPrevious:
+                    title: app.current_project_name
+                    with_previous: True
+                    on_release: app.show_project_tools(app.current_project_name, app.current_project_id)
+        BoxLayout:
+            orientation: "horizontal"
+            LeftControlColumn:
+                id: left_control
+                size_hint_x: 350 / root.width
+            ImageCanvas:
+                id: image_canvas
+            RightControlColumn:
+                id: right_control
+                size_hint_x: 350 / root.width
+
+
+<LeftControlColumn>:
+    orientation: "vertical"
+    Button:
+
+<ImageCanvas>:
+    image: image
+    canvas:
+        Color:
+            rgba: 0.8, 0.8, 0.8, 0.8
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    ScrollView:
+        size: root.size
+        Image:
+            id: image
+            keep_ratio: True
+            size: root.size
+            size_hint:(None, None)
+
+
+<RightControlColumn>:
+    image_queue: image_queue
+    image_queue_control: image_queue_control
+    orientation: "vertical"
+    canvas:
+        Color:
+            rgba: utils.get_color_from_hex("#0c273b")
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    ImageQueueControl:
+        id: image_queue_control
+        size_hint_y: 400 / root.height
+        size_hint_x: 1
+    ImageQueue:
+        id: image_queue
+
+<ImageQueueControl>:
+    btn_save: btn_save
+    cols: 1
+    padding: 16
+    spacing: 16
+    Button:
+        text: "Next"
+        size_hint_y: None
+        height: 50
+        on_release: app.root.current_screen.load_image()
+    Button:
+        id: btn_save
+        text: "Save"
+        size_hint_y: None
+        height: 50
+        disabled: True
+        on_release: app.root.current_screen.save_image()
+    Button:
+        text: "Refresh"
+        size_hint_y: None
+        height: 50
+        on_release: app.root.current_screen.refresh_image_queue()
+
+
+<ImageQueue>:
+    queue: queue
+    cols: 1
+    Label:
+        text: "Image Queue"
+        size_hint_y: None
+        height: 50
+    GridLayout:
+        id: queue
+        cols: 1
+
+
+<ImageQueueItem>:
+    image_name: self.image_name
+    image_id: self.image_id
+    image_open: self.image_open
+    image_locked: self.image_locked
+    button_color: self.button_color
+
+    size_hint_y: None
+    height: 50
+    Button:
+        text: root.image_name
+        background_color: root.button_color
+        on_release: app.root.current_screen.load_image(root.image_id)
+        disabled: root.image_locked

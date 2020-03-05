@@ -23,28 +23,39 @@ class ImageViewScreen(Screen):
         self.app = App.get_running_app()
 
     def on_enter(self, *args):
+        # TODO: Optimize to cache previously retrieved data
+        self.tile_view.clear_widgets()
         print("Loading Images")
+        filter_details = {
+            "order": {
+                "by": "name",
+                "ascending": True
+            }
+        }
         utils.get_project_images(
             self.app.current_project_id,
-            on_success=self._on_load_image_success,
-            on_fail=self._on_load_image_fail)
+            filter_details=filter_details,
+            on_success=self._get_image_ids_success)
 
-    def _on_load_image_success(self, request, result):
-        print("Loaded")
+    def _get_image_ids_success(self, request, result):
+        print("Ids: %s" % str(result["ids"]))
+
+        utils.get_images_by_ids(
+            result["ids"],
+            on_success=self._on_load_images_success,
+            on_fail=self._on_load_images_fail)
+
+    def _on_load_images_success(self, request, result):
         for row in result:
             img = utils.decode_image(row["image"])
             self.add_thumbnail(img)
-        return
 
-    def _on_load_image_fail(self, request, result):
+    def _on_load_images_fail(self, request, result):
         print("FAILED")
-        return
 
     def add_thumbnail(self, image):
 
         img = utils.bytes2texture(image, "jpg")
-        mat = utils.texture2mat(img)
-
         thumbnail = Thumbnail()
         thumbnail.cust_texture = img
         self.tile_view.add_widget(thumbnail)

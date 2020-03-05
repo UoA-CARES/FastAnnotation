@@ -97,14 +97,89 @@ def add_project_images(project_id, image_paths, on_success=None, on_fail=None):
         on_error=on_fail)
 
 
-def get_project_images(project_id, on_success=None, on_fail=None):
+def get_project_images(
+        project_id,
+        filter_details=None,
+        on_success=None,
+        on_fail=None):
     route = ClientConfig.SERVER_URL + "projects/" + \
-        str(project_id) + "/images/all"
+        str(project_id) + "/images"
+    headers = {"Accept": "application/json",
+               "Content-Type": "application/json"}
+    if not filter_details:
+        filter_details = {}
+    UrlRequest(
+        route,
+        req_headers=headers,
+        method="GET",
+        req_body=json.dumps(filter_details),
+        on_success=on_success,
+        on_failure=on_fail,
+        on_error=on_fail)
+
+
+def get_image_lock_by_id(image_id, lock=True, on_success=None, on_fail=None):
+    route = ClientConfig.SERVER_URL + "images/" + str(image_id)
+    route += "/lock" if lock else "/unlock"
+    headers = {"Accept": "application/json"}
+    UrlRequest(
+        route,
+        req_headers=headers,
+        method="PUT",
+        on_success=on_success,
+        on_failure=on_fail,
+        on_error=on_fail)
+
+
+def get_image_by_id(image_id, on_success=None, on_fail=None):
+    route = ClientConfig.SERVER_URL + "images/" + str(image_id)
     headers = {"Accept": "application/json"}
     UrlRequest(
         route,
         req_headers=headers,
         method="GET",
+        on_success=on_success,
+        on_failure=on_fail,
+        on_error=on_fail)
+
+
+def get_images_by_ids(image_ids, on_success=None, on_fail=None):
+    route = ClientConfig.SERVER_URL + "images"
+    headers = {"Accept": "application/json",
+               "Content-Type": "application/json"}
+    body = {"ids": image_ids}
+    UrlRequest(
+        route,
+        req_headers=headers,
+        method="GET",
+        req_body=json.dumps(body),
+        on_success=on_success,
+        on_failure=on_fail,
+        on_error=on_fail)
+
+
+def get_image_meta_by_id(image_id, on_success=None, on_fail=None):
+    route = ClientConfig.SERVER_URL + "images/" + str(image_id) + "/meta"
+    headers = {"Accept": "application/json"}
+    UrlRequest(
+        route,
+        req_headers=headers,
+        method="GET",
+        on_success=on_success,
+        on_failure=on_fail,
+        on_error=on_fail)
+
+
+def get_image_metas_by_ids(image_ids, on_success=None, on_fail=None):
+    route = ClientConfig.SERVER_URL + "images/meta"
+    headers = {"Accept": "application/json",
+               "Content-Type": "application/json"}
+    body = {"ids": image_ids}
+    UrlRequest(
+        route,
+        req_headers=headers,
+        method="GET",
+        req_body=json.dumps(body),
         on_success=on_success,
         on_failure=on_fail,
         on_error=on_fail)
