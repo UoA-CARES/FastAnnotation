@@ -1,5 +1,5 @@
 #:import utils kivy.utils
-#:import config client.client_config.ClientConfig
+#:import ClientConfig client.client_config.ClientConfig
 
 <InstanceAnnotatorScreen>:
     left_control: left_control
@@ -29,6 +29,27 @@
 
 <LeftControlColumn>:
     orientation: "vertical"
+    canvas:
+        Color:
+            rgba: utils.get_color_from_hex(ClientConfig.CLIENT_DARK_3)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    ToolSelect:
+        size_hint_y: 400 / root.height
+
+    ClassPicker:
+        size_hint_y: 400 / root.height
+
+    LayerView:
+
+<ToolSelect>:
+    Button:
+
+<ClassPicker>:
+    Button:
+
+<LayerView>:
     Button:
 
 <ImageCanvas>:
@@ -41,10 +62,11 @@
             size: self.size
     ScrollView:
         size: root.size
-        Image:
+        DrawableImage:
             id: image
             keep_ratio: True
             size: root.size
+            pos: root.pos
             size_hint:(None, None)
 
 
@@ -54,7 +76,7 @@
     orientation: "vertical"
     canvas:
         Color:
-            rgba: utils.get_color_from_hex("#0c273b")
+            rgba: utils.get_color_from_hex(ClientConfig.CLIENT_DARK_3)
         Rectangle:
             pos: self.pos
             size: self.size

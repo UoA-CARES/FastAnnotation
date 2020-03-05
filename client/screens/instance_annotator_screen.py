@@ -1,7 +1,11 @@
+import kivy.utils
 import numpy as np
 from kivy.app import App
+from kivy.graphics import Color, Ellipse
 from kivy.uix.screenmanager import Screen
-import kivy.utils
+from kivy.uix.image import Image
+from kivy.core.window import Window
+from kivy.clock import Clock
 
 import client.utils as utils
 from client.screens.common import *
@@ -69,6 +73,10 @@ class InstanceAnnotatorScreen(Screen):
     def on_enter(self, *args):
         self.image_canvas.refresh_image()
         self.refresh_image_queue()
+        Window.bind(on_resize=self.auto_resize)
+
+    def auto_resize(self, *args):
+        Clock.schedule_once(lambda dt: self.image_canvas.refresh_image())
 
     def refresh_image_queue(self):
         print("Refreshing Image Queue")
@@ -112,6 +120,7 @@ class InstanceAnnotatorScreen(Screen):
             print("Next image is %d" % image_id)
 
         if image_id in self.window_cache:
+            print("This is the way")
             self.window_cache[image_id].image_opened = True
             self.load_window_state(self.window_cache[image_id])
             self.image_canvas.refresh_image()
@@ -163,10 +172,39 @@ class LeftControlColumn(BoxLayout):
     pass
 
 
+class ToolSelect(BoxLayout):
+    pass
+
+
+class ClassPicker(BoxLayout):
+    pass
+
+
+class LayerView(BoxLayout):
+    pass
+
+
+class DrawableImage(Image):
+    def on_touch_down(self, touch):
+        with self.canvas:
+            Color(1, 1, 0)
+            d = 30.
+            Ellipse(pos=(touch.x - d / 2, touch.y - d / 2), size=(d, d))
+        return super(Image, self).on_touch_down(touch)
+
+    def on_touch_move(self, touch):
+        with self.canvas:
+            Color(1, 1, 0)
+            d = 30.
+            Ellipse(pos=(touch.x - d / 2, touch.y - d / 2), size=(d, d))
+        return super(Image, self).on_touch_move(touch)
+
+
 class ImageCanvas(BoxLayout):
     image = ObjectProperty(None)
 
     def refresh_image(self):
+        print("refreshing")
         window_state = App.get_running_app().root.current_screen.current_state
         self.image.texture = window_state.image_texture
         self.image.size = window_state.image_texture.size
