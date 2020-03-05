@@ -96,8 +96,20 @@ class InstanceAnnotatorScreen(Screen):
 
     def load_image(self, image_id=-1):
         if image_id < 0:
-            image_id = 278
-            print("Load next Image")
+            # For some reason children of a widget are pushed on like a stack
+            for w in reversed(self.right_control.image_queue.queue.children):
+                if not w.image_locked and not w.image_open:
+                    image_id = w.image_id
+                    break
+
+            if image_id < 0:
+                popup = Alert()
+                popup.title = "Out of images"
+                popup.alert_message = "There is no valid image to load next. Please try again later or upload more " \
+                                      "images to this project. "
+                popup.open()
+                return
+            print("Next image is %d" % image_id)
 
         if image_id in self.window_cache:
             self.window_cache[image_id].image_opened = True
@@ -204,6 +216,7 @@ class ImageQueue(GridLayout):
 
 class ImageQueueItem(BoxLayout):
     image_name = StringProperty("")
+    image_id = NumericProperty(0)
     button_color = ObjectProperty(
         kivy.utils.get_color_from_hex(
             ClientConfig.CLIENT_DARK_3))
