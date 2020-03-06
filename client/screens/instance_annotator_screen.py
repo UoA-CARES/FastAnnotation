@@ -1,14 +1,12 @@
+import random
+
 import kivy.utils
-import numpy as np
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.graphics import Color, Ellipse, Fbo, Rectangle, ClearBuffers, ClearColor
-from kivy.uix.image import Image
+from kivy.graphics import Color, Ellipse, Fbo, Rectangle
+from kivy.properties import BooleanProperty
 from kivy.uix.screenmanager import Screen
-from kivy.properties import ListProperty
-
-import random
 
 import client.utils as utils
 from client.screens.common import *
@@ -172,15 +170,43 @@ class InstanceAnnotatorScreen(Screen):
 
 
 class LeftControlColumn(BoxLayout):
+    tool_select = ObjectProperty(None)
+    class_picker = ObjectProperty(None)
+
+
+class ToolSelect(GridLayout):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.app = App.get_running_app()
+
+    def set_color(self, color):
+        print("Color: %s" % str(color))
+        layer_color = self.app.root.current_screen.image_canvas.draw_tool.layer_color
+        self.app.root.current_screen.image_canvas.draw_tool.layer_color = color[
+            :-1] + layer_color[-1:]
+
+    def set_alpha(self, alpha):
+        print("Alpha: %s" % str(alpha))
+        layer_color = self.app.root.current_screen.image_canvas.draw_tool.layer_color
+        layer_color = layer_color[:-1] + (alpha,)
+        self.app.root.current_screen.image_canvas.draw_tool.layer_color = layer_color
+
+    def set_pencil_size(self, size):
+        print("size: %s" % str(size))
+        self.app.root.current_screen.image_canvas.draw_tool.pen_size = size
+
+    def set_layer(self, layer):
+        print("LAYER SELECT")
+
+
+class ClassPicker(GridLayout):
     pass
 
 
-class ToolSelect(BoxLayout):
-    pass
-
-
-class ClassPicker(BoxLayout):
-    pass
+class ClassPickerItem(Button):
+    class_color = ObjectProperty((0, 0, 0, 1))
+    class_name = StringProperty("")
+    class_id = NumericProperty(-1)
 
 
 class LayerView(BoxLayout):
@@ -190,15 +216,11 @@ class LayerView(BoxLayout):
 class DrawTool(MouseDrawnTool):
     layer = ObjectProperty(None)
     pen_size = NumericProperty(10)
-    layer_color = ObjectProperty(None)
+    layer_color = ObjectProperty((1, 1, 1, 1))
 
     def set_layer(self, layer):
         self.layer = layer
         self.bind(layer_color=self.layer.setter('col'))
-        self.tool_options["color"] = self.layer_color
-
-    def init_tool_options(self):
-        self.tool_options["pen_size"] = self.pen_size
 
     def on_touch_down_hook(self, touch):
         if not self.layer:
@@ -206,7 +228,7 @@ class DrawTool(MouseDrawnTool):
 
         with self.layer.fbo:
             Color(1, 1, 1)
-            d = self.tool_options["pen_size"]
+            d = self.pen_size
             Ellipse(pos=(touch.x - d / 2, touch.y - d / 2), size=(d, d))
 
     def on_touch_move_hook(self, touch):
@@ -215,12 +237,6 @@ class DrawTool(MouseDrawnTool):
     def on_touch_up_hook(self, touch):
         if not self.layer:
             return
-        self.layer.col = (
-            random.uniform(
-                0, 1), random.uniform(
-                0, 1), random.uniform(
-                0, 1), random.uniform(
-                    0, 1))
 
 
 class DrawableLayer(Image):
