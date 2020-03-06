@@ -7,6 +7,7 @@ from kivy.core.window import Window
 from kivy.graphics import Color, Ellipse, Fbo, Rectangle
 from kivy.properties import BooleanProperty
 from kivy.uix.screenmanager import Screen
+from kivy.uix.floatlayout import FloatLayout
 
 import client.utils as utils
 from client.screens.common import *
@@ -218,9 +219,16 @@ class DrawTool(MouseDrawnTool):
     pen_size = NumericProperty(10)
     layer_color = ObjectProperty((1, 1, 1, 1))
 
+    # Stores binding id of last layer 
+    prev_bind = None
+
     def set_layer(self, layer):
         self.layer = layer
-        self.bind(layer_color=self.layer.setter('col'))
+
+        if self.prev_bind:
+            self.unbind_uid('layer_color', self.prev_bind)
+
+        self.prev_bind = self.fbind('layer_color', self.layer.setter('col'))
 
     def on_touch_down_hook(self, touch):
         if not self.layer:
@@ -239,6 +247,32 @@ class DrawTool(MouseDrawnTool):
             return
 
 
+class LayerStack(FloatLayout):
+    layer_list = ObjectProperty([])
+    current_layer = NumericProperty(-1)
+    layer_sizes = ObjectProperty(None)
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.app = App.get_running_app()
+
+    def add_layer(self):
+        layer = DrawableLayer()
+        layer.refresh_layer(self.layer_sizes)
+        self.add_widget(layer)
+        self.layer_list.append(layer)
+
+    def select_layer(self, index=0):
+        index = self.current_layer + 1
+        self.current_layer = index
+        self.app.root.current_screen.image_canvas.draw_tool.set_layer(
+            self.layer_list[index])
+
+    def clear(self):
+        self.layer_list = []
+        self.current_layer = -1
+
+
 class DrawableLayer(Image):
     fbo = ObjectProperty(None)
     col = ObjectProperty((1, 1, 1, 1))
@@ -253,16 +287,21 @@ class DrawableLayer(Image):
 
 class ImageCanvas(BoxLayout):
     image = ObjectProperty(None)
-    drawable_layer = ObjectProperty(None)
     draw_tool = ObjectProperty(None)
+    layer_stack = ObjectProperty(None)
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.app = App.get_running_app()
 
     def refresh_image(self):
         print("refreshing")
         window_state = App.get_running_app().root.current_screen.current_state
         self.image.texture = window_state.image_texture
         self.image.size = window_state.image_texture.size
-        self.drawable_layer.refresh_layer(size=window_state.image_texture.size)
-        self.draw_tool.set_layer(self.drawable_layer)
+        self.layer_stack.layer_sizes = self.image.size
+        self.layer_stack.add_layer()
+        self.layer_stack.select_layer()
 
 
 class RightControlColumn(BoxLayout):

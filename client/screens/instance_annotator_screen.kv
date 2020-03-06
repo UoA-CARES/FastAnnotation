@@ -109,10 +109,13 @@
 
 <LayerView>:
     Button:
+        on_release:
+            app.root.current_screen.image_canvas.layer_stack.add_layer()
+            app.root.current_screen.image_canvas.layer_stack.select_layer()
 
 <ImageCanvas>:
     image: image
-    drawable_layer: drawable_layer
+    layer_stack: layer_stack
     draw_tool: draw_tool
     canvas:
         Color:
@@ -132,8 +135,19 @@
             FloatLayout:
                 DrawTool:
                     id: draw_tool
-                DrawableLayer:
-                    id: drawable_layer
+                LayerStack:
+                    id: layer_stack
+
+
+<LayerStack>:
+    layer_list: self.layer_list
+    current_layer: self.current_layer
+
+
+<DrawTool>
+    layer: self.layer
+    pen_size: self.pen_size
+    layer_color: self.layer_color
 
 <DrawableLayer>:
     col: self.col
