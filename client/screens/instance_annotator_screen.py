@@ -187,24 +187,24 @@ class LayerView(BoxLayout):
     pass
 
 
-class DrawableLayer(MouseDrawnTool):
-    fbo = ObjectProperty(None)
-    col = ObjectProperty((1, 1, 1, 1))
+class DrawTool(MouseDrawnTool):
+    layer = ObjectProperty(None)
     pen_size = NumericProperty(10)
+    layer_color = ObjectProperty(None)
+
+    def set_layer(self, layer):
+        self.layer = layer
+        self.bind(layer_color=self.layer.setter('col'))
+        self.tool_options["color"] = self.layer_color
 
     def init_tool_options(self):
-        self.tool_options["color"] = self.col
         self.tool_options["pen_size"] = self.pen_size
 
-    def refresh_layer(self, size):
-        self.canvas.clear()
-        with self.canvas:
-            # create the fbo
-            self.fbo = Fbo(size=size)
-            Rectangle(size=size, texture=self.fbo.texture)
-
     def on_touch_down_hook(self, touch):
-        with self.fbo:
+        if not self.layer:
+            return
+
+        with self.layer.fbo:
             Color(1, 1, 1)
             d = self.tool_options["pen_size"]
             Ellipse(pos=(touch.x - d / 2, touch.y - d / 2), size=(d, d))
@@ -213,7 +213,9 @@ class DrawableLayer(MouseDrawnTool):
         self.on_touch_down_hook(touch)
 
     def on_touch_up_hook(self, touch):
-        self.tool_options["color"] = (
+        if not self.layer:
+            return
+        self.layer.col = (
             random.uniform(
                 0, 1), random.uniform(
                 0, 1), random.uniform(
@@ -221,9 +223,22 @@ class DrawableLayer(MouseDrawnTool):
                     0, 1))
 
 
+class DrawableLayer(Image):
+    fbo = ObjectProperty(None)
+    col = ObjectProperty((1, 1, 1, 1))
+
+    def refresh_layer(self, size):
+        self.canvas.clear()
+        with self.canvas:
+            # create the fbo
+            self.fbo = Fbo(size=size)
+            Rectangle(size=size, texture=self.fbo.texture)
+
+
 class ImageCanvas(BoxLayout):
     image = ObjectProperty(None)
     drawable_layer = ObjectProperty(None)
+    draw_tool = ObjectProperty(None)
 
     def refresh_image(self):
         print("refreshing")
@@ -231,6 +246,7 @@ class ImageCanvas(BoxLayout):
         self.image.texture = window_state.image_texture
         self.image.size = window_state.image_texture.size
         self.drawable_layer.refresh_layer(size=window_state.image_texture.size)
+        self.draw_tool.set_layer(self.drawable_layer)
 
 
 class RightControlColumn(BoxLayout):

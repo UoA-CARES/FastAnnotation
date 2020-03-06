@@ -56,6 +56,7 @@
 <ImageCanvas>:
     image: image
     drawable_layer: drawable_layer
+    draw_tool: draw_tool
     canvas:
         Color:
             rgba: 0.8, 0.8, 0.8, 0.8
@@ -72,13 +73,17 @@
             size_hint:(None, None)
             opacity: 1.0
             FloatLayout:
+                DrawTool:
+                    id: draw_tool
                 DrawableLayer:
                     id: drawable_layer
 
 <DrawableLayer>:
+    col: self.col
+    fbo: self.fbo
     canvas.before:
         Color:
-            rgba: self.tool_options["color"]
+            rgba: root.col
 
 
 
