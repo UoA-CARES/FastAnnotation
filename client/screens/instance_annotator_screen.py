@@ -1,14 +1,12 @@
-import random
-
 import kivy.utils
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.graphics import Color, Ellipse, Fbo, Rectangle
 from kivy.properties import BooleanProperty
-from kivy.uix.screenmanager import Screen
-from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.image import Image
 from kivy.uix.relativelayout import RelativeLayout
+from kivy.uix.screenmanager import Screen
 
 import client.utils as utils
 from client.screens.common import *
@@ -18,11 +16,6 @@ Builder.load_file(
     os.path.join(
         ClientConfig.SCREEN_DIR,
         'instance_annotator_screen.kv'))
-
-# TODO:
-# Need to draw signal diagrams to optimze flows for UI interactions
-# Might need to optimize REST calls
-# Figure out how images will be represented when open
 
 
 class WindowState:

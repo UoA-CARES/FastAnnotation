@@ -150,11 +150,18 @@
             text_size: self.size
 
 
+
 <ImageCanvas>:
     image: image
     layer_stack: layer_stack
     draw_tool: draw_tool
     scroll_view: scroll_view
+    canvas:
+        Color:
+            rgba: 0.8, 0.8, 0.8, 0.8
+        Rectangle:
+            pos: self.pos
+            size: self.size
     ScrollView:
         id: scroll_view
         size: root.size
@@ -164,7 +171,6 @@
             size: root.size
             pos: root.pos
             size_hint:(None, None)
-            opacity: 1.0
             FloatLayout:
                 DrawTool:
                     id: draw_tool
@@ -184,7 +190,7 @@
 <DrawableLayer>:
     col: self.col
     fbo: self.fbo
-    canvas.before:
+    canvas:
         Color:
             rgba: root.col
 
