@@ -1,7 +1,12 @@
-import numpy as np
-from kivy.app import App
-from kivy.uix.screenmanager import Screen
+import random
+
 import kivy.utils
+from kivy.app import App
+from kivy.clock import Clock
+from kivy.core.window import Window
+from kivy.graphics import Color, Ellipse, Fbo, Rectangle
+from kivy.properties import BooleanProperty
+from kivy.uix.screenmanager import Screen
 
 import client.utils as utils
 from client.screens.common import *
@@ -69,6 +74,10 @@ class InstanceAnnotatorScreen(Screen):
     def on_enter(self, *args):
         self.image_canvas.refresh_image()
         self.refresh_image_queue()
+        Window.bind(on_resize=self.auto_resize)
+
+    def auto_resize(self, *args):
+        Clock.schedule_once(lambda dt: self.image_canvas.refresh_image())
 
     def refresh_image_queue(self):
         print("Refreshing Image Queue")
@@ -112,6 +121,7 @@ class InstanceAnnotatorScreen(Screen):
             print("Next image is %d" % image_id)
 
         if image_id in self.window_cache:
+            print("This is the way")
             self.window_cache[image_id].image_opened = True
             self.load_window_state(self.window_cache[image_id])
             self.image_canvas.refresh_image()
@@ -160,16 +170,99 @@ class InstanceAnnotatorScreen(Screen):
 
 
 class LeftControlColumn(BoxLayout):
+    tool_select = ObjectProperty(None)
+    class_picker = ObjectProperty(None)
+
+
+class ToolSelect(GridLayout):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.app = App.get_running_app()
+
+    def set_color(self, color):
+        print("Color: %s" % str(color))
+        layer_color = self.app.root.current_screen.image_canvas.draw_tool.layer_color
+        self.app.root.current_screen.image_canvas.draw_tool.layer_color = color[
+            :-1] + layer_color[-1:]
+
+    def set_alpha(self, alpha):
+        print("Alpha: %s" % str(alpha))
+        layer_color = self.app.root.current_screen.image_canvas.draw_tool.layer_color
+        layer_color = layer_color[:-1] + (alpha,)
+        self.app.root.current_screen.image_canvas.draw_tool.layer_color = layer_color
+
+    def set_pencil_size(self, size):
+        print("size: %s" % str(size))
+        self.app.root.current_screen.image_canvas.draw_tool.pen_size = size
+
+    def set_layer(self, layer):
+        print("LAYER SELECT")
+
+
+class ClassPicker(GridLayout):
     pass
+
+
+class ClassPickerItem(Button):
+    class_color = ObjectProperty((0, 0, 0, 1))
+    class_name = StringProperty("")
+    class_id = NumericProperty(-1)
+
+
+class LayerView(BoxLayout):
+    pass
+
+
+class DrawTool(MouseDrawnTool):
+    layer = ObjectProperty(None)
+    pen_size = NumericProperty(10)
+    layer_color = ObjectProperty((1, 1, 1, 1))
+
+    def set_layer(self, layer):
+        self.layer = layer
+        self.bind(layer_color=self.layer.setter('col'))
+
+    def on_touch_down_hook(self, touch):
+        if not self.layer:
+            return
+
+        with self.layer.fbo:
+            Color(1, 1, 1)
+            d = self.pen_size
+            Ellipse(pos=(touch.x - d / 2, touch.y - d / 2), size=(d, d))
+
+    def on_touch_move_hook(self, touch):
+        self.on_touch_down_hook(touch)
+
+    def on_touch_up_hook(self, touch):
+        if not self.layer:
+            return
+
+
+class DrawableLayer(Image):
+    fbo = ObjectProperty(None)
+    col = ObjectProperty((1, 1, 1, 1))
+
+    def refresh_layer(self, size):
+        self.canvas.clear()
+        with self.canvas:
+            # create the fbo
+            self.fbo = Fbo(size=size)
+            Rectangle(size=size, texture=self.fbo.texture)
 
 
 class ImageCanvas(BoxLayout):
     image = ObjectProperty(None)
+    drawable_layer = ObjectProperty(None)
+    draw_tool = ObjectProperty(None)
 
     def refresh_image(self):
+        print("refreshing")
         window_state = App.get_running_app().root.current_screen.current_state
         self.image.texture = window_state.image_texture
         self.image.size = window_state.image_texture.size
+        self.drawable_layer.refresh_layer(size=window_state.image_texture.size)
+        self.draw_tool.set_layer(self.drawable_layer)
 
 
 class RightControlColumn(BoxLayout):

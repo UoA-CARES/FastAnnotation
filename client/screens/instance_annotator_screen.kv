@@ -1,5 +1,5 @@
 #:import utils kivy.utils
-#:import config client.client_config.ClientConfig
+#:import ClientConfig client.client_config.ClientConfig
 
 <InstanceAnnotatorScreen>:
     left_control: left_control
@@ -26,13 +26,94 @@
                 id: right_control
                 size_hint_x: 350 / root.width
 
-
 <LeftControlColumn>:
+    tool_select: tool_select
+    color_picker: color_picker
     orientation: "vertical"
+    canvas:
+        Color:
+            rgba: utils.get_color_from_hex(ClientConfig.CLIENT_DARK_3)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    ToolSelect:
+        id: tool_select
+        size_hint_y: 400 / root.height
+
+    ClassPicker:
+        id: color_picker
+        size_hint_y: 400 / root.height
+    LayerView:
+
+<ToolSelect>:
+    cols: 1
+    Label:
+        text: "Tool Options"
+        size_hint_y: None
+        height: 50
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_y: None
+        height: 30
+        Label:
+            text: "pen size"
+        NumericInput:
+            value: 10
+            step: 5
+            on_value: root.set_pencil_size(self.value)
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_y: None
+        height: 30
+        Label:
+            text: "alpha"
+        NumericInput:
+            min: 0.0
+            max: 1.0
+            value: 1.0
+            step: 0.1
+            on_value: root.set_alpha(self.value)
+
+<ClassPicker>:
+    cols: 1
+    Label:
+        text: "Class Picker"
+        size_hint_y: None
+        height: 50
+    GridLayout:
+        cols: 2
+        ClassPickerItem:
+            class_name: "Green"
+            class_color: (0.3, 0.8, 0.2, 1)
+        ClassPickerItem:
+            class_name: "Purple"
+            class_color: (0.5, 0.3, 0.9, 1)
+        ClassPickerItem:
+            class_name: "Red"
+            class_color: (0.9, 0.2, 0.2, 1)
+        ClassPickerItem:
+            class_name: "Blue"
+            class_color: (0.4, 0.7, 0.9, 1)
+
+<ClassPickerItem>
+    class_color: self.class_color
+    class_name: self.class_name
+    class_id: self.class_id
+
+    background_color: root.class_color
+    background_down: ''
+    size_hint_y: None
+    height: 50
+    text: self.class_name
+    on_release: app.root.current_screen.left_control.tool_select.set_color(self.class_color)
+
+<LayerView>:
     Button:
 
 <ImageCanvas>:
     image: image
+    drawable_layer: drawable_layer
+    draw_tool: draw_tool
     canvas:
         Color:
             rgba: 0.8, 0.8, 0.8, 0.8
@@ -45,8 +126,21 @@
             id: image
             keep_ratio: True
             size: root.size
+            pos: root.pos
             size_hint:(None, None)
+            opacity: 1.0
+            FloatLayout:
+                DrawTool:
+                    id: draw_tool
+                DrawableLayer:
+                    id: drawable_layer
 
+<DrawableLayer>:
+    col: self.col
+    fbo: self.fbo
+    canvas.before:
+        Color:
+            rgba: root.col
 
 <RightControlColumn>:
     image_queue: image_queue
@@ -54,7 +148,7 @@
     orientation: "vertical"
     canvas:
         Color:
-            rgba: utils.get_color_from_hex("#0c273b")
+            rgba: utils.get_color_from_hex(ClientConfig.CLIENT_DARK_3)
         Rectangle:
             pos: self.pos
             size: self.size
@@ -88,7 +182,6 @@
         height: 50
         on_release: app.root.current_screen.refresh_image_queue()
 
-
 <ImageQueue>:
     queue: queue
     cols: 1
@@ -99,7 +192,6 @@
     GridLayout:
         id: queue
         cols: 1
-
 
 <ImageQueueItem>:
     image_name: self.image_name
