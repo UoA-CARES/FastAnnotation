@@ -8,6 +8,7 @@ from kivy.graphics import Color, Ellipse, Fbo, Rectangle
 from kivy.properties import BooleanProperty
 from kivy.uix.screenmanager import Screen
 from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.relativelayout import RelativeLayout
 
 import client.utils as utils
 from client.screens.common import *
@@ -30,15 +31,23 @@ class WindowState:
             image_id=-1,
             image_name="",
             image_texture=None,
-            image_opened=False):
+            image_opened=False,
+            layer_state=None):
         self.image_id = image_id
         self.image_name = image_name
         self.image_texture = image_texture
         self.image_opened = image_opened
+        self.layer_state = layer_state
 
         if not self.image_texture:
             empty_image = np.zeros((2000, 2000, 3), np.uint8)
             self.image_texture = utils.mat2texture(empty_image)
+
+
+class LayerState:
+    def __init__(self, drawable_layer):
+        self.layer_fbo = drawable_layer.fbo
+        self.layer_color = drawable_layer.col
 
 
 class InstanceAnnotatorScreen(Screen):
@@ -60,6 +69,8 @@ class InstanceAnnotatorScreen(Screen):
             self.right_control.image_queue.mark_item(
                 new_state.image_id, opened=True)
 
+        if new_state.layer_state:
+            self.image_canvas.layer_stack.load_state(new_state.layer_state)
         self.right_control.image_queue_control.btn_save.disabled = not new_state.image_opened
         self.current_state = new_state
 
@@ -78,7 +89,7 @@ class InstanceAnnotatorScreen(Screen):
         Window.bind(on_resize=self.auto_resize)
 
     def auto_resize(self, *args):
-        Clock.schedule_once(lambda dt: self.image_canvas.refresh_image())
+        Clock.schedule_once(lambda dt: self.image_canvas.resize_image())
 
     def refresh_image_queue(self):
         print("Refreshing Image Queue")
@@ -105,6 +116,9 @@ class InstanceAnnotatorScreen(Screen):
             on_success=self.right_control.image_queue.handle_image_ids)
 
     def load_image(self, image_id=-1):
+        # Save current window state
+        self.current_state.layer_state = self.image_canvas.layer_stack.save_state()
+
         if image_id < 0:
             # For some reason children of a widget are pushed on like a stack
             for w in reversed(self.right_control.image_queue.queue.children):
@@ -122,10 +136,11 @@ class InstanceAnnotatorScreen(Screen):
             print("Next image is %d" % image_id)
 
         if image_id in self.window_cache:
-            print("This is the way")
             self.window_cache[image_id].image_opened = True
             self.load_window_state(self.window_cache[image_id])
             self.image_canvas.refresh_image()
+            self.image_canvas.layer_stack.load_state(
+                self.current_state.layer_state)
             return
 
         utils.get_image_lock_by_id(image_id,
@@ -168,11 +183,13 @@ class InstanceAnnotatorScreen(Screen):
             image_opened=True)
         self.load_window_state(new_state)
         self.image_canvas.refresh_image()
+        self.current_state.layer_state = self.image_canvas.layer_stack.save_state()
 
 
 class LeftControlColumn(BoxLayout):
     tool_select = ObjectProperty(None)
     class_picker = ObjectProperty(None)
+    layer_view = ObjectProperty(None)
 
 
 class ToolSelect(GridLayout):
@@ -210,8 +227,37 @@ class ClassPickerItem(Button):
     class_id = NumericProperty(-1)
 
 
-class LayerView(BoxLayout):
-    pass
+class LayerView(GridLayout):
+    layer_item_list = ObjectProperty(None)
+
+    def add_layer_item(self, layer_index, layer_name=None, enabled=True):
+        item = LayerViewItem()
+        item.layer_index = layer_index
+        if not layer_name:
+            layer_name = "Layer %d" % layer_index
+        item.layer_name = layer_name
+        item.layer_enabled = enabled
+        self.layer_item_list.add_widget(item)
+
+    def clear(self):
+        self.layer_item_list.clear_widgets()
+
+
+class LayerViewItem(RelativeLayout):
+    layer_index = NumericProperty(-1)
+    layer_name = StringProperty('')
+    layer_enabled = BooleanProperty(True)
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.app = App.get_running_app()
+
+    def select_layer(self):
+        self.app.root.current_screen.image_canvas.layer_stack.select_layer(
+            self.layer_index)
+
+    def toggle_layer(self):
+        self.layer_enabled = self.app.root.current_screen.image_canvas.layer_stack.toggle_visibility()
 
 
 class DrawTool(MouseDrawnTool):
@@ -219,7 +265,7 @@ class DrawTool(MouseDrawnTool):
     pen_size = NumericProperty(10)
     layer_color = ObjectProperty((1, 1, 1, 1))
 
-    # Stores binding id of last layer 
+    # Stores binding id of last layer
     prev_bind = None
 
     def set_layer(self, layer):
@@ -248,6 +294,7 @@ class DrawTool(MouseDrawnTool):
 
 
 class LayerStack(FloatLayout):
+    layer_view = ObjectProperty(None)
     layer_list = ObjectProperty([])
     current_layer = NumericProperty(-1)
     layer_sizes = ObjectProperty(None)
@@ -262,27 +309,66 @@ class LayerStack(FloatLayout):
         self.add_widget(layer)
         self.layer_list.append(layer)
 
-    def select_layer(self, index=0):
-        index = self.current_layer + 1
+        self.select_layer(index=len(self.layer_list) - 1)
+
+        layer_view = self.app.root.current_screen.left_control.layer_view
+        layer_view.add_layer_item(layer_index=len(self.layer_list) - 1)
+
+    def select_layer(self, index=-1):
+        if index < 0:
+            index = self.current_layer + 1
         self.current_layer = index
-        self.app.root.current_screen.image_canvas.draw_tool.set_layer(
-            self.layer_list[index])
+        layer = self.layer_list[index]
+        self.app.root.current_screen.image_canvas.draw_tool.set_layer(layer)
+
+    def toggle_visibility(self):
+        layer = self.layer_list[self.current_layer]
+        return layer.toggle_visibility()
 
     def clear(self):
         self.layer_list = []
         self.current_layer = -1
+        self.clear_widgets()
+        layer_view = self.app.root.current_screen.left_control.layer_view
+        layer_view.clear()
+
+    def save_state(self):
+        state = []
+        for layer in self.layer_list:
+            state.append(LayerState(layer))
+        return state
+
+    def load_state(self, state):
+        if not state:
+            return
+        self.clear()
+        for layer_state in state:
+            layer = DrawableLayer()
+            layer.fbo = layer_state.layer_fbo
+            layer.col = layer_state.layer_color
+            layer.refresh_layer()
+
+            self.layer_list.append(layer)
+            self.add_widget(layer)
+        self.select_layer(len(self.layer_list) - 1)
 
 
 class DrawableLayer(Image):
     fbo = ObjectProperty(None)
     col = ObjectProperty((1, 1, 1, 1))
+    visible = BooleanProperty(True)
 
-    def refresh_layer(self, size):
+    def refresh_layer(self, size=None):
         self.canvas.clear()
         with self.canvas:
-            # create the fbo
-            self.fbo = Fbo(size=size)
-            Rectangle(size=size, texture=self.fbo.texture)
+            if size:
+                self.fbo = Fbo(size=size)
+            Rectangle(size=self.fbo.size, texture=self.fbo.texture)
+
+    def toggle_visibility(self):
+        self.visible = not self.visible
+        self.canvas.opacity = int(self.visible)
+        return self.visible
 
 
 class ImageCanvas(BoxLayout):
@@ -299,9 +385,14 @@ class ImageCanvas(BoxLayout):
         window_state = App.get_running_app().root.current_screen.current_state
         self.image.texture = window_state.image_texture
         self.image.size = window_state.image_texture.size
+        self.layer_stack.clear()
         self.layer_stack.layer_sizes = self.image.size
         self.layer_stack.add_layer()
-        self.layer_stack.select_layer()
+
+    def resize_image(self):
+        window_state = App.get_running_app().root.current_screen.current_state
+        self.image.texture = window_state.image_texture
+        self.image.size = window_state.image_texture.size
 
 
 class RightControlColumn(BoxLayout):

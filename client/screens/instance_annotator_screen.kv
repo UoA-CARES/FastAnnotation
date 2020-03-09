@@ -29,6 +29,7 @@
 <LeftControlColumn>:
     tool_select: tool_select
     color_picker: color_picker
+    layer_view: layer_view
     orientation: "vertical"
     canvas:
         Color:
@@ -44,6 +45,7 @@
         id: color_picker
         size_hint_y: 400 / root.height
     LayerView:
+        id: layer_view
 
 <ToolSelect>:
     cols: 1
@@ -108,22 +110,53 @@
     on_release: app.root.current_screen.left_control.tool_select.set_color(self.class_color)
 
 <LayerView>:
+    layer_item_list: layer_item_list
+    cols: 1
     Button:
-        on_release:
-            app.root.current_screen.image_canvas.layer_stack.add_layer()
-            app.root.current_screen.image_canvas.layer_stack.select_layer()
+        size_hint_y: None
+        height: 50
+        text: "Add Layer"
+        on_release: app.root.current_screen.image_canvas.layer_stack.add_layer()
+    ScrollView:
+        GridLayout:
+            cols: 1
+            size_hint_y: None
+            height: self.minimum_height
+            id: layer_item_list
+
+<LayerViewItem>:
+    layer_name: self.layer_name
+    layer_enabled: self.layer_enabled
+    layer_index: self.layer_index
+    height: 50
+    size_hint_y: None
+    Button:
+        size_hint: (1,1)
+        on_release: root.select_layer()
+    BoxLayout:
+        size_hint: (1, 1)
+        pos_hint: {'center_x': .5, 'center_y': .5}
+        padding: 8
+        spacing: 12
+        Button:
+            text: "X" * root.layer_enabled
+            size_hint_x: None
+            width: self.height
+            on_release: root.toggle_layer()
+        Label:
+            text: root.layer_name
+            halign: 'left'
+            valign: 'center'
+            text_size: self.size
+
 
 <ImageCanvas>:
     image: image
     layer_stack: layer_stack
     draw_tool: draw_tool
-    canvas:
-        Color:
-            rgba: 0.8, 0.8, 0.8, 0.8
-        Rectangle:
-            pos: self.pos
-            size: self.size
+    scroll_view: scroll_view
     ScrollView:
+        id: scroll_view
         size: root.size
         Image:
             id: image
@@ -142,7 +175,6 @@
 <LayerStack>:
     layer_list: self.layer_list
     current_layer: self.current_layer
-
 
 <DrawTool>
     layer: self.layer

@@ -37,12 +37,14 @@
         id: text_field
         text: root.default_text
 
-<TileView@GridLayout>:
+<TileView>:
     tile_width: 0
     tile_height: 0
-    col_default_width: self.tile_width
+    size_hint_y: None
+    height: self.minimum_height
+    col_default_width: root.tile_width
     col_force_default: True
-    row_default_height: self.tile_height
+    row_default_height: root.tile_height
     row_force_default: True
     spacing: 16
     padding: 16

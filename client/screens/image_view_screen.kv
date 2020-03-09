@@ -10,12 +10,13 @@
                     title: app.current_project_name
                     with_previous: True
                     on_release: app.show_project_tools(app.current_project_name, app.current_project_id)
-        TileView:
-            id: tile_view
-            tile_width: 150
-            tile_height: 150
-            padding: 32
-            spacing: 32
+        ScrollView:
+            TileView:
+                id: tile_view
+                tile_width: 150
+                tile_height: 150
+                padding: 32
+                spacing: 32
 
 <Thumbnail>:
     cust_texture: self.cust_texture

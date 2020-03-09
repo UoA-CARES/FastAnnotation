@@ -15,17 +15,18 @@
                 ActionButton:
                     text: "Delete"
                     on_release: print("Delete Project")
-        TileView:
-            tile_width: 150
-            tile_height: 150
-            padding: 32
-            spacing: 32
-            Button:
-                text: "Add Images"
-                on_release: root.upload_images()
-            Button:
-                text: "View Images"
-                on_release: app.show_image_viewer()
-            Button:
-                text: "Instance Annotator"
-                on_release: app.open_instance_annotator()
+        ScrollView:
+            TileView:
+                tile_width: 150
+                tile_height: 150
+                padding: 32
+                spacing: 32
+                Button:
+                    text: "Add Images"
+                    on_release: root.upload_images()
+                Button:
+                    text: "View Images"
+                    on_release: app.show_image_viewer()
+                Button:
+                    text: "Instance Annotator"
+                    on_release: app.open_instance_annotator()

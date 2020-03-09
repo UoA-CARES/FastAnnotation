@@ -6,6 +6,7 @@ from kivy.properties import ObjectProperty, StringProperty, NumericProperty
 from kivy.uix.actionbar import ActionItem
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.image import Image
 from kivy.uix.popup import Popup
