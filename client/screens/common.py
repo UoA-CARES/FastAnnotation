@@ -51,7 +51,7 @@ class MouseDrawnTool(FloatLayout):
         return super(FloatLayout, self).on_touch_down(touch)
 
     def on_touch_move(self, touch):
-        self.on_touch_down_hook(touch)
+        self.on_touch_move_hook(touch)
         return super(FloatLayout, self).on_touch_move(touch)
 
     def on_touch_up(self, touch):

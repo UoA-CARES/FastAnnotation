@@ -206,9 +206,6 @@ class ToolSelect(GridLayout):
         print("size: %s" % str(size))
         self.app.root.current_screen.image_canvas.draw_tool.pen_size = size
 
-    def set_layer(self, layer):
-        print("LAYER SELECT")
-
 
 class ClassPicker(GridLayout):
     pass
@@ -273,6 +270,11 @@ class DrawTool(MouseDrawnTool):
         if not self.layer:
             return
 
+        self.layer.bounds['top-right'] = np.ceil(np.max(
+            np.array([self.layer.bounds['top-right'], touch.pos]), axis=0)).astype(int)
+        self.layer.bounds['bottom-left'] = np.ceil(np.min(
+            np.array([self.layer.bounds['bottom-left'], touch.pos]), axis=0)).astype(int)
+
         with self.layer.fbo:
             Color(1, 1, 1)
             d = self.pen_size
@@ -282,8 +284,7 @@ class DrawTool(MouseDrawnTool):
         self.on_touch_down_hook(touch)
 
     def on_touch_up_hook(self, touch):
-        if not self.layer:
-            return
+        pass
 
 
 class LayerStack(FloatLayout):
@@ -350,6 +351,8 @@ class DrawableLayer(Image):
     fbo = ObjectProperty(None)
     col = ObjectProperty((1, 1, 1, 1))
     visible = BooleanProperty(True)
+    bounds = {
+        'top-right': (0, 0), 'bottom-left': (np.iinfo(int).max, np.iinfo(int).max)}
 
     def refresh_layer(self, size=None):
         self.canvas.clear()
