@@ -2,7 +2,7 @@ import kivy.utils
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.graphics import Color, Ellipse, Fbo, Rectangle
+from kivy.graphics import Color, Ellipse, Fbo, Rectangle, InstructionGroup, Line
 from kivy.properties import BooleanProperty
 from kivy.uix.image import Image
 from kivy.uix.relativelayout import RelativeLayout
@@ -208,7 +208,19 @@ class ToolSelect(GridLayout):
 
 
 class ClassPicker(GridLayout):
-    pass
+    current_class = ObjectProperty(None)
+
+    def change_class(self, instance):
+        if self.current_class:
+            self.current_class.state = 'normal'
+        self.current_class = instance
+        self.current_class.state = 'down'
+        self.update_canvas()
+
+    def update_canvas(self):
+        if self.current_class:
+            App.get_running_app().root.current_screen.left_control.tool_select.set_color(
+                self.current_class.class_color)
 
 
 class ClassPickerItem(Button):
@@ -236,18 +248,28 @@ class LayerView(GridLayout):
 class LayerViewItem(RelativeLayout):
     layer_index = NumericProperty(-1)
     layer_name = StringProperty('')
-    layer_enabled = BooleanProperty(True)
+    mask_enabled = BooleanProperty(True)
+    bbox_enabled = BooleanProperty(True)
 
     def __init__(self, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
 
+    def on_parent(self, *args):
+        layer = self.app.root.current_screen.image_canvas.layer_stack.layer_list[
+            self.layer_index]
+        self.fbind('mask_enabled', layer.setter('mask_visible'))
+        self.fbind('bbox_enabled', layer.setter('bbox_visible'))
+
     def select_layer(self):
         self.app.root.current_screen.image_canvas.layer_stack.select_layer(
             self.layer_index)
 
-    def toggle_layer(self):
-        self.layer_enabled = self.app.root.current_screen.image_canvas.layer_stack.toggle_visibility()
+    def toggle_mask(self):
+        self.app.root.current_screen.image_canvas.layer_stack.toggle_mask()
+
+    def toggle_bbox(self):
+        self.app.root.current_screen.image_canvas.layer_stack.toggle_bbox()
 
 
 class DrawTool(MouseDrawnTool):
@@ -264,27 +286,37 @@ class DrawTool(MouseDrawnTool):
         if self.prev_bind:
             self.unbind_uid('layer_color', self.prev_bind)
 
-        self.prev_bind = self.fbind('layer_color', self.layer.setter('col'))
+        self.prev_bind = self.fbind(
+            'layer_color', self.layer.setter('mask_color'))
 
     def on_touch_down_hook(self, touch):
         if not self.layer:
             return
 
-        self.layer.bounds['top-right'] = np.ceil(np.max(
-            np.array([self.layer.bounds['top-right'], touch.pos]), axis=0)).astype(int)
-        self.layer.bounds['bottom-left'] = np.ceil(np.min(
-            np.array([self.layer.bounds['bottom-left'], touch.pos]), axis=0)).astype(int)
+        pen_radius = self.pen_size / 2
+        self.layer.bbox_top_right[0] = np.ceil(
+            max(self.layer.bbox_top_right[0], touch.x + np.ceil(pen_radius))).astype(int)
+        self.layer.bbox_top_right[1] = np.ceil(
+            max(self.layer.bbox_top_right[1], touch.y + np.ceil(pen_radius))).astype(int)
+
+        self.layer.bbox_bot_left[0] = np.ceil(
+            min(self.layer.bbox_bot_left[0], touch.x - np.ceil(pen_radius))).astype(int)
+        self.layer.bbox_bot_left[1] = np.ceil(
+            min(self.layer.bbox_bot_left[1], touch.y - np.ceil(pen_radius))).astype(int)
 
         with self.layer.fbo:
             Color(1, 1, 1)
             d = self.pen_size
-            Ellipse(pos=(touch.x - d / 2, touch.y - d / 2), size=(d, d))
+            Ellipse(
+                pos=(touch.x - pen_radius,
+                     touch.y - pen_radius),
+                size=(d, d))
 
     def on_touch_move_hook(self, touch):
         self.on_touch_down_hook(touch)
 
     def on_touch_up_hook(self, touch):
-        pass
+        self.layer.refresh_bbox()
 
 
 class LayerStack(FloatLayout):
@@ -298,12 +330,14 @@ class LayerStack(FloatLayout):
         self.app = App.get_running_app()
 
     def add_layer(self):
-        layer = DrawableLayer()
-        layer.refresh_layer(self.layer_sizes)
+        layer = DrawableLayer(size=self.layer_sizes)
+        layer.refresh_layer()
+
         self.add_widget(layer)
         self.layer_list.append(layer)
 
         self.select_layer(index=len(self.layer_list) - 1)
+        self.app.root.current_screen.left_control.class_picker.update_canvas()
 
         layer_view = self.app.root.current_screen.left_control.layer_view
         layer_view.add_layer_item(layer_index=len(self.layer_list) - 1)
@@ -315,9 +349,13 @@ class LayerStack(FloatLayout):
         layer = self.layer_list[index]
         self.app.root.current_screen.image_canvas.draw_tool.set_layer(layer)
 
-    def toggle_visibility(self):
+    def toggle_mask(self):
         layer = self.layer_list[self.current_layer]
-        return layer.toggle_visibility()
+        layer.toggle_mask()
+
+    def toggle_bbox(self):
+        layer = self.layer_list[self.current_layer]
+        layer.toggle_bbox()
 
     def clear(self):
         self.layer_list = []
@@ -337,9 +375,9 @@ class LayerStack(FloatLayout):
             return
         self.clear()
         for layer_state in state:
-            layer = DrawableLayer()
-            layer.fbo = layer_state.layer_fbo
-            layer.col = layer_state.layer_color
+            layer = DrawableLayer(
+                fbo=layer_state.layer_fbo,
+                mask_color=layer_state.layer_color)
             layer.refresh_layer()
 
             self.layer_list.append(layer)
@@ -347,24 +385,59 @@ class LayerStack(FloatLayout):
         self.select_layer(len(self.layer_list) - 1)
 
 
-class DrawableLayer(Image):
+class DrawableLayer(FloatLayout):
     fbo = ObjectProperty(None)
-    col = ObjectProperty((1, 1, 1, 1))
-    visible = BooleanProperty(True)
-    bounds = {
-        'top-right': (0, 0), 'bottom-left': (np.iinfo(int).max, np.iinfo(int).max)}
 
-    def refresh_layer(self, size=None):
-        self.canvas.clear()
-        with self.canvas:
-            if size:
-                self.fbo = Fbo(size=size)
+    mask_layer = ObjectProperty(None)
+    mask_color = ObjectProperty((1, 1, 1, 1))
+    mask_visible = BooleanProperty(True)
+
+    bbox_layer = ObjectProperty(None)
+    bbox_visible = BooleanProperty(True)
+    bbox_color = ObjectProperty((1, 1, 0, 1))
+    bbox_thickness = NumericProperty(1)
+
+    bbox_top_right = ObjectProperty([])
+    bbox_bot_left = ObjectProperty([])
+    bbox_bounds = ObjectProperty([0, 0, 0, 0])
+
+    def __init__(self, size=None, fbo=None, mask_color=None, **kwargs):
+        super().__init__(**kwargs)
+        if size:
+            self.size = size
+        if fbo:
+            self.fbo = fbo
+            self.size = self.fbo.size
+
+        if mask_color:
+            self.mask_color = mask_color
+        self.bbox_top_right = [-1, -1]
+        self.bbox_bot_left = [np.iinfo(int).max, np.iinfo(int).max]
+
+    def refresh_layer(self):
+        self.refresh_mask()
+        self.refresh_bbox()
+
+    def refresh_mask(self):
+        self.mask_layer.canvas.clear()
+        with self.mask_layer.canvas:
+            if self.size and not self.fbo:
+                self.fbo = Fbo(size=self.size)
             Rectangle(size=self.fbo.size, texture=self.fbo.texture)
 
-    def toggle_visibility(self):
-        self.visible = not self.visible
-        self.canvas.opacity = int(self.visible)
-        return self.visible
+    def refresh_bbox(self):
+        rect = list(self.bbox_bot_left)
+        rect += list(np.array(self.bbox_top_right) -
+                     np.array(self.bbox_bot_left))
+        self.bbox_bounds = rect
+
+    def toggle_mask(self):
+        self.mask_visible = not self.mask_visible
+        self.mask_layer.canvas.opacity = int(self.mask_visible)
+
+    def toggle_bbox(self):
+        self.bbox_visible = not self.bbox_visible
+        self.bbox_layer.canvas.opacity = int(self.bbox_visible)
 
 
 class ImageCanvas(BoxLayout):

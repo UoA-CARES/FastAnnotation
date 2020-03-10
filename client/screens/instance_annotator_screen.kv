@@ -28,7 +28,7 @@
 
 <LeftControlColumn>:
     tool_select: tool_select
-    color_picker: color_picker
+    class_picker: class_picker
     layer_view: layer_view
     orientation: "vertical"
     canvas:
@@ -42,7 +42,7 @@
         size_hint_y: 400 / root.height
 
     ClassPicker:
-        id: color_picker
+        id: class_picker
         size_hint_y: 400 / root.height
     LayerView:
         id: layer_view
@@ -107,7 +107,7 @@
     size_hint_y: None
     height: 50
     text: self.class_name
-    on_release: app.root.current_screen.left_control.tool_select.set_color(self.class_color)
+    on_release: app.root.current_screen.left_control.class_picker.change_class(root)
 
 <LayerView>:
     layer_item_list: layer_item_list
@@ -126,7 +126,8 @@
 
 <LayerViewItem>:
     layer_name: self.layer_name
-    layer_enabled: self.layer_enabled
+    mask_enabled: self.mask_enabled
+    bbox_enabled: self.bbox_enabled
     layer_index: self.layer_index
     height: 50
     size_hint_y: None
@@ -137,12 +138,17 @@
         size_hint: (1, 1)
         pos_hint: {'center_x': .5, 'center_y': .5}
         padding: 8
-        spacing: 12
+        spacing: 8
         Button:
-            text: "X" * root.layer_enabled
+            text: "M" * root.mask_enabled
             size_hint_x: None
             width: self.height
-            on_release: root.toggle_layer()
+            on_release: root.toggle_mask()
+        Button:
+            text: "B" * root.bbox_enabled
+            size_hint_x: None
+            width: self.height
+            on_release: root.toggle_bbox()
         Label:
             text: root.layer_name
             halign: 'left'
@@ -188,11 +194,33 @@
     layer_color: self.layer_color
 
 <DrawableLayer>:
-    col: self.col
+    mask_layer: mask_layer
+    mask_color: self.mask_color
     fbo: self.fbo
-    canvas.before:
-        Color:
-            rgba: root.col
+
+    bbox_layer: bbox_layer
+    bbox_color: self.bbox_color
+    bbox_thickness: self.bbox_thickness
+    bbox_top_right: self.bbox_top_right
+    bbox_bot_left: self.bbox_bot_left
+    bbox_bounds: self.bbox_bounds
+
+
+    Widget:
+        id: mask_layer
+        canvas.before:
+            Color:
+                rgba: root.mask_color
+
+    Widget:
+        id: bbox_layer
+        canvas.before:
+            Color:
+                rgba: root.bbox_color
+            Line:
+                width: root.bbox_thickness
+                rectangle: root.bbox_bounds
+
 
 <RightControlColumn>:
     image_queue: image_queue
