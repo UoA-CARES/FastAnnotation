@@ -6,6 +6,7 @@ from kivy.properties import ObjectProperty, StringProperty, NumericProperty
 from kivy.uix.actionbar import ActionItem
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.image import Image
 from kivy.uix.popup import Popup
@@ -34,7 +35,7 @@ class TileView(GridLayout):
     tile_height = NumericProperty(0)
 
 
-class MouseDrawnTool(Image):
+class MouseDrawnTool(FloatLayout):
     # Override these in child classes
     def on_touch_down_hook(self, touch):
         pass
@@ -48,15 +49,15 @@ class MouseDrawnTool(Image):
     # Do not override these in child classes
     def on_touch_down(self, touch):
         self.on_touch_down_hook(touch)
-        return super(Image, self).on_touch_down(touch)
+        return super(FloatLayout, self).on_touch_down(touch)
 
     def on_touch_move(self, touch):
-        self.on_touch_down_hook(touch)
-        return super(Image, self).on_touch_down(touch)
+        self.on_touch_move_hook(touch)
+        return super(FloatLayout, self).on_touch_move(touch)
 
     def on_touch_up(self, touch):
         self.on_touch_up_hook(touch)
-        return super(Image, self).on_touch_down(touch)
+        return super(FloatLayout, self).on_touch_up(touch)
 
 
 class NumericInput(StackLayout):

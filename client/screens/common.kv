@@ -37,12 +37,14 @@
         id: text_field
         text: root.default_text
 
-<TileView@GridLayout>:
+<TileView>:
     tile_width: 0
     tile_height: 0
-    col_default_width: self.tile_width
+    size_hint_y: None
+    height: self.minimum_height
+    col_default_width: root.tile_width
     col_force_default: True
-    row_default_height: self.tile_height
+    row_default_height: root.tile_height
     row_force_default: True
     spacing: 16
     padding: 16
@@ -69,13 +71,9 @@
             text: '+'
             disabled: root.value >= root.max
             on_release:
-                root.value += root.step
-                root.value = min(root.value, root.max)
-                root.value = round(root.value, root.decimal_places)
+                root.value = round(min(root.value + root.step, root.max), root.decimal_places)
         Button:
             text: '-'
             disabled: root.value <= root.min
             on_release:
-                root.value -= root.step
-                root.value = max(root.value, root.min)
-                root.value = round(root.value, root.decimal_places)
+                root.value = round(max(root.value - root.step, root.min), root.decimal_places)
