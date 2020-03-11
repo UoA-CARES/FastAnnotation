@@ -13,6 +13,7 @@ class ServerConfig:
     DATABASE_TIMEZONE = '+00:00'
 
     DATA_ROOT_DIR = os.path.join(ROOT_DIR, "database", "DATA")
+    XML_TEMPLATE_PATH = os.path.join(ROOT_DIR, "server", "template.xml")
     DEFAULT_IMAGE_EXT = ".jpg"
 
     # Used to white list filter combinations for Project Images

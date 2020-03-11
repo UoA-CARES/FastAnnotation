@@ -40,7 +40,19 @@ class WindowState:
 class LayerState:
     def __init__(self, drawable_layer):
         self.layer_fbo = drawable_layer.fbo
-        self.layer_color = drawable_layer.col
+        self.layer_color = drawable_layer.mask_color
+        self.class_name = drawable_layer.class_name
+        self.bbox = drawable_layer.bbox_bot_left + drawable_layer.bbox_top_right
+
+    def to_dict(self):
+        body = {}
+        mat = utils.texture2mat(self.layer_fbo.texture)
+        mask = np.all(mat.astype(bool), axis=2)
+        body['mask'] = utils.encode_mask(mask)
+        info = {'source_shape': tuple(reversed(self.layer_fbo.texture.size)) +
+                (3,), 'class_name': self.class_name, 'bbox': self.bbox}
+        body['info'] = info
+        return body
 
 
 class InstanceAnnotatorScreen(Screen):
@@ -142,6 +154,8 @@ class InstanceAnnotatorScreen(Screen):
                                    on_fail=self.handle_image_lock_fail)
 
     def save_image(self):
+        annotation = self.image_canvas.export_data()
+        utils.add_annotation_to_image(self.current_state.image_id, annotation)
         utils.get_image_lock_by_id(self.current_state.image_id,
                                    lock=False,
                                    on_success=self.handle_image_unlock_success)
@@ -189,22 +203,31 @@ class ToolSelect(GridLayout):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
+        self.draw_tool = None
+
+    def on_parent(self, *args):
+        Clock.schedule_once(lambda dt: self.late_init())
+
+    def late_init(self):
+        self.draw_tool = App.get_running_app().root.get_screen("InstanceAnnotator").image_canvas.draw_tool
 
     def set_color(self, color):
         print("Color: %s" % str(color))
-        layer_color = self.app.root.current_screen.image_canvas.draw_tool.layer_color
-        self.app.root.current_screen.image_canvas.draw_tool.layer_color = color[
-            :-1] + layer_color[-1:]
+        self.draw_tool.layer_color = color[
+            :-1] + self.draw_tool.layer_color[-1:]
+
+    def set_class_name(self, class_name):
+        self.draw_tool.class_name = class_name
 
     def set_alpha(self, alpha):
         print("Alpha: %s" % str(alpha))
-        layer_color = self.app.root.current_screen.image_canvas.draw_tool.layer_color
+        layer_color = self.draw_tool.layer_color
         layer_color = layer_color[:-1] + (alpha,)
-        self.app.root.current_screen.image_canvas.draw_tool.layer_color = layer_color
+        self.draw_tool.layer_color = layer_color
 
     def set_pencil_size(self, size):
         print("size: %s" % str(size))
-        self.app.root.current_screen.image_canvas.draw_tool.pen_size = size
+        self.draw_tool.pen_size = size
 
 
 class ClassPicker(GridLayout):
@@ -221,6 +244,9 @@ class ClassPicker(GridLayout):
         if self.current_class:
             App.get_running_app().root.current_screen.left_control.tool_select.set_color(
                 self.current_class.class_color)
+            App.get_running_app().root.current_screen.left_control.tool_select.set_class_name(
+                self.current_class.class_name
+            )
 
 
 class ClassPickerItem(Button):
@@ -246,7 +272,7 @@ class LayerView(GridLayout):
 
 
 class LayerViewItem(RelativeLayout):
-    layer_index = NumericProperty(-1)
+    layer_index = NumericProperty(0)
     layer_name = StringProperty('')
     mask_enabled = BooleanProperty(True)
     bbox_enabled = BooleanProperty(True)
@@ -254,55 +280,66 @@ class LayerViewItem(RelativeLayout):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
+        self.layer_stack = None
 
     def on_parent(self, *args):
-        layer = self.app.root.current_screen.image_canvas.layer_stack.layer_list[
-            self.layer_index]
+        Clock.schedule_once(lambda dt: self.late_init())
+
+    def late_init(self):
+        self.layer_stack = App.get_running_app().root.get_screen("InstanceAnnotator").image_canvas.layer_stack
+        layer = self.layer_stack.layer_list[self.layer_index]
         self.fbind('mask_enabled', layer.setter('mask_visible'))
         self.fbind('bbox_enabled', layer.setter('bbox_visible'))
 
     def select_layer(self):
-        self.app.root.current_screen.image_canvas.layer_stack.select_layer(
-            self.layer_index)
+        self.layer_stack.select_layer(self.layer_index)
 
     def toggle_mask(self):
-        self.app.root.current_screen.image_canvas.layer_stack.toggle_mask()
+        self.layer_stack.toggle_mask()
 
     def toggle_bbox(self):
-        self.app.root.current_screen.image_canvas.layer_stack.toggle_bbox()
+        self.layer_stack.toggle_bbox()
 
 
 class DrawTool(MouseDrawnTool):
     layer = ObjectProperty(None)
     pen_size = NumericProperty(10)
     layer_color = ObjectProperty((1, 1, 1, 1))
+    class_name = StringProperty("")
 
     # Stores binding id of last layer
-    prev_bind = None
+    color_bind = None
+    name_bind = None
 
     def set_layer(self, layer):
         self.layer = layer
 
-        if self.prev_bind:
-            self.unbind_uid('layer_color', self.prev_bind)
+        if self.color_bind:
+            self.unbind_uid('layer_color', self.color_bind)
 
-        self.prev_bind = self.fbind(
+        self.color_bind = self.fbind(
             'layer_color', self.layer.setter('mask_color'))
+
+        if self.name_bind:
+            self.unbind_uid('class_name', self.name_bind)
+
+        self.name_bind = self.fbind(
+            'class_name', self.layer.setter('class_name'))
 
     def on_touch_down_hook(self, touch):
         if not self.layer:
             return
 
         pen_radius = self.pen_size / 2
-        self.layer.bbox_top_right[0] = np.ceil(
-            max(self.layer.bbox_top_right[0], touch.x + np.ceil(pen_radius))).astype(int)
-        self.layer.bbox_top_right[1] = np.ceil(
-            max(self.layer.bbox_top_right[1], touch.y + np.ceil(pen_radius))).astype(int)
+        self.layer.bbox_top_right[0] = np.ceil(max(
+            self.layer.bbox_top_right[0], touch.x + np.ceil(pen_radius))).astype(int).tolist()
+        self.layer.bbox_top_right[1] = np.ceil(max(
+            self.layer.bbox_top_right[1], touch.y + np.ceil(pen_radius))).astype(int).tolist()
 
-        self.layer.bbox_bot_left[0] = np.ceil(
-            min(self.layer.bbox_bot_left[0], touch.x - np.ceil(pen_radius))).astype(int)
-        self.layer.bbox_bot_left[1] = np.ceil(
-            min(self.layer.bbox_bot_left[1], touch.y - np.ceil(pen_radius))).astype(int)
+        self.layer.bbox_bot_left[0] = np.ceil(min(
+            self.layer.bbox_bot_left[0], touch.x - np.ceil(pen_radius))).astype(int).tolist()
+        self.layer.bbox_bot_left[1] = np.ceil(min(
+            self.layer.bbox_bot_left[1], touch.y - np.ceil(pen_radius))).astype(int).tolist()
 
         with self.layer.fbo:
             Color(1, 1, 1)
@@ -387,6 +424,7 @@ class LayerStack(FloatLayout):
 
 class DrawableLayer(FloatLayout):
     fbo = ObjectProperty(None)
+    class_name = StringProperty("")
 
     mask_layer = ObjectProperty(None)
     mask_color = ObjectProperty((1, 1, 1, 1))
@@ -401,7 +439,7 @@ class DrawableLayer(FloatLayout):
     bbox_bot_left = ObjectProperty([])
     bbox_bounds = ObjectProperty([0, 0, 0, 0])
 
-    def __init__(self, size=None, fbo=None, mask_color=None, **kwargs):
+    def __init__(self, size=None, fbo=None, class_name=None, mask_color=None, **kwargs):
         super().__init__(**kwargs)
         if size:
             self.size = size
@@ -411,6 +449,9 @@ class DrawableLayer(FloatLayout):
 
         if mask_color:
             self.mask_color = mask_color
+
+        if class_name:
+            self.class_name = class_name
         self.bbox_top_right = [-1, -1]
         self.bbox_bot_left = [np.iinfo(int).max, np.iinfo(int).max]
 
@@ -462,6 +503,13 @@ class ImageCanvas(BoxLayout):
         window_state = App.get_running_app().root.current_screen.current_state
         self.image.texture = window_state.image_texture
         self.image.size = window_state.image_texture.size
+
+    def export_data(self):
+        state = self.layer_stack.save_state()
+        body = []
+        for s in state:
+            body.append(s.to_dict())
+        return body
 
 
 class RightControlColumn(BoxLayout):

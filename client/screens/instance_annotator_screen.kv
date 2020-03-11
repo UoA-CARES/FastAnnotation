@@ -169,6 +169,8 @@
             pos: self.pos
             size: self.size
     ScrollView:
+        scroll_type: ['bars', 'content']
+        bar_width: '10dp'
         id: scroll_view
         size: root.size
         Image:
@@ -269,9 +271,13 @@
         text: "Image Queue"
         size_hint_y: None
         height: 50
-    GridLayout:
-        id: queue
-        cols: 1
+    ScrollView:
+        GridLayout:
+            id: queue
+            cols: 1
+            size_hint_y: None
+            height: self.minimum_height
+
 
 <ImageQueueItem>:
     image_name: self.image_name

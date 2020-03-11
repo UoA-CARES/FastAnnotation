@@ -145,10 +145,10 @@ def add_project_images(pid):
             row["name"] +
             ServerConfig.DEFAULT_IMAGE_EXT)
 
-        query = "INSERT INTO image (project_fid, image_path, image_name) "
-        query += "VALUES (%s, %s, %s);"
+        query = "INSERT INTO image (project_fid, image_path, image_name, image_ext) "
+        query += "VALUES (%s, %s, %s, %s);"
         try:
-            _, id = db.query(query, (pid, img_path, row["name"]))
+            _, id = db.query(query, (pid, img_path, row["name"], row["type"]))
         except DatabaseError as e:
             msg = "Unknown Error"
             if e.errno == 1062:

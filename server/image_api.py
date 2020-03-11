@@ -1,11 +1,13 @@
 import base64
-
+import server.utils as utils
+import os
 from flask import Blueprint
 from flask import jsonify
 from flask import request
 from flask_negotiate import produces, consumes
 
 from server.server_config import DatabaseInstance
+from server.server_config import ServerConfig
 
 image_blueprint = Blueprint('image_blueprint', __name__)
 
@@ -18,7 +20,8 @@ db = DatabaseInstance()
 def get_bulk_images():
     content = request.get_json()
     if "ids" not in content:
-        response = jsonify({"err": "Submitted content does not fit expected structure"})
+        response = jsonify(
+            {"err": "Submitted content does not fit expected structure"})
         response.status_code = 400
         return response
 
@@ -50,7 +53,8 @@ def get_bulk_images():
 def get_bulk_image_metas():
     content = request.get_json()
     if "ids" not in content:
-        response = jsonify({"err": "Submitted content does not fit expected structure"})
+        response = jsonify(
+            {"err": "Submitted content does not fit expected structure"})
         response.status_code = 400
         return response
 
@@ -171,6 +175,44 @@ def unlock_image_by_id(iid):
 
     query = "UPDATE image SET is_locked = b'0' WHERE image_id = %s"
     db.query(query, (iid,))
+    response = jsonify({"success": True, "id": iid})
+    response.status_code = 200
+    return response
+
+
+@image_blueprint.route("<int:iid>/annotation", methods=['POST'])
+@produces('application/json')
+@consumes('application/json')
+def add_annotation_to_image(iid):
+    content = request.get_json()
+    if not isinstance(content, list):
+        content = [content]
+
+    i = 0
+    for row in content:
+        info = row['info']
+        mask = utils.decode_mask(row['mask'], info['source_shape'])
+
+        mask_path = os.path.join(
+            ServerConfig.DATA_ROOT_DIR,
+            "annotation",
+            str(iid),
+            "trimaps",
+            "layer_%d.png" % i)
+        info_path = os.path.join(
+            ServerConfig.DATA_ROOT_DIR,
+            "annotation",
+            str(iid),
+            "xmls",
+            "layer_%d.xml" % i)
+
+        query = "REPLACE INTO instance_seg_meta (image_id, mask_path, info_path) VALUES (%s,%s,%s)"
+        db.query(query, (iid, mask_path, info_path))
+
+        utils.save_mask(mask, mask_path)
+        utils.save_info(info, info_path)
+        i += 1
+
     response = jsonify({"success": True, "id": iid})
     response.status_code = 200
     return response
