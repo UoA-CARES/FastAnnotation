@@ -185,7 +185,7 @@ def get_image_metas_by_ids(image_ids, on_success=None, on_fail=None):
         on_error=on_fail)
 
 
-def add_annotation_to_image(
+def add_image_annotation(
         image_id,
         annotation,
         on_success=None,
@@ -198,6 +198,28 @@ def add_annotation_to_image(
         req_headers=headers,
         method="POST",
         req_body=json.dumps(annotation),
+        on_success=on_success,
+        on_failure=on_fail,
+        on_error=on_fail)
+
+
+def delete_image_annotation(image_id, on_success=None, on_fail=None):
+    route = ClientConfig.SERVER_URL + "images/" + str(image_id) + "/annotation"
+    UrlRequest(
+        route,
+        method="DELETE",
+        on_success=on_success,
+        on_failure=on_fail,
+        on_error=on_fail)
+
+
+def get_image_annotation(image_id, on_success=None, on_fail=None):
+    route = ClientConfig.SERVER_URL + "images/" + str(image_id) + "/annotation"
+    headers = {"Accept": "application/json"}
+    UrlRequest(
+        route,
+        req_headers=headers,
+        method="GET",
         on_success=on_success,
         on_failure=on_fail,
         on_error=on_fail)
@@ -219,9 +241,10 @@ def encode_mask(mask):
     return encoded_mask.decode('utf-8')
 
 
-def decode_mask(b64_str):
+def decode_mask(b64_str, shape):
     mask_bytes = base64.b64decode(b64_str.encode("utf-8"))
-    return np.fromstring(mask_bytes, bool)
+    flat = np.fromstring(mask_bytes, bool)
+    return np.reshape(flat, newshape=shape[:2], order='C')
 
 
 def bytes2mat(bytes):
@@ -254,9 +277,13 @@ def texture2bytes(texture):
 
 
 def mat2texture(mat):
+    mat = cv2.flip(mat, 0)
+    mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGBA)
+    indices = np.where(mat[:, :, :3] == (0, 0, 0))
+    mat[indices[0], indices[1], 3] = 0
     buf = mat.tostring()
-    tex = Texture.create(size=(mat.shape[1], mat.shape[0]), colorfmt='bgr')
-    tex.blit_buffer(buf, colorfmt='bgr', bufferfmt='ubyte')
+    tex = Texture.create(size=(mat.shape[1], mat.shape[0]), colorfmt='rgba')
+    tex.blit_buffer(buf, colorfmt='rgba', bufferfmt='ubyte')
     return tex
 
 

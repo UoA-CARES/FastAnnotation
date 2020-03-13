@@ -24,7 +24,6 @@ def save_mask(mask, filepath):
     folder = os.path.dirname(filepath)
     Path(folder).mkdir(parents=True, exist_ok=True)
     mask = mask.astype(np.uint8) * 255
-    mask = cv2.flip(mask, 0)
     cv2.imwrite(filepath, mask)
 
 

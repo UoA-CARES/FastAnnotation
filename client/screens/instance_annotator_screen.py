@@ -3,6 +3,7 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.graphics import Color, Ellipse, Fbo, Rectangle, InstructionGroup, Line
+from kivy.graphics.texture import Texture
 from kivy.properties import BooleanProperty
 from kivy.uix.image import Image
 from kivy.uix.relativelayout import RelativeLayout
@@ -10,6 +11,7 @@ from kivy.uix.screenmanager import Screen
 
 import client.utils as utils
 from client.screens.common import *
+import cv2
 
 # Load corresponding kivy file
 Builder.load_file(
@@ -25,32 +27,98 @@ class WindowState:
             image_name="",
             image_texture=None,
             image_opened=False,
-            layer_state=None):
+            layer_states=None):
         self.image_id = image_id
         self.image_name = image_name
         self.image_texture = image_texture
         self.image_opened = image_opened
-        self.layer_state = layer_state
+        self.layer_states = layer_states
 
         if not self.image_texture:
-            empty_image = np.zeros((2000, 2000, 3), np.uint8)
-            self.image_texture = utils.mat2texture(empty_image)
+            self.image_texture = utils.mat2texture(
+                np.ones(shape=(2000, 2000, 3), dtype=np.uint8))
+
+        if not self.layer_states:
+            self.layer_states = [
+                LayerState(
+                    empty_size=self.image_texture.size)]
+
+    def to_dict(self):
+        output = {}
+        output['image_id'] = self.image_id
+        output['image_name'] = self.image_name
+        layers = []
+        for state in self.layer_states:
+            layers.append(state.to_dict())
+        output['annotations'] = layers
+        return output
 
 
 class LayerState:
-    def __init__(self, drawable_layer):
-        self.layer_fbo = drawable_layer.fbo
-        self.layer_color = drawable_layer.mask_color
-        self.class_name = drawable_layer.class_name
-        self.bbox = drawable_layer.bbox_bot_left + drawable_layer.bbox_top_right
+    class_picker = None
+
+    def __init__(self, drawable_layer=None, config=None, empty_size=None):
+        self.mask = None
+        self.texture = None
+        self.class_name = ""
+        self.mask_color = [1, 1, 1, 1]
+        self.bbox = None
+        if drawable_layer:
+            self.texture = drawable_layer.fbo.texture
+            self.class_name = drawable_layer.class_name
+            self.mask_color = drawable_layer.mask_color
+            self.bbox = drawable_layer.bbox_bot_left + drawable_layer.bbox_top_right
+        elif config:
+            self.mask = utils.decode_mask(
+                config["mask"], config["info"]["source_shape"][:2])
+            self.class_name = config["info"]["class_name"]
+            if self.class_picker:
+                self.mask_color = self.class_picker.class_map[self.class_name]
+            self.bbox = config["info"]["bbox"]
+        elif empty_size:
+            self.mask = np.zeros(shape=empty_size, dtype=bool)
+            if self.class_picker:
+                self.class_name = self.class_picker.current_class.class_name
+                self.mask_color = self.class_picker.current_class.class_color
+            else:
+                self.class_name = ""
+                self.mask_color = [1, 1, 1, 1]
+        else:
+            raise ValueError("One of keyword parameters must be set.")
+
+    @staticmethod
+    def bind_class_picker(class_picker):
+        LayerState.class_picker = class_picker
+
+    def get_size(self):
+        if self.mask is not None:
+            return self.mask.shape
+        elif self.texture is not None:
+            return self.texture.size
+        return None
+
+    def get_mask(self):
+        if self.mask is not None:
+            return self.mask
+        self.mask = utils.texture2mat(self.texture)
+        self.mask = np.all(self.mask.astype(bool), axis=2)
+        return self.mask
+
+    def get_texture(self):
+        if self.texture is not None:
+            return self.texture
+        mat = cv2.cvtColor(
+            self.mask.astype(
+                np.uint8) * 255,
+            cv2.COLOR_GRAY2BGR)
+        self.texture = utils.mat2texture(mat)
+        return self.texture
 
     def to_dict(self):
         body = {}
-        mat = utils.texture2mat(self.layer_fbo.texture)
-        mask = np.all(mat.astype(bool), axis=2)
-        body['mask'] = utils.encode_mask(mask)
-        info = {'source_shape': tuple(reversed(self.layer_fbo.texture.size)) +
-                (3,), 'class_name': self.class_name, 'bbox': self.bbox}
+        body['mask'] = utils.encode_mask(self.get_mask())
+        info = {'source_shape': tuple(reversed(self.texture.size)) +
+                (3,), 'class_name': self.class_name, 'bbox': np.array(self.bbox).tolist()}
         body['info'] = info
         return body
 
@@ -66,18 +134,94 @@ class InstanceAnnotatorScreen(Screen):
         self.current_state = WindowState()
         self.window_cache = {}
 
-    def load_window_state(self, new_state):
-        if new_state.image_id is not -1:
-            self.window_cache[new_state.image_id] = new_state
+    def load_state(self, index):
+        if index not in self.window_cache:
+            return
+        state = self.window_cache[index]
 
-        if new_state.image_opened:
-            self.right_control.image_queue.mark_item(
-                new_state.image_id, opened=True)
+        state.image_opened = True
+        self.image_canvas.load_image(state.image_texture, index)
+        self.image_canvas.layer_stack.clear()
 
-        if new_state.layer_state:
-            self.image_canvas.layer_stack.load_state(new_state.layer_state)
-        self.right_control.image_queue_control.btn_save.disabled = not new_state.image_opened
-        self.current_state = new_state
+        layer = None
+        for layer_state in state.layer_states:
+            # Build Layer
+            layer = DrawableLayer(
+                size=layer_state.get_size(),
+                texture=layer_state.get_texture(),
+                mask_color=layer_state.mask_color,
+                class_name=layer_state.class_name,
+                bbox=layer_state.bbox)
+            layer.bind_to_draw_tool(self.image_canvas.draw_tool)
+            layer.refresh_bbox()
+
+            # Add to LayerStack
+            stack_index = self.image_canvas.layer_stack.add_layer(layer)
+
+            # Add to LayerView
+            layer_name = "Layer %d" % stack_index
+            self.left_control.layer_view.add_layer_item(layer, layer_name)
+        if not layer:
+            print("WUT")
+        layer.select()
+
+        # Record as current state
+        self.current_state = state
+
+    # Saves the currently opened state
+    def save_state(self):
+        if self.image_canvas.image_id not in self.window_cache:
+            return
+
+        # Build WindowState
+        window_state = self.window_cache[self.image_canvas.image_id]
+        window_state.image_texture = self.image_canvas.image.texture
+        window_state.image_opened = True
+
+        # Build Layer States
+        layer_states = []
+        for layer in self.image_canvas.layer_stack.layer_list:
+            layer_states.append(LayerState(drawable_layer=layer))
+
+        if layer_states:
+            window_state.layer_states = layer_states
+        self.window_cache[self.image_canvas.image_id] = window_state
+
+    # Add a new state with a given id
+    def add_state(self, image_id, image_name, texture):
+        window_state = WindowState(
+            image_id=image_id,
+            image_name=image_name,
+            image_texture=texture,
+            image_opened=True
+        )
+        self.window_cache[image_id] = window_state
+
+    def add_layer(self):
+        layer = DrawableLayer(size=self.current_state.image_texture.size)
+        layer.bind_to_draw_tool(self.image_canvas.draw_tool)
+        # Add to Layer Stack
+        stack_index = self.image_canvas.layer_stack.add_layer(layer)
+
+        # Add to Layer View
+        layer_name = "Layer %d" % stack_index
+        self.left_control.layer_view.add_layer_item(layer, layer_name)
+
+        # Select Layer
+        layer.select()
+
+    # def load_window_state(self, new_state):
+    #     if new_state.image_id is not -1:
+    #         self.window_cache[new_state.image_id] = new_state
+    #
+    #     if new_state.image_opened:
+    #         self.right_control.image_queue.mark_item(
+    #             new_state.image_id, opened=True)
+    #
+    #     if new_state.layer_states:
+    #         self.image_canvas.layer_stack.load_state(new_state.layer_states)
+    #     self.right_control.image_queue_control.btn_save.disabled = not new_state.image_opened
+    #     self.current_state = new_state
 
     def clear_stale_window_states(self):
         stale_keys = []
@@ -89,12 +233,25 @@ class InstanceAnnotatorScreen(Screen):
             self.window_cache.pop(key, None)
 
     def on_enter(self, *args):
-        self.image_canvas.refresh_image()
+        self.left_control.tool_select.bind_draw_tool(
+            self.image_canvas.draw_tool)
+        self.left_control.tool_select.bind_class_picker(
+            self.left_control.class_picker)
+        self.add_state(image_id=-1, image_name="", texture=None)
+        self.load_state(index=-1)
+        # self.image_canvas.refresh_image()
         self.refresh_image_queue()
+
+        print("ENTER")
+        LayerState.bind_class_picker(self.left_control.class_picker)
+
         Window.bind(on_resize=self.auto_resize)
 
     def auto_resize(self, *args):
-        Clock.schedule_once(lambda dt: self.image_canvas.resize_image())
+        Clock.schedule_once(
+            lambda dt: self.image_canvas.load_image(
+                self.current_state.image_texture,
+                self.current_state.image_id))
 
     def refresh_image_queue(self):
         print("Refreshing Image Queue")
@@ -103,7 +260,7 @@ class InstanceAnnotatorScreen(Screen):
 
         self.right_control.image_queue.clear()
         for state in self.window_cache.values():
-            if state.image_opened:
+            if state.image_opened and state.image_id > 0:
                 self.right_control.image_queue.add_item(
                     state.image_name,
                     state.image_id,
@@ -122,7 +279,7 @@ class InstanceAnnotatorScreen(Screen):
 
     def load_image(self, image_id=-1):
         # Save current window state
-        self.current_state.layer_state = self.image_canvas.layer_stack.save_state()
+        self.save_state()
 
         if image_id < 0:
             # For some reason children of a widget are pushed on like a stack
@@ -141,11 +298,7 @@ class InstanceAnnotatorScreen(Screen):
             print("Next image is %d" % image_id)
 
         if image_id in self.window_cache:
-            self.window_cache[image_id].image_opened = True
-            self.load_window_state(self.window_cache[image_id])
-            self.image_canvas.refresh_image()
-            self.image_canvas.layer_stack.load_state(
-                self.current_state.layer_state)
+            self.load_state(image_id)
             return
 
         utils.get_image_lock_by_id(image_id,
@@ -154,8 +307,9 @@ class InstanceAnnotatorScreen(Screen):
                                    on_fail=self.handle_image_lock_fail)
 
     def save_image(self):
-        annotation = self.image_canvas.export_data()
-        utils.add_annotation_to_image(self.current_state.image_id, annotation)
+        self.save_state()
+        annotation = self.current_state.to_dict()
+        utils.add_image_annotation(self.current_state.image_id, annotation)
         utils.get_image_lock_by_id(self.current_state.image_id,
                                    lock=False,
                                    on_success=self.handle_image_unlock_success)
@@ -166,6 +320,8 @@ class InstanceAnnotatorScreen(Screen):
         utils.get_image_by_id(
             locked_id,
             on_success=self.handle_image_request_success)
+        self.right_control.image_queue.mark_item(result["id"], opened=True, locked=False)
+        self.right_control.image_queue_control.btn_save.disabled = False
 
     def handle_image_lock_fail(self, request, result):
         popup = Alert()
@@ -177,20 +333,35 @@ class InstanceAnnotatorScreen(Screen):
         unlocked_id = result["id"]
         print("Locked Image %d" % unlocked_id)
         self.window_cache[unlocked_id].image_opened = False
-        self.right_control.image_queue.mark_item(unlocked_id, locked=False)
+        self.right_control.image_queue.mark_item(unlocked_id, opened=False, locked=False)
         self.right_control.image_queue_control.btn_save.disabled = True
 
     def handle_image_request_success(self, request, result):
         img_bytes = utils.decode_image(result["image"])
         texture = utils.bytes2texture(img_bytes, "jpg")
-        new_state = WindowState(
+        self.add_state(
             image_id=result["id"],
             image_name=result["name"],
-            image_texture=texture,
-            image_opened=True)
-        self.load_window_state(new_state)
-        self.image_canvas.refresh_image()
-        self.current_state.layer_state = self.image_canvas.layer_stack.save_state()
+            texture=texture
+        )
+        self.load_state(result["id"])
+        utils.get_image_annotation(
+            result["id"],
+            on_success=self.handle_annotation_request_success)
+
+    def handle_annotation_request_success(self, request, result):
+        print("YAY")
+        # Add layer state info to correct window state
+        window_state = self.window_cache[result["image_id"]]
+
+        layer_states = []
+        for row in result["annotations"]:
+            layer_states.append(LayerState(config=row))
+
+        if layer_states:
+            window_state.layer_states = layer_states
+
+        self.load_state(result["image_id"])
 
 
 class LeftControlColumn(BoxLayout):
@@ -200,24 +371,35 @@ class LeftControlColumn(BoxLayout):
 
 
 class ToolSelect(GridLayout):
+    class_color = ObjectProperty(None)
+    class_name = StringProperty("")
+
     def __init__(self, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
         self.draw_tool = None
 
+    def bind_draw_tool(self, draw_tool):
+        self.draw_tool = draw_tool
+
+    def bind_class_picker(self, class_picker):
+        class_picker.fbind('current_color', self.setter('class_color'))
+        class_picker.fbind('current_name', self.setter('class_name'))
+
     def on_parent(self, *args):
         Clock.schedule_once(lambda dt: self.late_init())
 
     def late_init(self):
-        self.draw_tool = App.get_running_app().root.get_screen("InstanceAnnotator").image_canvas.draw_tool
+        self.draw_tool = App.get_running_app().root.get_screen(
+            "InstanceAnnotator").image_canvas.draw_tool
 
-    def set_color(self, color):
-        print("Color: %s" % str(color))
-        self.draw_tool.layer_color = color[
+    def on_class_color(self, *args):
+        print("Color: %s" % str(self.class_color))
+        self.draw_tool.layer_color = self.class_color[
             :-1] + self.draw_tool.layer_color[-1:]
 
-    def set_class_name(self, class_name):
-        self.draw_tool.class_name = class_name
+    def on_class_name(self, *args):
+        self.draw_tool.class_name = self.class_name
 
     def set_alpha(self, alpha):
         print("Alpha: %s" % str(alpha))
@@ -232,21 +414,24 @@ class ToolSelect(GridLayout):
 
 class ClassPicker(GridLayout):
     current_class = ObjectProperty(None)
+    current_color = ObjectProperty(None)
+    current_name = StringProperty("")
+    class_map = {}
+
+    def register(self, item):
+        if not isinstance(item, ClassPickerItem):
+            return
+        self.class_map[item.class_name] = item.class_color
 
     def change_class(self, instance):
         if self.current_class:
             self.current_class.state = 'normal'
         self.current_class = instance
         self.current_class.state = 'down'
-        self.update_canvas()
 
-    def update_canvas(self):
-        if self.current_class:
-            App.get_running_app().root.current_screen.left_control.tool_select.set_color(
-                self.current_class.class_color)
-            App.get_running_app().root.current_screen.left_control.tool_select.set_class_name(
-                self.current_class.class_name
-            )
+        # Set properties
+        self.current_color = self.current_class.class_color
+        self.current_name = self.current_class.class_name
 
 
 class ClassPickerItem(Button):
@@ -254,17 +439,23 @@ class ClassPickerItem(Button):
     class_name = StringProperty("")
     class_id = NumericProperty(-1)
 
+    def on_parent(self, screen, parent):
+        class_picker = parent
+        while not isinstance(class_picker, ClassPicker) and class_picker:
+            class_picker = class_picker.parent
+
+        if not class_picker:
+            return
+        Clock.schedule_once(lambda dt: class_picker.register(self))
+
 
 class LayerView(GridLayout):
     layer_item_list = ObjectProperty(None)
+    current_selection = ObjectProperty(None)
 
-    def add_layer_item(self, layer_index, layer_name=None, enabled=True):
-        item = LayerViewItem()
-        item.layer_index = layer_index
-        if not layer_name:
-            layer_name = "Layer %d" % layer_index
-        item.layer_name = layer_name
-        item.layer_enabled = enabled
+    def add_layer_item(self, layer, name):
+        item = LayerViewItem(name)
+        item.bind_to_layer(layer)
         self.layer_item_list.add_widget(item)
 
     def clear(self):
@@ -277,28 +468,28 @@ class LayerViewItem(RelativeLayout):
     mask_enabled = BooleanProperty(True)
     bbox_enabled = BooleanProperty(True)
 
-    def __init__(self, **kw):
+    def __init__(self, name, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
-        self.layer_stack = None
+        self.layer = None
+        self.layer_name = name
 
-    def on_parent(self, *args):
-        Clock.schedule_once(lambda dt: self.late_init())
-
-    def late_init(self):
-        self.layer_stack = App.get_running_app().root.get_screen("InstanceAnnotator").image_canvas.layer_stack
-        layer = self.layer_stack.layer_list[self.layer_index]
+    def bind_to_layer(self, layer):
+        self.layer = layer
         self.fbind('mask_enabled', layer.setter('mask_visible'))
         self.fbind('bbox_enabled', layer.setter('bbox_visible'))
 
     def select_layer(self):
-        self.layer_stack.select_layer(self.layer_index)
+        if self.layer:
+            self.layer.select()
 
     def toggle_mask(self):
-        self.layer_stack.toggle_mask()
+        if self.layer:
+            self.layer.toggle_mask()
 
     def toggle_bbox(self):
-        self.layer_stack.toggle_bbox()
+        if self.layer:
+            self.layer.toggle_bbox()
 
 
 class DrawTool(MouseDrawnTool):
@@ -366,18 +557,23 @@ class LayerStack(FloatLayout):
         super().__init__(**kw)
         self.app = App.get_running_app()
 
-    def add_layer(self):
-        layer = DrawableLayer(size=self.layer_sizes)
-        layer.refresh_layer()
-
+    def add_layer(self, layer):
         self.add_widget(layer)
         self.layer_list.append(layer)
-
-        self.select_layer(index=len(self.layer_list) - 1)
-        self.app.root.current_screen.left_control.class_picker.update_canvas()
-
-        layer_view = self.app.root.current_screen.left_control.layer_view
-        layer_view.add_layer_item(layer_index=len(self.layer_list) - 1)
+        return len(self.layer_list) - 1
+    #
+    # def add_layer(self):
+    #     layer = DrawableLayer(size=self.layer_sizes)
+    #     layer.refresh_layer()
+    #
+    #     self.add_widget(layer)
+    #     self.layer_list.append(layer)
+    #
+    #     self.select_layer(index=len(self.layer_list) - 1)
+    #     self.app.root.current_screen.left_control.class_picker.update_canvas()
+    #
+    #     layer_view = self.app.root.current_screen.left_control.layer_view
+    #     layer_view.add_layer_item(layer_index=len(self.layer_list) - 1)
 
     def select_layer(self, index=-1):
         if index < 0:
@@ -408,6 +604,8 @@ class LayerStack(FloatLayout):
         return state
 
     def load_state(self, state):
+        raise NotImplementedError()
+
         if not state:
             return
         self.clear()
@@ -439,32 +637,62 @@ class DrawableLayer(FloatLayout):
     bbox_bot_left = ObjectProperty([])
     bbox_bounds = ObjectProperty([0, 0, 0, 0])
 
-    def __init__(self, size=None, fbo=None, class_name=None, mask_color=None, **kwargs):
+    def __init__(
+            self,
+            size=None,
+            texture=None,
+            class_name=None,
+            mask_color=None,
+            bbox=None,
+            **kwargs):
         super().__init__(**kwargs)
         if size:
             self.size = size
-        if fbo:
-            self.fbo = fbo
-            self.size = self.fbo.size
+
+        if texture:
+            self.size = texture.size
+            self.texture = texture
+
+        if self.size:
+            self.fbo = Fbo(size=self.size, texture=texture)
 
         if mask_color:
             self.mask_color = mask_color
 
         if class_name:
             self.class_name = class_name
+
         self.bbox_top_right = [-1, -1]
         self.bbox_bot_left = [np.iinfo(int).max, np.iinfo(int).max]
+
+        if bbox is not None:
+            bbox = np.array(bbox)
+            self.bbox_bot_left = list(bbox[:2])
+            self.bbox_top_right = list(bbox[2:] + bbox[:2])
+
+        self.draw_tool = None
+        self.refresh_mask()
+
+    def bind_to_draw_tool(self, draw_tool):
+        self.draw_tool = draw_tool
+
+    def select(self):
+        self.draw_tool.set_layer(self)
 
     def refresh_layer(self):
         self.refresh_mask()
         self.refresh_bbox()
 
     def refresh_mask(self):
+        texture = None
+        if self.fbo:
+            texture = self.fbo.texture
+
         self.mask_layer.canvas.clear()
         with self.mask_layer.canvas:
-            if self.size and not self.fbo:
-                self.fbo = Fbo(size=self.size)
-            Rectangle(size=self.fbo.size, texture=self.fbo.texture)
+            if self.size:
+                self.fbo = Fbo(size=self.size, texture=texture)
+            Rectangle(size=self.fbo.texture.size, texture=self.fbo.texture)
 
     def refresh_bbox(self):
         rect = list(self.bbox_bot_left)
@@ -483,6 +711,7 @@ class DrawableLayer(FloatLayout):
 
 class ImageCanvas(BoxLayout):
     image = ObjectProperty(None)
+    image_id = NumericProperty(-1)
     draw_tool = ObjectProperty(None)
     layer_stack = ObjectProperty(None)
 
@@ -490,14 +719,19 @@ class ImageCanvas(BoxLayout):
         super().__init__(**kw)
         self.app = App.get_running_app()
 
+    def load_image(self, texture, image_id):
+        self.image_id = image_id
+        self.image.texture = texture
+        self.image.size = texture.size
+
     def refresh_image(self):
         print("refreshing")
         window_state = App.get_running_app().root.current_screen.current_state
         self.image.texture = window_state.image_texture
         self.image.size = window_state.image_texture.size
-        self.layer_stack.clear()
-        self.layer_stack.layer_sizes = self.image.size
-        self.layer_stack.add_layer()
+        # self.layer_stack.clear()
+        # self.layer_stack.layer_sizes = self.image.size
+        # self.layer_stack.add_layer()
 
     def resize_image(self):
         window_state = App.get_running_app().root.current_screen.current_state

@@ -77,6 +77,7 @@
             on_value: root.set_alpha(self.value)
 
 <ClassPicker>:
+    current_class: self.current_class
     cols: 1
     Label:
         text: "Class Picker"
@@ -87,6 +88,7 @@
         ClassPickerItem:
             class_name: "Green"
             class_color: (0.3, 0.8, 0.2, 1)
+            on_parent: root.change_class(self)
         ClassPickerItem:
             class_name: "Purple"
             class_color: (0.5, 0.3, 0.9, 1)
@@ -116,7 +118,7 @@
         size_hint_y: None
         height: 50
         text: "Add Layer"
-        on_release: app.root.current_screen.image_canvas.layer_stack.add_layer()
+        on_release: app.root.current_screen.add_layer()
     ScrollView:
         GridLayout:
             cols: 1
@@ -158,6 +160,7 @@
 
 
 <ImageCanvas>:
+    image_id: self.image_id
     image: image
     layer_stack: layer_stack
     draw_tool: draw_tool

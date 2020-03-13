@@ -1,11 +1,13 @@
 import base64
-import server.utils as utils
 import os
+
 from flask import Blueprint
 from flask import jsonify
 from flask import request
 from flask_negotiate import produces, consumes
+from mysql.connector.errors import DatabaseError
 
+import server.utils as utils
 from server.server_config import DatabaseInstance
 from server.server_config import ServerConfig
 
@@ -185,11 +187,9 @@ def unlock_image_by_id(iid):
 @consumes('application/json')
 def add_annotation_to_image(iid):
     content = request.get_json()
-    if not isinstance(content, list):
-        content = [content]
 
     i = 0
-    for row in content:
+    for row in content["annotations"]:
         info = row['info']
         mask = utils.decode_mask(row['mask'], info['source_shape'])
 
@@ -206,13 +206,50 @@ def add_annotation_to_image(iid):
             "xmls",
             "layer_%d.xml" % i)
 
-        query = "REPLACE INTO instance_seg_meta (image_id, mask_path, info_path) VALUES (%s,%s,%s)"
-        db.query(query, (iid, mask_path, info_path))
+        query = "REPLACE INTO instance_seg_meta (image_id, mask_path, info_path, class_name) VALUES (%s,%s,%s,%s)"
+        db.query(query, (iid, mask_path, info_path, info["class_name"]))
 
         utils.save_mask(mask, mask_path)
         utils.save_info(info, info_path)
         i += 1
 
     response = jsonify({"success": True, "id": iid})
+    response.status_code = 200
+    return response
+
+
+@image_blueprint.route("<int:iid>/annotation", methods=['DELETE'])
+def delete_annotations_for_image(iid):
+    query = "DELETE FROM instance_seg_meta "
+    query += "WHERE image_id = %s"
+    try:
+        db.query(query, (iid,))
+    except DatabaseError as e:
+        response = jsonify({"err_code": e.errno, "err_msg": e.msg})
+        response.status_code = 400
+    else:
+        response = jsonify(success=True)
+        response.status_code = 200
+    return response
+
+
+@image_blueprint.route("<int:iid>/annotation", methods=['GET'])
+@produces('application/json')
+def get_annotations_for_image(iid):
+    query = "SELECT * FROM instance_seg_meta "
+    query += "WHERE image_id = %s"
+    results, _ = db.query(query, (iid,))
+
+    body = []
+    for row in results:
+        mask = utils.load_mask(row[2])
+        info = utils.load_info(row[3])
+        annotation = {}
+        annotation['mask'] = utils.encode_mask(mask)
+        annotation['info'] = info
+        body.append(annotation)
+
+    body = {"image_id": iid, "annotations": body}
+    response = jsonify(body)
     response.status_code = 200
     return response
