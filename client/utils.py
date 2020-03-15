@@ -294,4 +294,5 @@ def texture2mat(texture):
         data=texture.pixels)
 
     mat = np.array(pil_image)
+    mat = cv2.flip(mat, 0)
     return cv2.cvtColor(mat, cv2.COLOR_RGBA2BGR)
