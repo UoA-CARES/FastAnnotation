@@ -300,24 +300,3 @@ def texture2mat(texture):
     mat = np.array(pil_image)
     mat = cv2.flip(mat, 0)
     return cv2.cvtColor(mat, cv2.COLOR_RGBA2BGR)
-
-
-"""
-Converts rectange bounds from the opencv point format (x1, y1, x2, y2)
-to the kivy format (x1, y1, width, height)
-"""
-
-
-def rect_bounds_cv2kivy(cv_bounds):
-    print("DOH")
-
-
-"""
-Converts rectange bounds from the opencv point format (x1, y1, x2, y2)
-to the kivy format (x1, y1, width, height)
-"""
-
-
-def rect_bounds_kivy2cv(kivy_bounds):
-    pass
-

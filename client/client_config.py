@@ -17,4 +17,7 @@ class ClientConfig:
     CLIENT_HIGHLIGHT_1 = "#3AD6E7"
     CLIENT_DARK_3 = "#0C273B"
 
+    BBOX_SELECT = "#ff0000"
+    BBOX_UNSELECT = "#ebcf1a"
+
     SCREEN_DIR = os.path.join(ROOT_DIR, 'client', 'screens')

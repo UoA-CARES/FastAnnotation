@@ -112,7 +112,7 @@
     on_release: app.root.current_screen.left_control.class_picker.change_class(root)
 
 <LayerView>:
-    layer_item_list: layer_item_list
+    layer_item_layout: layer_item_layout
     cols: 1
     Button:
         size_hint_y: None
@@ -124,33 +124,47 @@
             cols: 1
             size_hint_y: None
             height: self.minimum_height
-            id: layer_item_list
+            id: layer_item_layout
 
 <LayerViewItem>:
     layer_name: self.layer_name
     mask_enabled: self.mask_enabled
     bbox_enabled: self.bbox_enabled
     layer_index: self.layer_index
+
+    button_up_color: self.button_up_color
+    button_down_color : self.button_down_color
+
+    btn_base: btn_base
+    btn_mask: btn_mask
+    btn_bbox: btn_bbox
+
+
     height: 50
     size_hint_y: None
     Button:
+        id: btn_base
         size_hint: (1,1)
-        on_release: root.select_layer()
+        on_release: root.layer_view.select_layer_item(root.layer_name)
     BoxLayout:
         size_hint: (1, 1)
         pos_hint: {'center_x': .5, 'center_y': .5}
         padding: 8
         spacing: 8
         Button:
-            text: "M" * root.mask_enabled
+            id: btn_mask
+            text: "M"
             size_hint_x: None
             width: self.height
             on_release: root.toggle_mask()
+            background_color: root.button_down_color
         Button:
-            text: "B" * root.bbox_enabled
+            id: btn_bbox
+            text: "B"
             size_hint_x: None
             width: self.height
             on_release: root.toggle_bbox()
+            background_color: root.button_down_color
         Label:
             text: root.layer_name
             halign: 'left'

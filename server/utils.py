@@ -90,23 +90,3 @@ def create_info_file(filepath):
         with open(filepath, "w") as f_out:
             for line in f_in:
                 f_out.write(line)
-
-
-"""
-Converts rectange bounds from the opencv point format (x1, y1, x2, y2)
-to the kivy format (x1, y1, width, height)
-"""
-
-
-def rect_bounds_cv2kivy(cv_bounds):
-    print("DOH")
-
-
-"""
-Converts rectange bounds from the opencv point format (x1, y1, x2, y2)
-to the kivy format (x1, y1, width, height)
-"""
-
-
-def rect_bounds_kivy2cv(kivy_bounds):
-    pass
