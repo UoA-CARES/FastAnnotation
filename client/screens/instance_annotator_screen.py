@@ -117,8 +117,13 @@ class LayerState:
     def to_dict(self):
         body = {}
         body['mask'] = utils.encode_mask(self.get_mask())
-        info = {'source_shape': tuple(reversed(self.texture.size)) +
-                (3,), 'class_name': self.class_name, 'bbox': np.array(self.bbox).tolist()}
+        info = {
+            'source_shape': tuple(
+                reversed(
+                    self.texture.size)) + (
+                3,), 'class_name': self.class_name, 'bbox': np.array(
+                    self.bbox).tolist()}
+
         body['info'] = info
         return body
 
@@ -161,8 +166,6 @@ class InstanceAnnotatorScreen(Screen):
             # Add to LayerView
             layer_name = "Layer %d" % stack_index
             self.left_control.layer_view.add_layer_item(layer, layer_name)
-        if not layer:
-            print("WUT")
         layer.select()
 
         # Record as current state
@@ -320,7 +323,8 @@ class InstanceAnnotatorScreen(Screen):
         utils.get_image_by_id(
             locked_id,
             on_success=self.handle_image_request_success)
-        self.right_control.image_queue.mark_item(result["id"], opened=True, locked=False)
+        self.right_control.image_queue.mark_item(
+            result["id"], opened=True, locked=False)
         self.right_control.image_queue_control.btn_save.disabled = False
 
     def handle_image_lock_fail(self, request, result):
@@ -333,7 +337,8 @@ class InstanceAnnotatorScreen(Screen):
         unlocked_id = result["id"]
         print("Locked Image %d" % unlocked_id)
         self.window_cache[unlocked_id].image_opened = False
-        self.right_control.image_queue.mark_item(unlocked_id, opened=False, locked=False)
+        self.right_control.image_queue.mark_item(
+            unlocked_id, opened=False, locked=False)
         self.right_control.image_queue_control.btn_save.disabled = True
 
     def handle_image_request_success(self, request, result):
@@ -350,9 +355,9 @@ class InstanceAnnotatorScreen(Screen):
             on_success=self.handle_annotation_request_success)
 
     def handle_annotation_request_success(self, request, result):
-        print("YAY")
         # Add layer state info to correct window state
         window_state = self.window_cache[result["image_id"]]
+
 
         layer_states = []
         for row in result["annotations"]:
@@ -668,7 +673,7 @@ class DrawableLayer(FloatLayout):
         if bbox is not None:
             bbox = np.array(bbox)
             self.bbox_bot_left = list(bbox[:2])
-            self.bbox_top_right = list(bbox[2:] + bbox[:2])
+            self.bbox_top_right = list(bbox[2:])
 
         self.draw_tool = None
         self.refresh_mask()
@@ -695,9 +700,12 @@ class DrawableLayer(FloatLayout):
             Rectangle(size=self.fbo.texture.size, texture=self.fbo.texture)
 
     def refresh_bbox(self):
+        utils.rect_bounds_cv2kivy(self.bbox_bot_left + self.bbox_top_right)
         rect = list(self.bbox_bot_left)
         rect += list(np.array(self.bbox_top_right) -
                      np.array(self.bbox_bot_left))
+        if not np.all(np.array(rect) > 0):
+            rect = [0, 0, 0, 0]
         self.bbox_bounds = rect
 
     def toggle_mask(self):

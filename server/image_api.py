@@ -212,7 +212,6 @@ def add_annotation_to_image(iid):
         utils.save_mask(mask, mask_path)
         utils.save_info(info, info_path)
         i += 1
-
     response = jsonify({"success": True, "id": iid})
     response.status_code = 200
     return response

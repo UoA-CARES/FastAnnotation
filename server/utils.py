@@ -48,10 +48,11 @@ def save_info(info, filepath):
     obj = root.find('object')
     obj.find("name").text = info["class_name"]
 
-    obj.find("bndbox/ymin").text = str(bbox[0])
-    obj.find("bndbox/xmin").text = str(bbox[1])
-    obj.find("bndbox/ymax").text = str(bbox[2])
-    obj.find("bndbox/xmax").text = str(bbox[3])
+    obj.find("bndbox/xmin").text = str(bbox[0])
+    obj.find("bndbox/ymin").text = str(bbox[1])
+    obj.find("bndbox/xmax").text = str(bbox[2])
+    obj.find("bndbox/ymax").text = str(bbox[3])
+
 
     xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(indent="   ")
     xmlstr = os.linesep.join([s for s in xmlstr.splitlines() if s.strip()])
@@ -89,3 +90,23 @@ def create_info_file(filepath):
         with open(filepath, "w") as f_out:
             for line in f_in:
                 f_out.write(line)
+
+
+"""
+Converts rectange bounds from the opencv point format (x1, y1, x2, y2)
+to the kivy format (x1, y1, width, height)
+"""
+
+
+def rect_bounds_cv2kivy(cv_bounds):
+    print("DOH")
+
+
+"""
+Converts rectange bounds from the opencv point format (x1, y1, x2, y2)
+to the kivy format (x1, y1, width, height)
+"""
+
+
+def rect_bounds_kivy2cv(kivy_bounds):
+    pass
