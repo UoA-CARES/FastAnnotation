@@ -6,7 +6,6 @@ from definitions import ROOT_DIR
 class ClientConfig:
     """ A collection of constants utilized by the client """
 
-    #130.216.239.117
     SERVER_URL = "http://localhost:5000/"
 
     SECONDS_PER_MINUTE = 60
