@@ -145,6 +145,7 @@
     Button:
         id: btn_base
         size_hint: (1,1)
+        background_color: root.button_up_color
         on_release: root.layer_view.select_layer_item(root.layer_name)
     BoxLayout:
         size_hint: (1, 1)
@@ -170,6 +171,16 @@
             halign: 'left'
             valign: 'center'
             text_size: self.size
+    BoxLayout:
+        pos_hint: {'right': 1, 'top': 1}
+        size_hint_y: 0.5
+        size_hint_x: None
+        width: self.height
+        spacing: 8
+        padding: 8
+        Button:
+            text: "X"
+            on_release: root.layer_view.delete_layer_item(root.layer_name)
 
 
 

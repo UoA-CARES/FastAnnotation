@@ -146,7 +146,7 @@ class InstanceAnnotatorScreen(Screen):
 
         state.image_opened = True
         self.image_canvas.load_image(state.image_texture, index)
-        self.image_canvas.layer_stack.clear()
+        self.left_control.layer_view.clear()
 
         layer_name = None
         for layer_state in state.layer_states:
@@ -160,12 +160,7 @@ class InstanceAnnotatorScreen(Screen):
             layer.bind_to_draw_tool(self.image_canvas.draw_tool)
             layer.refresh_bbox()
 
-            # Add to LayerStack
-            stack_index = self.image_canvas.layer_stack.add_layer(layer)
-
-            # Add to LayerView
-            layer_name = "Layer %d" % stack_index
-            self.left_control.layer_view.add_layer_item(layer, layer_name)
+            layer_name = self.left_control.layer_view.add_layer_item(layer)
         self.left_control.layer_view.select_layer_item(layer_name)
 
         # Record as current state
@@ -202,12 +197,7 @@ class InstanceAnnotatorScreen(Screen):
 
     def add_layer(self):
         layer = DrawableLayer(size=self.current_state.image_texture.size)
-        # Add to Layer Stack
-        stack_index = self.image_canvas.layer_stack.add_layer(layer)
-
-        # Add to Layer View
-        layer_name = "Layer %d" % stack_index
-        self.left_control.layer_view.add_layer_item(layer, layer_name)
+        layer_name = self.left_control.layer_view.add_layer_item(layer)
         self.left_control.layer_view.select_layer_item(layer_name)
 
     def clear_stale_window_states(self):
@@ -224,6 +214,8 @@ class InstanceAnnotatorScreen(Screen):
             self.image_canvas.draw_tool)
         self.left_control.layer_view.bind_draw_tool(
             self.image_canvas.draw_tool)
+        self.left_control.layer_view.bind_layer_stack(
+            self.image_canvas.layer_stack)
         self.left_control.tool_select.bind_class_picker(
             self.left_control.class_picker)
         self.add_state(image_id=-1, image_name="", texture=None)
@@ -452,36 +444,40 @@ class LayerView(GridLayout):
     layer_item_layout = ObjectProperty(None)
 
     layer_item_dict = {}
-    current_selection = ObjectProperty(None)
+    current_selection = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.draw_tool = None
+        self.layer_stack = None
 
     def bind_draw_tool(self, draw_tool):
         self.draw_tool = draw_tool
 
-    def add_layer_item(self, layer, name):
-        # Avoid name collisions
-        name_copy = name
-        copy_i = 1
-        while name in self.layer_item_dict:
-            name_copy = "%s (%d)" % (name, copy_i)
-            copy_i += 1
-        name = name_copy
+    def bind_layer_stack(self, layer_stack):
+        self.layer_stack = layer_stack
 
-        item = LayerViewItem(name)
+    def add_layer_item(self, layer):
+        # Add to Layer Stack
+        stack_index = self.layer_stack.add_layer(layer)
+
+        layer_name = "Layer %d" % stack_index
+
+        # Build Layer Item
+        item = LayerViewItem(layer_name)
         item.bind_to_layer(layer)
         item.bind_to_layer_view(self)
 
-        self.layer_item_dict[name] = item
-
+        # Add to LayerView
+        self.layer_item_dict[layer_name] = item
         self.layer_item_layout.add_widget(item)
+
+        return layer_name
 
     def select_layer_item(self, name):
         if self.current_selection:
             prev_item = self.layer_item_dict[self.current_selection]
-            prev_item.unselect()
+            prev_item.deselect()
         self.current_selection = name
 
         layer_item = self.layer_item_dict[name]
@@ -491,11 +487,26 @@ class LayerView(GridLayout):
         self.draw_tool.set_layer(layer)
         layer_item.select()
 
-        # UI changes
+    def delete_layer_item(self, name):
+        self.current_selection = None
+        layer_item = self.layer_item_dict.pop(name, None)
+        layer = layer_item.layer
+
+        # Remove from LayerView
+        self.layer_item_layout.remove_widget(layer_item)
+
+        # Remove from LayerStack
+        self.layer_stack.remove_layer(layer)
+
+        # Unbind from Drawtool
+        self.draw_tool.set_layer(None)
 
     def clear(self):
+        self.current_selection = None
         self.layer_item_layout.clear_widgets()
         self.layer_item_dict.clear()
+        self.layer_stack.clear()
+        self.draw_tool.set_layer(None)
 
 
 class LayerViewItem(RelativeLayout):
@@ -536,7 +547,7 @@ class LayerViewItem(RelativeLayout):
             return
         self.layer_selected = True
 
-    def unselect(self):
+    def deselect(self):
         if not self.layer:
             return
         self.layer_selected = False
@@ -578,7 +589,7 @@ class LayerViewItem(RelativeLayout):
 
 
 class DrawTool(MouseDrawnTool):
-    layer = ObjectProperty(None)
+    layer = ObjectProperty(None, allownone=True)
     pen_size = NumericProperty(10)
     layer_color = ObjectProperty((1, 1, 1, 1))
     class_name = StringProperty("")
@@ -593,11 +604,14 @@ class DrawTool(MouseDrawnTool):
         if self.color_bind:
             self.unbind_uid('layer_color', self.color_bind)
 
-        self.color_bind = self.fbind(
-            'layer_color', self.layer.setter('mask_color'))
-
         if self.name_bind:
             self.unbind_uid('class_name', self.name_bind)
+
+        if not layer:
+            return
+
+        self.color_bind = self.fbind(
+            'layer_color', self.layer.setter('mask_color'))
 
         self.name_bind = self.fbind(
             'class_name', self.layer.setter('class_name'))
@@ -629,6 +643,8 @@ class DrawTool(MouseDrawnTool):
         self.on_touch_down_hook(touch)
 
     def on_touch_up_hook(self, touch):
+        if not self.layer:
+            return
         self.layer.refresh_bbox()
 
 
@@ -647,50 +663,13 @@ class LayerStack(FloatLayout):
         self.layer_list.append(layer)
         return len(self.layer_list) - 1
 
-    # def select_layer(self, index=-1):
-    #     if index < 0:
-    #         index = self.current_layer + 1
-    #     self.current_layer = index
-    #     layer = self.layer_list[index]
-    #     self.app.root.current_screen.image_canvas.draw_tool.set_layer(layer)
-    #
-    # def toggle_mask(self):
-    #     layer = self.layer_list[self.current_layer]
-    #     layer.toggle_mask()
-    #
-    # def toggle_bbox(self):
-    #     layer = self.layer_list[self.current_layer]
-    #     layer.toggle_bbox()
+    def remove_layer(self, layer):
+        self.remove_widget(layer)
+        self.layer_list.remove(layer)
 
     def clear(self):
         self.layer_list = []
-        self.current_layer = -1
         self.clear_widgets()
-        layer_view = self.app.root.current_screen.left_control.layer_view
-        layer_view.clear()
-
-    def save_state(self):
-        state = []
-        for layer in self.layer_list:
-            state.append(LayerState(layer))
-        return state
-
-    def load_state(self, state):
-        raise NotImplementedError()
-
-        if not state:
-            return
-
-        self.clear()
-        for layer_state in state:
-            layer = DrawableLayer(
-                fbo=layer_state.layer_fbo,
-                mask_color=layer_state.layer_color)
-            layer.refresh_layer()
-
-            self.layer_list.append(layer)
-            self.add_widget(layer)
-        self.select_layer(len(self.layer_list) - 1)
 
 
 class DrawableLayer(FloatLayout):
@@ -808,21 +787,11 @@ class ImageCanvas(BoxLayout):
         window_state = App.get_running_app().root.current_screen.current_state
         self.image.texture = window_state.image_texture
         self.image.size = window_state.image_texture.size
-        # self.layer_stack.clear()
-        # self.layer_stack.layer_sizes = self.image.size
-        # self.layer_stack.add_layer()
 
     def resize_image(self):
         window_state = App.get_running_app().root.current_screen.current_state
         self.image.texture = window_state.image_texture
         self.image.size = window_state.image_texture.size
-
-    def export_data(self):
-        state = self.layer_stack.save_state()
-        body = []
-        for s in state:
-            body.append(s.to_dict())
-        return body
 
 
 class RightControlColumn(BoxLayout):
