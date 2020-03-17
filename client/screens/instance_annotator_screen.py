@@ -139,6 +139,43 @@ class InstanceAnnotatorScreen(Screen):
         self.current_state = WindowState()
         self.window_cache = {}
 
+    def on_enter(self, *args):
+        # Tool Select Binds
+        self.left_control.tool_select.bind_draw_tool(
+            self.image_canvas.draw_tool)
+        self.left_control.tool_select.bind_class_picker(
+            self.left_control.class_picker)
+
+        # Layer View Binds
+        self.left_control.layer_view.bind_draw_tool(
+            self.image_canvas.draw_tool)
+        self.left_control.layer_view.bind_layer_stack(
+            self.image_canvas.layer_stack)
+
+        # Draw Tool Binds
+        self.image_canvas.draw_tool.bind_layer_view(
+            self.left_control.layer_view)
+        self.image_canvas.draw_tool.bind_keyboard()
+
+        self.add_state(image_id=-1, image_name="", texture=None)
+        self.load_state(index=-1)
+        # self.image_canvas.refresh_image()
+        self.refresh_image_queue()
+
+        print("ENTER")
+        LayerState.bind_class_picker(self.left_control.class_picker)
+
+        Window.bind(on_resize=self.auto_resize)
+
+    def on_leave(self, *args):
+        self.image_canvas.draw_tool.unbind_keyboard()
+
+    def auto_resize(self, *args):
+        Clock.schedule_once(
+            lambda dt: self.image_canvas.load_image(
+                self.current_state.image_texture,
+                self.current_state.image_id))
+
     def load_state(self, index):
         if index not in self.window_cache:
             return
@@ -157,7 +194,6 @@ class InstanceAnnotatorScreen(Screen):
                 mask_color=layer_state.mask_color,
                 class_name=layer_state.class_name,
                 bbox=layer_state.bbox)
-            layer.bind_to_draw_tool(self.image_canvas.draw_tool)
             layer.refresh_bbox()
 
             layer_name = self.left_control.layer_view.add_layer_item(layer)
@@ -208,40 +244,6 @@ class InstanceAnnotatorScreen(Screen):
 
         for key in stale_keys:
             self.window_cache.pop(key, None)
-
-    def on_enter(self, *args):
-        self.left_control.tool_select.bind_draw_tool(
-            self.image_canvas.draw_tool)
-        self.left_control.layer_view.bind_draw_tool(
-            self.image_canvas.draw_tool)
-        self.left_control.layer_view.bind_layer_stack(
-            self.image_canvas.layer_stack)
-        self.left_control.tool_select.bind_class_picker(
-            self.left_control.class_picker)
-        self.add_state(image_id=-1, image_name="", texture=None)
-        self.load_state(index=-1)
-        # self.image_canvas.refresh_image()
-        self.refresh_image_queue()
-
-        print("ENTER")
-        LayerState.bind_class_picker(self.left_control.class_picker)
-
-        Window.bind(on_resize=self.auto_resize)
-        Window.bind(on_keyboard=self.on_keyboard)
-
-    # Entry point for keyboard shortcuts
-    def on_keyboard(self, window, key, scancode, codepoint, modifier):
-        if modifier == ['ctrl']:
-            if codepoint == 'z':
-                print("UNDO")
-            elif codepoint == 'y':
-                print("REDO")
-
-    def auto_resize(self, *args):
-        Clock.schedule_once(
-            lambda dt: self.image_canvas.load_image(
-                self.current_state.image_texture,
-                self.current_state.image_id))
 
     def refresh_image_queue(self):
         print("Refreshing Image Queue")
@@ -443,19 +445,29 @@ class ClassPickerItem(Button):
 class LayerView(GridLayout):
     layer_item_layout = ObjectProperty(None)
 
-    layer_item_dict = {}
     current_selection = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.draw_tool = None
         self.layer_stack = None
+        self.layer_item_dict = {}
 
     def bind_draw_tool(self, draw_tool):
         self.draw_tool = draw_tool
 
     def bind_layer_stack(self, layer_stack):
         self.layer_stack = layer_stack
+
+    def get_items_at_pos(self, pos):
+        selected_items = []
+        for layer_item in self.layer_item_dict.values():
+            layer = layer_item.layer
+            bl = np.array(layer.bbox_bot_left)
+            tr = np.array(layer.bbox_top_right)
+            if np.all(np.logical_and(bl <= pos, pos <= tr)):
+                selected_items.append(layer_item)
+        return selected_items
 
     def add_layer_item(self, layer):
         # Add to Layer Stack
@@ -598,6 +610,37 @@ class DrawTool(MouseDrawnTool):
     color_bind = None
     name_bind = None
 
+    def __init__(self, **kwargs):
+        self.layer_view = None
+
+        self.keycode_buffer = {}
+        self._keyboard = Window.request_keyboard(
+            self.unbind_keyboard, self, 'text')
+        self._consecutive_selects = 0
+        super().__init__(**kwargs)
+
+    def bind_layer_view(self, layer_view):
+        self.layer_view = layer_view
+
+    def bind_keyboard(self,):
+        self._keyboard.bind(on_key_down=self.on_key_down)
+        self._keyboard.bind(on_key_up=self.on_key_up)
+
+    def unbind_keyboard(self):
+        self._keyboard.unbind(on_key_down=self.on_key_down)
+        self._keyboard.unbind(on_key_up=self.on_key_up)
+        self._keyboard = None
+
+    def on_key_down(self, keyboard, keycode, text, modifiers):
+        if keycode[1] in self.keycode_buffer:
+            return
+        print("DOWN: %s" % (str(keycode[1])))
+        self.keycode_buffer[keycode[1]] = keycode[0]
+
+    def on_key_up(self, keyboard, keycode):
+        print("UP: %s" % (str(keycode[1])))
+        self.keycode_buffer.pop(keycode[1])
+
     def set_layer(self, layer):
         self.layer = layer
 
@@ -617,6 +660,17 @@ class DrawTool(MouseDrawnTool):
             'class_name', self.layer.setter('class_name'))
 
     def on_touch_down_hook(self, touch):
+        if 'lctrl' in self.keycode_buffer:
+            select_items = self.layer_view.get_items_at_pos(touch.pos)
+            item = select_items[self._consecutive_selects % len(select_items)]
+            self.layer_view.select_layer_item(item.layer_name)
+            self._consecutive_selects += 1
+            return
+
+        self._consecutive_selects = 0
+        self.on_touch_move_hook(touch)
+
+    def on_touch_move_hook(self, touch):
         if not self.layer:
             return
 
@@ -638,9 +692,6 @@ class DrawTool(MouseDrawnTool):
                 pos=(touch.x - pen_radius,
                      touch.y - pen_radius),
                 size=(d, d))
-
-    def on_touch_move_hook(self, touch):
-        self.on_touch_down_hook(touch)
 
     def on_touch_up_hook(self, touch):
         if not self.layer:
@@ -723,16 +774,8 @@ class DrawableLayer(FloatLayout):
             bbox = np.array(bbox)
             self.bbox_bot_left = list(bbox[:2])
             self.bbox_top_right = list(bbox[2:])
-
-        self.draw_tool = None
         self.layer_view = None
         self.refresh_mask()
-
-    def bind_to_draw_tool(self, draw_tool):
-        self.draw_tool = draw_tool
-
-    def bind_to_layer_view(self, layer_view):
-        self.layer_view = layer_view
 
     def refresh_layer(self):
         self.refresh_mask()
