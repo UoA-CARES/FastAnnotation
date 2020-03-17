@@ -159,7 +159,6 @@ class InstanceAnnotatorScreen(Screen):
 
         self.add_state(image_id=-1, image_name="", texture=None)
         self.load_state(index=-1)
-        # self.image_canvas.refresh_image()
         self.refresh_image_queue()
 
         print("ENTER")
@@ -229,10 +228,12 @@ class InstanceAnnotatorScreen(Screen):
             image_texture=texture,
             image_opened=True
         )
+        window_state.layer_states[0].mask_color = self.left_control.class_picker.current_color
         self.window_cache[image_id] = window_state
 
     def add_layer(self):
         layer = DrawableLayer(size=self.current_state.image_texture.size)
+        layer.mask_color = self.left_control.class_picker.current_color
         layer_name = self.left_control.layer_view.add_layer_item(layer)
         self.left_control.layer_view.select_layer_item(layer_name)
 
@@ -660,6 +661,9 @@ class DrawTool(MouseDrawnTool):
             'class_name', self.layer.setter('class_name'))
 
     def on_touch_down_hook(self, touch):
+        if not self.layer:
+            return
+
         if 'lctrl' in self.keycode_buffer:
             select_items = self.layer_view.get_items_at_pos(touch.pos)
             item = select_items[self._consecutive_selects % len(select_items)]
@@ -668,12 +672,33 @@ class DrawTool(MouseDrawnTool):
             return
 
         self._consecutive_selects = 0
-        self.on_touch_move_hook(touch)
+
+        self.draw_circle(touch)
+        self.calculate_bounds(touch)
 
     def on_touch_move_hook(self, touch):
         if not self.layer:
             return
 
+        self.draw_circle(touch)
+        self.calculate_bounds(touch)
+
+    def on_touch_up_hook(self, touch):
+        if not self.layer:
+            return
+        self.layer.refresh_bbox()
+
+    def draw_circle(self, touch):
+        pen_radius = self.pen_size / 2
+        with self.layer.fbo:
+            Color(1, 1, 1)
+            d = self.pen_size
+            Ellipse(
+                pos=(touch.x - pen_radius,
+                     touch.y - pen_radius),
+                size=(d, d))
+
+    def calculate_bounds(self, touch):
         pen_radius = self.pen_size / 2
         self.layer.bbox_top_right[0] = np.ceil(max(
             self.layer.bbox_top_right[0], touch.x + np.ceil(pen_radius))).astype(int).tolist()
@@ -684,19 +709,6 @@ class DrawTool(MouseDrawnTool):
             self.layer.bbox_bot_left[0], touch.x - np.ceil(pen_radius))).astype(int).tolist()
         self.layer.bbox_bot_left[1] = np.ceil(min(
             self.layer.bbox_bot_left[1], touch.y - np.ceil(pen_radius))).astype(int).tolist()
-
-        with self.layer.fbo:
-            Color(1, 1, 1)
-            d = self.pen_size
-            Ellipse(
-                pos=(touch.x - pen_radius,
-                     touch.y - pen_radius),
-                size=(d, d))
-
-    def on_touch_up_hook(self, touch):
-        if not self.layer:
-            return
-        self.layer.refresh_bbox()
 
 
 class LayerStack(FloatLayout):
