@@ -1,5 +1,6 @@
 #:import utils kivy.utils
 #:import ClientConfig client.client_config.ClientConfig
+#:import common client.screens.common
 
 <InstanceAnnotatorScreen>:
     left_control: left_control
@@ -83,34 +84,46 @@
         text: "Class Picker"
         size_hint_y: None
         height: 50
+
     GridLayout:
         cols: 2
+        ClassPickerItem:
+            class_name: "Eraser"
+            class_color: (0.1, 0.1, 0.1, 1)
+            on_release: root.enable_eraser(self)
         ClassPickerItem:
             class_name: "Green"
             class_color: (0.3, 0.8, 0.2, 1)
             on_parent: root.change_class(self)
+            on_release: root.change_class(self)
         ClassPickerItem:
             class_name: "Purple"
             class_color: (0.5, 0.3, 0.9, 1)
+            on_release: root.change_class(self)
         ClassPickerItem:
             class_name: "Red"
             class_color: (0.9, 0.2, 0.2, 1)
+            on_release: root.change_class(self)
         ClassPickerItem:
             class_name: "Blue"
             class_color: (0.4, 0.7, 0.9, 1)
+            on_release: root.change_class(self)
+        ClassPickerItem:
+            class_name: "Yellow"
+            class_color: (0.9, 0.7, 0.0, 1)
+            on_release: root.change_class(self)
 
 <ClassPickerItem>
     class_color: self.class_color
     class_name: self.class_name
     class_id: self.class_id
+    release_cb: self.release_cb
 
     background_color: root.class_color
     background_down: ''
     size_hint_y: None
     height: 50
     text: self.class_name
-    on_release: app.root.current_screen.left_control.class_picker.change_class(root)
-
 <LayerView>:
     layer_item_layout: layer_item_layout
     cols: 1
@@ -208,10 +221,13 @@
             pos: root.pos
             size_hint:(None, None)
             FloatLayout:
+                size: self.parent.size
                 DrawTool:
                     id: draw_tool
+                    size: self.parent.size
                 LayerStack:
                     id: layer_stack
+                    size: self.parent.size
 
 
 <LayerStack>:
@@ -224,9 +240,8 @@
     layer_color: self.layer_color
 
 <DrawableLayer>:
-    mask_layer: mask_layer
+    paint_window: paint_window
     mask_color: self.mask_color
-    fbo: self.fbo
 
     bbox_layer: bbox_layer
     bbox_color: self.bbox_color
@@ -235,12 +250,10 @@
     bbox_bot_left: self.bbox_bot_left
     bbox_bounds: self.bbox_bounds
 
-
-    Widget:
-        id: mask_layer
-        canvas.before:
-            Color:
-                rgba: root.mask_color
+    PaintWindow:
+        id: paint_window
+        size: (300,300)
+        mask_color: root.mask_color
 
     Widget:
         id: bbox_layer

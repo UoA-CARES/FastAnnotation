@@ -36,7 +36,7 @@ class WindowState:
 
         if not self.image_texture:
             self.image_texture = utils.mat2texture(
-                np.ones(shape=(2000, 2000, 3), dtype=np.uint8))
+                np.ones(shape=(700, 700, 3), dtype=np.uint8))
 
         if not self.layer_states:
             self.layer_states = [
@@ -64,7 +64,7 @@ class LayerState:
         self.mask_color = [1, 1, 1, 1]
         self.bbox = None
         if drawable_layer:
-            self.texture = drawable_layer.fbo.texture
+            self.texture = drawable_layer.get_fbo().texture
             self.class_name = drawable_layer.class_name
             self.mask_color = drawable_layer.mask_color
             self.bbox = drawable_layer.bbox_bot_left + drawable_layer.bbox_top_right
@@ -155,6 +155,8 @@ class InstanceAnnotatorScreen(Screen):
         # Draw Tool Binds
         self.image_canvas.draw_tool.bind_layer_view(
             self.left_control.layer_view)
+        self.image_canvas.draw_tool.bind_class_picker(
+            self.left_control.class_picker)
         self.image_canvas.draw_tool.bind_keyboard()
 
         self.add_state(image_id=-1, image_name="", texture=None)
@@ -189,9 +191,9 @@ class InstanceAnnotatorScreen(Screen):
             # Build Layer
             layer = DrawableLayer(
                 size=layer_state.get_size(),
-                texture=layer_state.get_texture(),
                 mask_color=layer_state.mask_color,
                 class_name=layer_state.class_name,
+                texture=layer_state.get_texture(),
                 bbox=layer_state.bbox)
             layer.refresh_bbox()
 
@@ -407,6 +409,8 @@ class ToolSelect(GridLayout):
 
 
 class ClassPicker(GridLayout):
+    eraser_enabled = BooleanProperty(False)
+
     current_class = ObjectProperty(None)
     current_color = ObjectProperty(None)
     current_name = StringProperty("")
@@ -426,6 +430,16 @@ class ClassPicker(GridLayout):
         # Set properties
         self.current_color = self.current_class.class_color
         self.current_name = self.current_class.class_name
+        self.eraser_enabled = False
+
+    def enable_eraser(self, instance):
+        print("ERASER")
+        self.eraser_enabled = True
+        if self.current_class:
+            self.current_class.state = 'normal'
+        self.current_class = instance
+        self.current_class.state = 'down'
+
 
 
 class ClassPickerItem(Button):
@@ -601,11 +615,42 @@ class LayerViewItem(RelativeLayout):
             self.layer.toggle_bbox()
 
 
+class MaskInstruction:
+    def __init__(self, pos, pen_size, negate=False):
+        color = (1, 1, 1, 1)
+        if negate:
+            print("NEGATE!")
+            color = (0, 0, 0, 1)
+        self.instruction = InstructionGroup()
+        self.color = Color(*color)
+        self.instruction.add(self.color)
+        self.circle = Ellipse(
+            pos=(
+                pos[0] -
+                pen_size /
+                2,
+                pos[1] -
+                pen_size /
+                2),
+            size=(
+                pen_size,
+                pen_size))
+        self.instruction.add(self.circle)
+        self.line = Line(
+            points=pos,
+            cap='round',
+            joint='round',
+            width=pen_size / 2)
+        self.instruction.add(self.line)
+
+
 class DrawTool(MouseDrawnTool):
     layer = ObjectProperty(None, allownone=True)
     pen_size = NumericProperty(10)
     layer_color = ObjectProperty((1, 1, 1, 1))
     class_name = StringProperty("")
+
+    erase = BooleanProperty(False)
 
     # Stores binding id of last layer
     color_bind = None
@@ -618,10 +663,16 @@ class DrawTool(MouseDrawnTool):
         self._keyboard = Window.request_keyboard(
             self.unbind_keyboard, self, 'text')
         self._consecutive_selects = 0
+
+        self.mask_stack = []
+        self.delete_stack = []
         super().__init__(**kwargs)
 
     def bind_layer_view(self, layer_view):
         self.layer_view = layer_view
+
+    def bind_class_picker(self, class_picker):
+        class_picker.fbind('eraser_enabled', self.setter('erase'))
 
     def bind_keyboard(self,):
         self._keyboard.bind(on_key_down=self.on_key_down)
@@ -640,7 +691,24 @@ class DrawTool(MouseDrawnTool):
 
     def on_key_up(self, keyboard, keycode):
         print("UP: %s" % (str(keycode[1])))
+        if 'lctrl' in self.keycode_buffer:
+            if keycode[1] == 'z':
+                self.undo()
+            elif keycode[1] == 'y':
+                self.redo()
         self.keycode_buffer.pop(keycode[1])
+
+    def undo(self):
+        if not self.mask_stack:
+            return
+
+        mask = self.mask_stack.pop()
+        self.delete_stack.append(mask)
+        self.layer.remove_instruction(mask.instruction)
+
+    def redo(self):
+        if not self.delete_stack:
+            return
 
     def set_layer(self, layer):
         self.layer = layer
@@ -673,42 +741,43 @@ class DrawTool(MouseDrawnTool):
 
         self._consecutive_selects = 0
 
-        self.draw_circle(touch)
+        mask = MaskInstruction(
+            pos=touch.pos,
+            pen_size=self.pen_size,
+            negate=self.erase)
+
+        self.layer.add_instruction(mask.instruction)
+
+        self.mask_stack.append(mask)
+
+        self.delete_stack.clear()
         self.calculate_bounds(touch)
+        print("WOW : %s" % str(touch.pos))
 
     def on_touch_move_hook(self, touch):
         if not self.layer:
             return
 
-        self.draw_circle(touch)
+        mask = self.mask_stack[-1]
+        mask.line.points += [touch.x, touch.y]
         self.calculate_bounds(touch)
 
     def on_touch_up_hook(self, touch):
         if not self.layer:
             return
+
         self.layer.refresh_bbox()
 
-    def draw_circle(self, touch):
-        pen_radius = self.pen_size / 2
-        with self.layer.fbo:
-            Color(1, 1, 1)
-            d = self.pen_size
-            Ellipse(
-                pos=(touch.x - pen_radius,
-                     touch.y - pen_radius),
-                size=(d, d))
-
     def calculate_bounds(self, touch):
-        pen_radius = self.pen_size / 2
         self.layer.bbox_top_right[0] = np.ceil(max(
-            self.layer.bbox_top_right[0], touch.x + np.ceil(pen_radius))).astype(int).tolist()
+            self.layer.bbox_top_right[0], touch.x + np.ceil(self.pen_size))).astype(int).tolist()
         self.layer.bbox_top_right[1] = np.ceil(max(
-            self.layer.bbox_top_right[1], touch.y + np.ceil(pen_radius))).astype(int).tolist()
+            self.layer.bbox_top_right[1], touch.y + np.ceil(self.pen_size))).astype(int).tolist()
 
         self.layer.bbox_bot_left[0] = np.ceil(min(
-            self.layer.bbox_bot_left[0], touch.x - np.ceil(pen_radius))).astype(int).tolist()
+            self.layer.bbox_bot_left[0], touch.x - np.ceil(self.pen_size))).astype(int).tolist()
         self.layer.bbox_bot_left[1] = np.ceil(min(
-            self.layer.bbox_bot_left[1], touch.y - np.ceil(pen_radius))).astype(int).tolist()
+            self.layer.bbox_bot_left[1], touch.y - np.ceil(self.pen_size))).astype(int).tolist()
 
 
 class LayerStack(FloatLayout):
@@ -739,7 +808,6 @@ class DrawableLayer(FloatLayout):
     fbo = ObjectProperty(None)
     class_name = StringProperty("")
 
-    mask_layer = ObjectProperty(None)
     mask_color = ObjectProperty((1, 1, 1, 1))
     mask_visible = BooleanProperty(True)
 
@@ -756,28 +824,17 @@ class DrawableLayer(FloatLayout):
 
     def __init__(
             self,
-            size=None,
-            texture=None,
-            class_name=None,
-            mask_color=None,
+            size,
+            class_name="",
+            mask_color=(1, 1, 1, 1),
+            texture = None,
             bbox=None,
             **kwargs):
         super().__init__(**kwargs)
-        if size:
-            self.size = size
-
-        if texture:
-            self.size = texture.size
-            self.texture = texture
-
-        if self.size:
-            self.fbo = Fbo(size=self.size, texture=texture)
-
-        if mask_color:
-            self.mask_color = mask_color
-
-        if class_name:
-            self.class_name = class_name
+        self.size = size
+        self.class_name = class_name
+        self.mask_color = mask_color
+        self.texture = texture
 
         self.bbox_top_right = [-1, -1]
         self.bbox_bot_left = [np.iinfo(int).max, np.iinfo(int).max]
@@ -786,23 +843,29 @@ class DrawableLayer(FloatLayout):
             bbox = np.array(bbox)
             self.bbox_bot_left = list(bbox[:2])
             self.bbox_top_right = list(bbox[2:])
+
         self.layer_view = None
-        self.refresh_mask()
+        Clock.schedule_once(lambda dt: self.late_init())
 
-    def refresh_layer(self):
-        self.refresh_mask()
-        self.refresh_bbox()
+    def late_init(self):
+        self.paint_window.refresh()
+        self.load_texture(self.texture)
 
-    def refresh_mask(self):
-        texture = None
-        if self.fbo:
-            texture = self.fbo.texture
+    def load_texture(self, texture):
+        if self.texture:
+            g = InstructionGroup()
+            g.add(Color(1, 1, 1, 1))
+            g.add(Rectangle(size=self.get_fbo().size, texture=texture))
+            self.paint_window.add_instruction(g)
 
-        self.mask_layer.canvas.clear()
-        with self.mask_layer.canvas:
-            if self.size:
-                self.fbo = Fbo(size=self.size, texture=texture)
-            Rectangle(size=self.fbo.texture.size, texture=self.fbo.texture)
+    def get_fbo(self):
+        return self.paint_window.fbo
+
+    def add_instruction(self, instruction):
+        self.paint_window.add_instruction(instruction)
+
+    def remove_instruction(self, instruction):
+        self.paint_window.remove_instruction(instruction)
 
     def refresh_bbox(self):
         rect = list(self.bbox_bot_left)
@@ -815,7 +878,7 @@ class DrawableLayer(FloatLayout):
 
     def toggle_mask(self):
         self.mask_visible = not self.mask_visible
-        self.mask_layer.canvas.opacity = int(self.mask_visible)
+        self.paint_window.canvas.opacity = int(self.mask_visible)
 
     def toggle_bbox(self):
         self.bbox_visible = not self.bbox_visible
