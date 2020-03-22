@@ -62,12 +62,15 @@ class LayerState:
         self.texture = None
         self.class_name = ""
         self.mask_color = [1, 1, 1, 1]
+        # bbox in (x1, y1, x2, y2) format
         self.bbox = None
         if drawable_layer:
             self.texture = drawable_layer.get_fbo().texture
             self.class_name = drawable_layer.class_name
             self.mask_color = drawable_layer.mask_color
-            self.bbox = drawable_layer.bbox_bot_left + drawable_layer.bbox_top_right
+            self.bbox = drawable_layer.bbox_bounds
+            self.bbox[2] += drawable_layer.bbox_bounds[0]
+            self.bbox[3] += drawable_layer.bbox_bounds[1]
         elif config:
             self.mask = utils.decode_mask(
                 config["mask"], config["info"]["source_shape"][:2])
@@ -488,6 +491,9 @@ class LayerView(GridLayout):
         stack_index = self.layer_stack.add_layer(layer)
 
         layer_name = "Layer %d" % stack_index
+        while layer_name in self.layer_item_dict.keys():
+            stack_index += 1
+            layer_name = "Layer %d" % stack_index
 
         # Build Layer Item
         item = LayerViewItem(layer_name)
@@ -822,8 +828,6 @@ class DrawableLayer(FloatLayout):
             ClientConfig.BBOX_UNSELECT))
     bbox_thickness = NumericProperty(1)
 
-    bbox_top_right = ObjectProperty([])
-    bbox_bot_left = ObjectProperty([])
     bbox_bounds = ObjectProperty([0, 0, 0, 0])
 
     def __init__(
@@ -840,13 +844,8 @@ class DrawableLayer(FloatLayout):
         self.mask_color = mask_color
         self.texture = texture
 
-        self.bbox_top_right = [-1, -1]
-        self.bbox_bot_left = [np.iinfo(int).max, np.iinfo(int).max]
-
         if bbox is not None:
-            bbox = np.array(bbox)
-            self.bbox_bot_left = list(bbox[:2])
-            self.bbox_top_right = list(bbox[2:])
+            self.bbox_bounds = [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]]
 
         self.layer_view = None
         Clock.schedule_once(lambda dt: self.late_init())
