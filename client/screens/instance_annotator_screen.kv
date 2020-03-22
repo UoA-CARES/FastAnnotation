@@ -1,5 +1,6 @@
 #:import utils kivy.utils
 #:import ClientConfig client.client_config.ClientConfig
+#:import common client.screens.common
 
 <InstanceAnnotatorScreen>:
     left_control: left_control
@@ -39,11 +40,11 @@
             size: self.size
     ToolSelect:
         id: tool_select
-        size_hint_y: 400 / root.height
+        size_hint_y: 300 / root.height
 
     ClassPicker:
         id: class_picker
-        size_hint_y: 400 / root.height
+        size_hint_y: 500 / root.height
     LayerView:
         id: layer_view
 
@@ -83,36 +84,48 @@
         text: "Class Picker"
         size_hint_y: None
         height: 50
+
     GridLayout:
         cols: 2
+        ClassPickerItem:
+            class_name: "Eraser"
+            class_color: (0.1, 0.1, 0.1, 1)
+            on_release: root.enable_eraser(self)
         ClassPickerItem:
             class_name: "Green"
             class_color: (0.3, 0.8, 0.2, 1)
             on_parent: root.change_class(self)
+            on_release: root.change_class(self)
         ClassPickerItem:
             class_name: "Purple"
             class_color: (0.5, 0.3, 0.9, 1)
+            on_release: root.change_class(self)
         ClassPickerItem:
             class_name: "Red"
             class_color: (0.9, 0.2, 0.2, 1)
+            on_release: root.change_class(self)
         ClassPickerItem:
             class_name: "Blue"
             class_color: (0.4, 0.7, 0.9, 1)
+            on_release: root.change_class(self)
+        ClassPickerItem:
+            class_name: "Yellow"
+            class_color: (0.9, 0.7, 0.0, 1)
+            on_release: root.change_class(self)
 
 <ClassPickerItem>
     class_color: self.class_color
     class_name: self.class_name
     class_id: self.class_id
+    release_cb: self.release_cb
 
     background_color: root.class_color
     background_down: ''
     size_hint_y: None
     height: 50
     text: self.class_name
-    on_release: app.root.current_screen.left_control.class_picker.change_class(root)
-
 <LayerView>:
-    layer_item_list: layer_item_list
+    layer_item_layout: layer_item_layout
     cols: 1
     Button:
         size_hint_y: None
@@ -124,43 +137,69 @@
             cols: 1
             size_hint_y: None
             height: self.minimum_height
-            id: layer_item_list
+            id: layer_item_layout
 
 <LayerViewItem>:
     layer_name: self.layer_name
     mask_enabled: self.mask_enabled
     bbox_enabled: self.bbox_enabled
     layer_index: self.layer_index
+
+    button_up_color: self.button_up_color
+    button_down_color : self.button_down_color
+
+    btn_base: btn_base
+    btn_mask: btn_mask
+    btn_bbox: btn_bbox
+
+
     height: 50
     size_hint_y: None
     Button:
+        id: btn_base
         size_hint: (1,1)
-        on_release: root.select_layer()
+        background_color: root.button_up_color
+        on_release: root.layer_view.select_layer_item(root.layer_name)
     BoxLayout:
         size_hint: (1, 1)
         pos_hint: {'center_x': .5, 'center_y': .5}
         padding: 8
         spacing: 8
         Button:
-            text: "M" * root.mask_enabled
+            id: btn_mask
+            text: "M"
             size_hint_x: None
             width: self.height
             on_release: root.toggle_mask()
+            background_color: root.button_down_color
         Button:
-            text: "B" * root.bbox_enabled
+            id: btn_bbox
+            text: "B"
             size_hint_x: None
             width: self.height
             on_release: root.toggle_bbox()
+            background_color: root.button_down_color
         Label:
             text: root.layer_name
             halign: 'left'
             valign: 'center'
             text_size: self.size
+    BoxLayout:
+        pos_hint: {'right': 1, 'top': 1}
+        size_hint_y: 0.5
+        size_hint_x: None
+        width: self.height
+        spacing: 8
+        padding: 8
+        Button:
+            text: "X"
+            on_release: root.layer_view.delete_layer_item(root.layer_name)
 
 
 
 <ImageCanvas>:
     image_id: self.image_id
+    scatter: scatter
     image: image
     layer_stack: layer_stack
     draw_tool: draw_tool
@@ -171,22 +210,29 @@
         Rectangle:
             pos: self.pos
             size: self.size
-    ScrollView:
-        scroll_type: ['bars', 'content']
-        bar_width: '10dp'
-        id: scroll_view
-        size: root.size
-        Image:
-            id: image
-            keep_ratio: True
-            size: root.size
-            pos: root.pos
-            size_hint:(None, None)
-            FloatLayout:
-                DrawTool:
-                    id: draw_tool
-                LayerStack:
-                    id: layer_stack
+    Scatter:
+        id: scatter
+        pos: (0,0)
+        ScrollView:
+            scroll_type: ['bars', 'content']
+            bar_width: '10dp'
+            id: scroll_view
+            width: root.width / root.scatter.scale
+            height: root.height / root.scatter.scale
+            Image:
+                id: image
+                keep_ratio: True
+                size: root.size
+                pos: root.pos
+                size_hint:(None, None)
+                FloatLayout:
+                    size: self.parent.size
+                    DrawTool:
+                        id: draw_tool
+                        size: self.parent.size
+                    LayerStack:
+                        id: layer_stack
+                        size: self.parent.size
 
 
 <LayerStack>:
@@ -199,9 +245,8 @@
     layer_color: self.layer_color
 
 <DrawableLayer>:
-    mask_layer: mask_layer
+    paint_window: paint_window
     mask_color: self.mask_color
-    fbo: self.fbo
 
     bbox_layer: bbox_layer
     bbox_color: self.bbox_color
@@ -210,12 +255,10 @@
     bbox_bot_left: self.bbox_bot_left
     bbox_bounds: self.bbox_bounds
 
-
-    Widget:
-        id: mask_layer
-        canvas.before:
-            Color:
-                rgba: root.mask_color
+    PaintWindow:
+        id: paint_window
+        size: root.size
+        mask_color: root.mask_color
 
     Widget:
         id: bbox_layer

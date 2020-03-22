@@ -188,6 +188,9 @@ def unlock_image_by_id(iid):
 def add_annotation_to_image(iid):
     content = request.get_json()
 
+    query = "DELETE FROM instance_seg_meta WHERE image_id = %s"
+    db.query(query, (iid,))
+
     i = 0
     for row in content["annotations"]:
         info = row['info']
