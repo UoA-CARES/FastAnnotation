@@ -739,7 +739,6 @@ class DrawTool(MouseDrawnTool):
     def on_touch_down_hook(self, touch):
         if not self.layer:
             return
-
         if 'lctrl' in self.keycode_buffer:
             select_items = self.layer_view.get_items_at_pos(touch.pos)
             item = select_items[self._consecutive_selects % len(select_items)]
@@ -954,14 +953,30 @@ class DrawableLayer(FloatLayout):
 
 
 class ImageCanvas(BoxLayout):
+    scatter = ObjectProperty(None)
     image = ObjectProperty(None)
     image_id = NumericProperty(-1)
     draw_tool = ObjectProperty(None)
     layer_stack = ObjectProperty(None)
 
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.app = App.get_running_app()
+    max_scale = NumericProperty(10.0)
+    min_scale = NumericProperty(0.5)
+    step_scale = NumericProperty(0.1)
+
+    def on_touch_down(self, touch):
+        if 'lctrl' in self.draw_tool.keycode_buffer and touch.is_mouse_scrolling:
+            if touch.button == 'scrolldown':
+                self.zoom(1.0 + self.step_scale)
+            elif touch.button == 'scrollup':
+                self.zoom(1.0 - self.step_scale)
+        super(ImageCanvas, self).on_touch_down(touch)
+
+    def zoom(self, scale):
+        print("pos: %s size: %s" % (str(self.scatter.pos), str(self.scatter.size)))
+        self.scatter.scale = np.clip(self.scatter.scale * scale,
+                                     self.min_scale,
+                                     self.max_scale)
+        self.scatter.pos = self.pos
 
     def load_image(self, texture, image_id):
         self.image_id = image_id

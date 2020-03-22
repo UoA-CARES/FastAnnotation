@@ -199,6 +199,7 @@
 
 <ImageCanvas>:
     image_id: self.image_id
+    scatter: scatter
     image: image
     layer_stack: layer_stack
     draw_tool: draw_tool
@@ -209,25 +210,29 @@
         Rectangle:
             pos: self.pos
             size: self.size
-    ScrollView:
-        scroll_type: ['bars', 'content']
-        bar_width: '10dp'
-        id: scroll_view
-        size: root.size
-        Image:
-            id: image
-            keep_ratio: True
-            size: root.size
-            pos: root.pos
-            size_hint:(None, None)
-            FloatLayout:
-                size: self.parent.size
-                DrawTool:
-                    id: draw_tool
+    Scatter:
+        id: scatter
+        pos: (0,0)
+        ScrollView:
+            scroll_type: ['bars', 'content']
+            bar_width: '10dp'
+            id: scroll_view
+            width: root.width / root.scatter.scale
+            height: root.height / root.scatter.scale
+            Image:
+                id: image
+                keep_ratio: True
+                size: root.size
+                pos: root.pos
+                size_hint:(None, None)
+                FloatLayout:
                     size: self.parent.size
-                LayerStack:
-                    id: layer_stack
-                    size: self.parent.size
+                    DrawTool:
+                        id: draw_tool
+                        size: self.parent.size
+                    LayerStack:
+                        id: layer_stack
+                        size: self.parent.size
 
 
 <LayerStack>:
@@ -252,7 +257,7 @@
 
     PaintWindow:
         id: paint_window
-        size: (300,300)
+        size: root.size
         mask_color: root.mask_color
 
     Widget:
