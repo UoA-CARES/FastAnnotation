@@ -709,6 +709,9 @@ class DrawTool(MouseDrawnTool):
     def redo(self):
         if not self.delete_stack:
             return
+        mask = self.delete_stack.pop()
+        self.mask_stack.append(mask)
+        self.layer.add_instruction(mask.instruction)
 
     def set_layer(self, layer):
         self.layer = layer
