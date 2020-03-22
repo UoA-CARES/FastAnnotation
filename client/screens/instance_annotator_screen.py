@@ -1,17 +1,16 @@
+from collections import deque
+import cv2
 import kivy.utils
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.graphics import Color, Ellipse, Fbo, Rectangle, InstructionGroup, Line
-from kivy.graphics.texture import Texture
+from kivy.graphics import Color, Ellipse, InstructionGroup, Line
 from kivy.properties import BooleanProperty
-from kivy.uix.image import Image
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.screenmanager import Screen
 
 import client.utils as utils
 from client.screens.common import *
-import cv2
 
 # Load corresponding kivy file
 Builder.load_file(
@@ -36,7 +35,7 @@ class WindowState:
 
         if not self.image_texture:
             self.image_texture = utils.mat2texture(
-                np.ones(shape=(700, 700, 3), dtype=np.uint8))
+                np.ones(shape=(3000, 3000, 3), dtype=np.uint8))
 
         if not self.layer_states:
             self.layer_states = [
@@ -198,8 +197,6 @@ class InstanceAnnotatorScreen(Screen):
                 class_name=layer_state.class_name,
                 texture=layer_state.get_texture(),
                 bbox=layer_state.bbox)
-            layer.fit_bbox()
-
             layer_name = self.left_control.layer_view.add_layer_item(layer)
         self.left_control.layer_view.select_layer_item(layer_name)
 
@@ -504,6 +501,9 @@ class LayerView(GridLayout):
         self.layer_item_dict[layer_name] = item
         self.layer_item_layout.add_widget(item)
 
+        # Fit bounding box
+        self.draw_tool.fit_bbox(layer)
+
         return layer_name
 
     def select_layer_item(self, name):
@@ -596,10 +596,8 @@ class LayerViewItem(RelativeLayout):
     def on_bbox_enabled(self, *args):
         if self.bbox_enabled:
             self.btn_bbox.background_color = self.button_down_color
-            # self.btn_bbox.state = 'down'
         else:
             self.btn_bbox.background_color = self.button_up_color
-            # self.btn_bbox.state = 'normal'
 
     def on_layer_selected(self, *args):
         if self.layer_selected:
@@ -620,33 +618,29 @@ class LayerViewItem(RelativeLayout):
             self.layer.toggle_bbox()
 
 
-class MaskInstruction:
-    def __init__(self, pos, pen_size, negate=False):
+class MaskInstruction(InstructionGroup):
+    def __init__(self, pos, pen_size, negate=False, **kwargs):
+        super().__init__(**kwargs)
         color = (1, 1, 1, 1)
         if negate:
             print("NEGATE!")
             color = (0, 0, 0, 1)
-        self.instruction = InstructionGroup()
         self.color = Color(*color)
-        self.instruction.add(self.color)
+        self.add(self.color)
         self.circle = Ellipse(
-            pos=(
-                pos[0] -
-                pen_size /
-                2,
-                pos[1] -
-                pen_size /
-                2),
-            size=(
-                pen_size,
-                pen_size))
-        self.instruction.add(self.circle)
+            pos=(pos[0] -
+                 pen_size / 2,
+                 pos[1] -
+                 pen_size / 2),
+            size=(pen_size,
+                  pen_size))
+        self.add(self.circle)
         self.line = Line(
             points=pos,
             cap='round',
             joint='round',
             width=pen_size / 2)
-        self.instruction.add(self.line)
+        self.add(self.line)
 
 
 class DrawTool(MouseDrawnTool):
@@ -706,19 +700,23 @@ class DrawTool(MouseDrawnTool):
     def undo(self):
         if not self.mask_stack:
             return
-
         mask = self.mask_stack.pop()
         self.delete_stack.append(mask)
-        self.layer.remove_instruction(mask.instruction)
-        self.layer.fit_bbox()
+        self.layer.remove_instruction(mask)
+        self.fit_bbox()
 
     def redo(self):
         if not self.delete_stack:
             return
         mask = self.delete_stack.pop()
         self.mask_stack.append(mask)
-        self.layer.add_instruction(mask.instruction)
-        self.layer.fit_bbox()
+        self.layer.add_instruction(mask)
+        self.fit_bbox()
+
+    def add_action(self, instruction_group):
+        self.layer.add_instruction(instruction_group)
+        self.mask_stack.append(instruction_group)
+        self.delete_stack.clear()
 
     def set_layer(self, layer):
         self.layer = layer
@@ -749,45 +747,117 @@ class DrawTool(MouseDrawnTool):
             self._consecutive_selects += 1
             return
 
+        if 'shift' in self.keycode_buffer:
+            self.flood_fill(touch.pos)
+            return
+
+        pos = np.round(touch.pos).astype(int)
+
         self._consecutive_selects = 0
 
         mask = MaskInstruction(
-            pos=touch.pos,
+            pos=list(pos),
             pen_size=self.pen_size,
             negate=self.erase)
 
-        self.layer.add_instruction(mask.instruction)
-
-        self.mask_stack.append(mask)
-        self.delete_stack.clear()
-        print("WOW : %s" % str(touch.pos))
+        self.add_action(mask)
 
     def on_touch_move_hook(self, touch):
         if not self.layer:
             return
 
+        pos = np.round(touch.pos).astype(int)
+
         mask = self.mask_stack[-1]
-        mask.line.points += [touch.x, touch.y]
+        mask.line.points += list(pos)
 
     def on_touch_up_hook(self, touch):
         if not self.layer:
             return
 
-        self.layer.fit_bbox()
+        self.fit_bbox()
 
-    def calculate_bounds(self, touch):
-        if self.erase:
+    def fit_bbox(self, layer=None):
+        if layer is None:
+            layer = self.layer
+
+        fbo = layer.get_fbo()
+
+        if fbo is None:
             return
 
-        self.layer.bbox_top_right[0] = np.ceil(max(
-            self.layer.bbox_top_right[0], touch.x + np.ceil(self.pen_size / 2))).astype(int).tolist()
-        self.layer.bbox_top_right[1] = np.ceil(max(
-            self.layer.bbox_top_right[1], touch.y + np.ceil(self.pen_size / 2))).astype(int).tolist()
+        fbo.draw()
+        mat_gray = np.sum(
+            utils.texture2mat(fbo.texture),
+            axis=2)
 
-        self.layer.bbox_bot_left[0] = np.ceil(min(
-            self.layer.bbox_bot_left[0], touch.x - np.ceil(self.pen_size / 2))).astype(int).tolist()
-        self.layer.bbox_bot_left[1] = np.ceil(min(
-            self.layer.bbox_bot_left[1], touch.y - np.ceil(self.pen_size / 2))).astype(int).tolist()
+        col_sum = np.sum(mat_gray, axis=0)
+        x1 = 0
+        x2 = len(col_sum)
+        for x in col_sum:
+            if x > 0:
+                break
+            x1 += 1
+
+        for x in reversed(col_sum):
+            if x > 0:
+                break
+            x2 -= 1
+
+        row_sum = np.sum(mat_gray, axis=1)
+        y1 = 0
+        y2 = len(row_sum)
+        for x in reversed(row_sum):
+            if x > 0:
+                break
+            y1 += 1
+
+        for x in row_sum:
+            if x > 0:
+                break
+            y2 -= 1
+
+        bounds = [x1, y1, x2 - x1, y2 - y1]
+        if np.product(bounds[2:]) <= 0:
+            bounds = [0, 0, 0, 0]
+            print("Failed Bounds")
+
+        layer.bbox_bounds = bounds
+
+    def flood_fill(self, pos):
+        print("FLOOD")
+
+        fbo = self.layer.get_fbo()
+        if fbo is None:
+            return
+
+        if np.sum(fbo.get_pixel_color(*pos)) > 0:
+            return
+
+        region = fbo.texture.get_region(*self.layer.bbox_bounds)
+        relative_pos = np.array(pos) - np.array(self.layer.bbox_bounds[:2])
+
+        cv2_pos = np.round(relative_pos).astype(int)
+
+        (width, height) = region.size
+
+        mat = utils.texture2mat(region)
+        mat_copy = mat.copy()
+        mask = np.zeros((height + 2, width + 2), dtype=np.uint8)
+        cv2.floodFill(mat_copy, mask, tuple(cv2_pos), (255, 255, 255))
+        cv2.circle(mat_copy, tuple(cv2_pos), 3, (0, 255, 0))
+
+        mat = np.clip(mat_copy - mat, 0, 255)
+        mat = cv2.flip(mat, 0)
+
+        # Convert to instruction
+        g = InstructionGroup()
+        g.add(Color(1, 1, 1, 1))
+        g.add(Rectangle(size=(width, height),
+                        pos=tuple(self.layer.bbox_bounds[:2]),
+                        texture=utils.mat2texture(mat)))
+
+        self.add_action(g)
 
 
 class LayerStack(FloatLayout):
@@ -845,7 +915,11 @@ class DrawableLayer(FloatLayout):
         self.texture = texture
 
         if bbox is not None:
-            self.bbox_bounds = [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]]
+            self.bbox_bounds = [
+                bbox[0],
+                bbox[1],
+                bbox[2] - bbox[0],
+                bbox[3] - bbox[1]]
 
         self.layer_view = None
         Clock.schedule_once(lambda dt: self.late_init())
@@ -869,45 +943,6 @@ class DrawableLayer(FloatLayout):
 
     def remove_instruction(self, instruction):
         self.paint_window.remove_instruction(instruction)
-
-    def fit_bbox(self):
-        if self.paint_window.fbo is None:
-            return
-
-        mat_gray = np.sum(
-            utils.texture2mat(
-                self.paint_window.fbo.texture),
-            axis=2)
-
-        col_sum = np.sum(mat_gray, axis=0)
-        x1 = 0
-        x2 = len(col_sum)
-        for x in col_sum:
-            if x > 0:
-                break
-            x1 += 1
-
-        for x in reversed(col_sum):
-            if x > 0:
-                break
-            x2 -= 1
-
-        row_sum = np.sum(mat_gray, axis=1)
-        y1 = 0
-        y2 = len(row_sum)
-        for x in reversed(row_sum):
-            if x > 0:
-                break
-            y1 += 1
-
-        for x in row_sum:
-            if x > 0:
-                break
-            y2 -= 1
-
-        self.bbox_bounds = [x1, y1, x2 - x1, y2 - y1]
-        if np.product(self.bbox_bounds) <= 0:
-            self.bbox_bounds = [0, 0, 0, 0]
 
     def toggle_mask(self):
         self.mask_visible = not self.mask_visible
