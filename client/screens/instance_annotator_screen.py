@@ -195,7 +195,7 @@ class InstanceAnnotatorScreen(Screen):
                 class_name=layer_state.class_name,
                 texture=layer_state.get_texture(),
                 bbox=layer_state.bbox)
-            layer.refresh_bbox()
+            layer.fit_bbox()
 
             layer_name = self.left_control.layer_view.add_layer_item(layer)
         self.left_control.layer_view.select_layer_item(layer_name)
@@ -439,7 +439,6 @@ class ClassPicker(GridLayout):
             self.current_class.state = 'normal'
         self.current_class = instance
         self.current_class.state = 'down'
-
 
 
 class ClassPickerItem(Button):
@@ -705,6 +704,7 @@ class DrawTool(MouseDrawnTool):
         mask = self.mask_stack.pop()
         self.delete_stack.append(mask)
         self.layer.remove_instruction(mask.instruction)
+        self.layer.fit_bbox()
 
     def redo(self):
         if not self.delete_stack:
@@ -712,6 +712,7 @@ class DrawTool(MouseDrawnTool):
         mask = self.delete_stack.pop()
         self.mask_stack.append(mask)
         self.layer.add_instruction(mask.instruction)
+        self.layer.fit_bbox()
 
     def set_layer(self, layer):
         self.layer = layer
@@ -752,9 +753,7 @@ class DrawTool(MouseDrawnTool):
         self.layer.add_instruction(mask.instruction)
 
         self.mask_stack.append(mask)
-
         self.delete_stack.clear()
-        self.calculate_bounds(touch)
         print("WOW : %s" % str(touch.pos))
 
     def on_touch_move_hook(self, touch):
@@ -763,24 +762,26 @@ class DrawTool(MouseDrawnTool):
 
         mask = self.mask_stack[-1]
         mask.line.points += [touch.x, touch.y]
-        self.calculate_bounds(touch)
 
     def on_touch_up_hook(self, touch):
         if not self.layer:
             return
 
-        self.layer.refresh_bbox()
+        self.layer.fit_bbox()
 
     def calculate_bounds(self, touch):
+        if self.erase:
+            return
+
         self.layer.bbox_top_right[0] = np.ceil(max(
-            self.layer.bbox_top_right[0], touch.x + np.ceil(self.pen_size))).astype(int).tolist()
+            self.layer.bbox_top_right[0], touch.x + np.ceil(self.pen_size / 2))).astype(int).tolist()
         self.layer.bbox_top_right[1] = np.ceil(max(
-            self.layer.bbox_top_right[1], touch.y + np.ceil(self.pen_size))).astype(int).tolist()
+            self.layer.bbox_top_right[1], touch.y + np.ceil(self.pen_size / 2))).astype(int).tolist()
 
         self.layer.bbox_bot_left[0] = np.ceil(min(
-            self.layer.bbox_bot_left[0], touch.x - np.ceil(self.pen_size))).astype(int).tolist()
+            self.layer.bbox_bot_left[0], touch.x - np.ceil(self.pen_size / 2))).astype(int).tolist()
         self.layer.bbox_bot_left[1] = np.ceil(min(
-            self.layer.bbox_bot_left[1], touch.y - np.ceil(self.pen_size))).astype(int).tolist()
+            self.layer.bbox_bot_left[1], touch.y - np.ceil(self.pen_size / 2))).astype(int).tolist()
 
 
 class LayerStack(FloatLayout):
@@ -830,7 +831,7 @@ class DrawableLayer(FloatLayout):
             size,
             class_name="",
             mask_color=(1, 1, 1, 1),
-            texture = None,
+            texture=None,
             bbox=None,
             **kwargs):
         super().__init__(**kwargs)
@@ -870,14 +871,44 @@ class DrawableLayer(FloatLayout):
     def remove_instruction(self, instruction):
         self.paint_window.remove_instruction(instruction)
 
-    def refresh_bbox(self):
-        rect = list(self.bbox_bot_left)
-        rect += list(np.array(self.bbox_top_right) -
-                     np.array(self.bbox_bot_left))
+    def fit_bbox(self):
+        if self.paint_window.fbo is None:
+            return
 
-        if not np.all(np.array(rect) > 0):
-            rect = [0, 0, 0, 0]
-        self.bbox_bounds = rect
+        mat_gray = np.sum(
+            utils.texture2mat(
+                self.paint_window.fbo.texture),
+            axis=2)
+
+        col_sum = np.sum(mat_gray, axis=0)
+        x1 = 0
+        x2 = len(col_sum)
+        for x in col_sum:
+            if x > 0:
+                break
+            x1 += 1
+
+        for x in reversed(col_sum):
+            if x > 0:
+                break
+            x2 -= 1
+
+        row_sum = np.sum(mat_gray, axis=1)
+        y1 = 0
+        y2 = len(row_sum)
+        for x in reversed(row_sum):
+            if x > 0:
+                break
+            y1 += 1
+
+        for x in row_sum:
+            if x > 0:
+                break
+            y2 -= 1
+
+        self.bbox_bounds = [x1, y1, x2 - x1, y2 - y1]
+        if np.product(self.bbox_bounds) <= 0:
+            self.bbox_bounds = [0, 0, 0, 0]
 
     def toggle_mask(self):
         self.mask_visible = not self.mask_visible

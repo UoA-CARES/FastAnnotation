@@ -111,10 +111,12 @@ class PaintWindow(Widget):
         self.fbo.add(instruction)
 
     def remove_instruction(self, instruction):
-        self.fbo.remove(instruction)
-        new_children = self.fbo.children.copy()
+        new_children = [x for x in self.fbo.children if x != instruction]
+        self.fbo.clear()
         self.fbo.bind()
         self.fbo.clear_buffer()
         self.fbo.release()
         for c in new_children:
             self.fbo.add(c)
+
+        self.fbo.draw()
