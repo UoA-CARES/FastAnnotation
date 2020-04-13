@@ -246,9 +246,7 @@ def get_annotations_for_image(iid):
     for row in results:
         mask = utils.load_mask(row[2])
         info = utils.load_info(row[3])
-        annotation = {}
-        annotation['mask'] = utils.encode_mask(mask)
-        annotation['info'] = info
+        annotation = {'mask': utils.encode_mask(mask), 'info': info}
         body.append(annotation)
 
     body = {"image_id": iid, "annotations": body}
