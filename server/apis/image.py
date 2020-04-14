@@ -1,4 +1,5 @@
 import base64
+import os
 
 import server.utils as utils
 from flask import request
@@ -7,6 +8,7 @@ from mysql.connector.errors import DatabaseError
 
 from server.core.common_dtos import common_store
 from server.server_config import DatabaseInstance
+from server.server_config import ServerConfig
 
 api = Namespace('images', description='Image related operations')
 
@@ -49,8 +51,76 @@ annotation = api.model('annotation', {
         description="The name of the class associated with this annotation")})
 
 bulk_annotations = api.model('bulk_annotations', {
+    'image_id': fields.Integer(
+        required=True,
+        description="The identifier for the image associated with the attached annotations"),
     'annotations': fields.List(fields.Nested(annotation))
 })
+
+bulk_image_request = api.model('bulk_image_request', {'ids': fields.List(
+    fields.Integer, required=True, description="The list of image ids to retrieve")})
+
+
+@api.route("")
+class ImageList(Resource):
+    @api.expect(bulk_image_request)
+    @api.param(
+        'image-data',
+        description='A flag indicating whether image data is required',
+        type='boolean')
+    def get(self):
+        """
+        A bulk operation for retrieving images by id.
+        """
+        content = request.json
+
+        image_data_flag = request.args.get('image-data')
+        if image_data_flag.lower() not in ("true", "false"):
+            image_data_flag = True
+        else:
+            image_data_flag = image_data_flag.lower() == "true"
+
+        query = "SELECT image_id, image_path, image_name, image_ext, is_locked, is_labeled FROM image "
+        query += "WHERE image_id IN "
+        query += "(%s)" % ",".join(str(x) for x in content["ids"])
+
+        try:
+            result = db.query(query)[0]
+        except DatabaseError as e:
+            response = {
+                "action": "failed",
+                "error": {
+                    "code": 400,
+                    "message": e.msg
+                }
+            }
+            code = 400
+        except BaseException as e:
+            response = {
+                "action": "failed",
+                "error": {
+                    "code": 500,
+                    "message": str(e)
+                }
+            }
+            code = 500
+        else:
+            images = []
+            for row in result:
+                if not image_data_flag:
+                    pass
+                elif row["image_ext"].lower() in (".jpg", ".jpeg", ".png"):
+                    with open(row["image_path"], "rb") as img_file:
+                        encoded_image = base64.b64encode(img_file.read())
+                        row["image_data"] = encoded_image.decode('utf-8')
+                images.append(row)
+            response = {"images": images}
+            code = 200
+
+        if code == 200:
+            return marshal(response, bulk_images), code
+        else:
+            return marshal(response, api.models["generic_response"]), code
 
 
 @api.route("/<int:iid>")
@@ -101,11 +171,12 @@ class Image(Resource):
             code = 200
 
         if code == 200:
-            return marshal(response, image), code
+            return marshal(response, image, skip_none=True), code
         else:
-            return marshal(response, api.models["generic_response"]), code
+            return marshal(
+                response, api.models["generic_response"], skip_none=True), code
 
-    @api.marshal_with(api.models["generic_response"])
+    @api.marshal_with(api.models["generic_response"], skip_none=True)
     @api.expect(image)
     def put(self, iid):
         """
@@ -129,10 +200,20 @@ class Image(Resource):
             query += " is_labeled = %s"
             params.append(content["is_labeled"])
 
+        if not params:
+            response = {
+                "action": "failed",
+                "error": {
+                    "code": 400,
+                    "message": "No valid parameters provided for update."
+                }
+            }
+            return response, 400
+
         query += " WHERE image_id = %s"
         params.append(iid)
         try:
-            db.query(query, (params,))
+            db.query(query, tuple(params))
         except DatabaseError as e:
             response = {
                 "action": "failed",
@@ -159,7 +240,7 @@ class Image(Resource):
             code = 200
         return response, code
 
-    @api.marshal_with(api.models["generic_response"])
+    @api.marshal_with(api.models["generic_response"], skip_none=True)
     def delete(self, iid):
         """
         Delete an image as referenced by its identifier.
@@ -237,21 +318,119 @@ class ImageAnnotationList(Resource):
                 row["bbox"] = info["bbox"]
                 response.append(row)
 
-            response = {"annotations": response}
+            response = {"image_id": iid, "annotations": response}
             code = 200
         if code == 200:
-            return marshal(response, bulk_annotations), code
+            return marshal(response, bulk_annotations, skip_none=True), code
         else:
-            return marshal(response, api.models["generic_response"]), code
+            return marshal(
+                response, api.models["generic_response"], skip_none=True), code
 
-    @api.marshal_with(api.models["bulk_response"])
+    @api.marshal_with(api.models["bulk_response"], skip_none=True)
     @api.expect(bulk_annotations)
     def post(self, iid):
         """
         A bulk operation for adding annotations to an image.
         """
 
+        content = request.json
+
+        query = "DELETE FROM instance_seg_meta WHERE image_id = %s"
+        try:
+            db.query(query, (iid,))
+        except BaseException:
+            pass
+
+        i = 0
+        code = 201
+        results = []
+        for row in content["annotations"]:
+            try:
+                mask = utils.decode_mask(row['mask_data'], row['shape'])
+
+                mask_path = os.path.join(
+                    ServerConfig.DATA_ROOT_DIR,
+                    "annotation",
+                    str(iid),
+                    "trimaps",
+                    "layer_%d.png" % i)
+                info_path = os.path.join(
+                    ServerConfig.DATA_ROOT_DIR,
+                    "annotation",
+                    str(iid),
+                    "xmls",
+                    "layer_%d.xml" % i)
+
+                query = "REPLACE INTO instance_seg_meta (image_id, mask_path, info_path, class_name)"
+                query += " VALUES (%s,%s,%s,%s)"
+                _, aid = db.query(query, (iid, mask_path, info_path, row["class_name"]))
+
+                utils.save_mask(mask, mask_path)
+                utils.save_info(
+                    shape=row["shape"],
+                    bbox=row["bbox"],
+                    class_name=row["class_name"],
+                    filepath=info_path)
+                i += 1
+            except DatabaseError as e:
+                response = {
+                    "action": "failed",
+                    "error": {
+                        "code": 400,
+                        "message": e.msg
+                    }
+                }
+                results.append(response)
+                code = 200
+            except BaseException as e:
+                response = {
+                    "action": "failed",
+                    "error": {
+                        "code": 500,
+                        "message": str(e)
+                    }
+                }
+                results.append(response)
+                code = 200
+            else:
+                response = {
+                    "action": "created",
+                    "id": aid
+                }
+                results.append(response)
+
+        return {"results": results}, code
+
+    @api.marshal_with(api.models["generic_response"], skip_none=True)
     def delete(self, iid):
         """
         Deletes all annotations from an image.
         """
+        query = "DELETE FROM instance_seg_meta WHERE image_id = %s"
+        try:
+            db.query(query, (iid,))
+        except DatabaseError as e:
+            response = {
+                "action": "failed",
+                "error": {
+                    "code": 400,
+                    "message": e.msg
+                }
+            }
+            code = 400
+        except BaseException as e:
+            response = {
+                "action": "failed",
+                "error": {
+                    "code": 500,
+                    "message": str(e)
+                }
+            }
+            code = 500
+        else:
+            response = {
+                "action": "deleted",
+                "id": iid
+            }
+            code = 200
+        return response, code

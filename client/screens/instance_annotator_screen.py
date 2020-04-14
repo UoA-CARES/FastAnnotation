@@ -72,11 +72,11 @@ class LayerState:
             self.bbox[3] += drawable_layer.bbox_bounds[1]
         elif config:
             self.mask = utils.decode_mask(
-                config["mask"], config["info"]["source_shape"][:2])
-            self.class_name = config["info"]["class_name"]
+                config["mask_data"], config["shape"][:2])
+            self.class_name = config["class_name"]
             if self.class_picker:
                 self.mask_color = self.class_picker.class_map[self.class_name]
-            self.bbox = config["info"]["bbox"]
+            self.bbox = config["bbox"]
         elif empty_size:
             self.mask = np.zeros(shape=empty_size, dtype=bool)
             if self.class_picker:
@@ -118,15 +118,10 @@ class LayerState:
 
     def to_dict(self):
         body = {}
-        body['mask'] = utils.encode_mask(self.get_mask())
-        info = {
-            'source_shape': tuple(
-                reversed(
-                    self.texture.size)) + (
-                3,), 'class_name': self.class_name, 'bbox': np.array(
-                    self.bbox).tolist()}
-
-        body['info'] = info
+        body['mask_data'] = utils.encode_mask(self.get_mask())
+        body['bbox'] = np.array(self.bbox).tolist()
+        body['class_name'] = self.class_name
+        body['shape'] = tuple(reversed(self.texture.size)) + (3,)
         return body
 
 
@@ -252,7 +247,6 @@ class InstanceAnnotatorScreen(Screen):
         print("Refreshing Image Queue")
         # clear queue of stale items
         self.clear_stale_window_states()
-
         self.right_control.image_queue.clear()
         for state in self.window_cache.values():
             if state.image_opened and state.image_id > 0:
@@ -262,8 +256,8 @@ class InstanceAnnotatorScreen(Screen):
                     opened=True)
 
         filter_details = {
-            "order": {
-                "by": "name",
+            "order_by": {
+                "key": "name",
                 "ascending": True
             }
         }
@@ -296,18 +290,21 @@ class InstanceAnnotatorScreen(Screen):
             self.load_state(image_id)
             return
 
-        utils.get_image_lock_by_id(image_id,
-                                   lock=True,
-                                   on_success=self.handle_image_lock_success,
-                                   on_fail=self.handle_image_lock_fail)
+        utils.update_image_meta_by_id(image_id,
+                                      lock=True,
+                                      on_success=self.handle_image_lock_success,
+                                      on_fail=self.handle_image_lock_fail)
 
     def save_image(self):
         self.save_state()
         annotation = self.current_state.to_dict()
-        utils.add_image_annotation(self.current_state.image_id, annotation)
-        utils.get_image_lock_by_id(self.current_state.image_id,
-                                   lock=False,
-                                   on_success=self.handle_image_unlock_success)
+        utils.add_image_annotation(self.current_state.image_id, annotation, on_success=self.handle_annotation, on_fail=self.handle_annotation)
+        utils.update_image_meta_by_id(self.current_state.image_id,
+                                      lock=False,
+                                      on_success=self.handle_image_unlock_success, on_fail=self.handle_annotation)
+
+    def handle_annotation(self, request, result):
+        pass
 
     def handle_image_lock_success(self, request, result):
         locked_id = result["id"]
@@ -334,7 +331,7 @@ class InstanceAnnotatorScreen(Screen):
         self.right_control.image_queue_control.btn_save.disabled = True
 
     def handle_image_request_success(self, request, result):
-        img_bytes = utils.decode_image(result["image"])
+        img_bytes = utils.decode_image(result["image_data"])
         texture = utils.bytes2texture(img_bytes, "jpg")
         self.add_state(
             image_id=result["id"],
@@ -1025,7 +1022,7 @@ class ImageQueue(GridLayout):
             new_ids, on_success=self.handle_image_meta)
 
     def handle_image_meta(self, request, result):
-        for row in result:
+        for row in result["images"]:
             self.add_item(row["name"], row["id"], locked=row["is_locked"])
 
     def add_item(self, name, image_id, locked=False, opened=False):

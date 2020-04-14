@@ -1,5 +1,7 @@
 import json
 from datetime import datetime
+import dateutil.parser
+
 
 from kivy.app import App
 from kivy.network.urlrequest import UrlRequest
@@ -29,30 +31,24 @@ class AddProjectPopup(Popup):
             on_fail=self._add_project_failure)
 
     def _add_project_success(self, request, result):
-        for id in result['ids']:
-            utils.get_project_by_id(id,
-                                    on_success=self._create_card_success,
-                                    on_fail=self._add_project_failure)
-        self.dismiss()
-
-    def _create_card_success(self, request, result):
         pvw = App.get_running_app().root.current_screen.project_view_window
-        project = result[0]
-        total = project['labeled_count'] + project['unlabeled_count']
-        pvw.add_card(
-            project['project_name'],
-            project['project_id'],
-            "IMAGE",
-            total,
-            project['labeled_count'],
-            project['last_uploaded'])
+        for row in result['projects']:
+            total = row['labeled_count'] + row['unlabeled_count']
+            pvw.add_card(
+                row['name'],
+                row['id'],
+                "IMAGE",
+                total,
+                row['labeled_count'],
+                row['last_uploaded'])
+        self.dismiss()
 
     def _add_project_failure(self, request, result):
         pop_up = Alert()
         pop_up.title = "Error!"
         if request.resp_status == 400:
             pop_up.alert_message = "A project named '%s' already exists." % json.loads(
-                request.req_body)[0]['project_name']
+                request.req_body)['projects'][0]['name']
         elif request.resp_status >= 500:
             pop_up.alert_message = "An unknown server error occurred."
         else:
@@ -84,7 +80,7 @@ class ProjectViewWindow(TileView):
         card.image = image
         card.total_images = total_images
         card.labeled_images = labeled_images
-        card.last_update_time = datetime.fromtimestamp(last_update_time)
+        card.last_update_time = last_update_time
         self.add_widget(card)
         card.format_last_updated_label()
 
@@ -100,15 +96,15 @@ class ProjectViewWindow(TileView):
 
     def _refresh_projects_success(self, request, result):
         self.clear_widgets()
-        for project in result:
+        for project in result["projects"]:
             total = project['labeled_count'] + project['unlabeled_count']
             self.add_card(
-                project['project_name'],
-                project['project_id'],
+                project['name'],
+                project['id'],
                 "IMAGE",
                 total,
                 project['labeled_count'],
-                project['last_uploaded'])
+                dateutil.parser.parse(project['last_uploaded']))
 
 
 class ProjectCard(BoxLayout):

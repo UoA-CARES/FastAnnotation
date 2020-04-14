@@ -54,24 +54,24 @@ image_filter = api.model(
             description="An optional flag for filtering labeled images"),
         'order_by': fields.Nested(
             order_by,
-            required=False,
+            required=True,
             default={},
             description="An optional flag for ordering images")})
 
 image_upload = api.model('image_upload', {
     'name': fields.String(required=True, description='The image name'),
-    'ext': fields.Integer(required=True, description="The file extension of the image"),
+    'ext': fields.String(required=True, description="The file extension of the image"),
     'image_data': fields.String(required=True, description="The encoded image data")
 })
 
 bulk_image_upload = api.model('bulk_image_upload', {
-    'images': fields.List(fields.Nested(image_upload))
+    'images': fields.List(fields.Nested(image_upload), required=True)
 })
 
 
 @api.route("")
 class ProjectList(Resource):
-    @api.marshal_with(project_bulk)
+    @api.marshal_with(project_bulk, skip_none=True)
     def get(self):
         """
         Get a list of all available projects
@@ -80,7 +80,7 @@ class ProjectList(Resource):
             "SELECT project_id, project_name, labeled_count, unlabeled_count, last_uploaded FROM project")[0]
         return {"projects": results}, 200
 
-    @api.marshal_with(api.models['bulk_response'])
+    @api.marshal_with(api.models['bulk_response'], skip_none=True)
     @api.expect(project_bulk)
     def post(self):
         """
@@ -135,7 +135,7 @@ class ProjectList(Resource):
 
 @api.route("/<int:pid>")
 class Project(Resource):
-    @api.marshal_with(project)
+    @api.marshal_with(project, skip_none=True)
     def get(self, pid):
         """
         Get a project by its identifier.
@@ -146,7 +146,7 @@ class Project(Resource):
         results = db.query(query, (pid,))[0]
         return results, 200
 
-    @api.marshal_with(api.models["generic_response"])
+    @api.marshal_with(api.models["generic_response"], skip_none=True)
     def delete(self, pid):
         """
         Delete a project by its identifier. All associated images and annotations will also be deleted.
@@ -184,14 +184,12 @@ class Project(Resource):
                 "action": "deleted",
                 "id": pid
             }
-            response.status_code = 200
-
         return response, code
 
 
-@api.route("<int:pid>/images")
+@api.route("/<int:pid>/images")
 class ProjectImageList(Resource):
-    @api.marshal_with(api.models['generic_response'])
+    @api.marshal_with(api.models['generic_response'], skip_none=True)
     @api.expect(image_filter)
     def get(self, pid):
         """
@@ -208,8 +206,16 @@ class ProjectImageList(Resource):
         if "labeled" in content:
             query += " and is_labeled = " + str(content["labeled"])
 
-        query += " ORDER BY " + content["order_by"]["key"]
-        query += " asc" if content["order_by"]["ascending"] else " desc"
+        valid_order_by = True
+        if content["order_by"]["key"] == "id":
+            query += " ORDER BY image_id"
+        elif content["order_by"]["key"] == "name":
+            query += " ORDER BY image_name"
+        else:
+            valid_order_by = False
+
+        if valid_order_by:
+            query += " asc" if content["order_by"]["ascending"] else " desc"
 
         code = 200
         try:
@@ -235,12 +241,12 @@ class ProjectImageList(Resource):
         else:
             response = {
                 "action": "read",
-                "ids": [x[0] for x in results]
+                "ids": [row['image_id'] for row in results]
             }
         return response, code
 
     @api.expect(bulk_image_upload)
-    @api.marshal_with(api.models['bulk_response'])
+    @api.marshal_with(api.models['bulk_response'], skip_none=True)
     def post(self, pid):
         """
         A bulk operation for adding images to a project as referenced by its identifier.
@@ -265,7 +271,7 @@ class ProjectImageList(Resource):
             query = "INSERT INTO image (project_fid, image_path, image_name, image_ext) "
             query += "VALUES (%s, %s, %s, %s);"
             try:
-                _, id = db.query(query, (pid, img_path, row["name"], row["ext"]))
+                _, id = db.query(query, (pid, img_path, row["name"], ServerConfig.DEFAULT_IMAGE_EXT))
                 cv2.imwrite(img_path, img)
             except DatabaseError as e:
                 response = {
@@ -308,7 +314,7 @@ class ProjectImageList(Resource):
         code = 200 if success_count > 0 else 400
         return {"results": bulk_response}, code
 
-    @api.marshal_with(api.models['generic_response'])
+    @api.marshal_with(api.models['generic_response'], skip_none=True)
     def delete(self, pid):
         """
         Deletes all images associated with this project as referenced by its identifier.
