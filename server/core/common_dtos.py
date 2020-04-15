@@ -6,15 +6,21 @@ common_store = DtoStore()
 error_model = Model('error_response', {
     'code': fields.Integer(
         required=False,
-        description="An optional error code associated with the failure"),
-    'message': fields.String})
+        description="An optional error code associated with the failure",
+        example="404"),
+    'message': fields.String(
+        required=False,
+        description="A message describing the nature of the failure",
+        example="Resource not found."
+    )})
 common_store.add_dto(error_model)
 
 generic_model = Model('generic_response', {
     'action': fields.String(
         required=True,
         description="The action performed on the bulk item",
-        enum=["created", "read", "updated", "deleted", "failed"]),
+        enum=["created", "read", "updated", "deleted", "failed"],
+        example="failed"),
     'error': fields.Nested(
         error_model,
         required=False,

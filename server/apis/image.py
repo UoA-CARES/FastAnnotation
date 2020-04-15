@@ -16,14 +16,32 @@ db = DatabaseInstance()
 
 api.models.update(common_store.get_dtos())
 
-image = api.model('image', {
-    'id': fields.Integer(attribute='image_id', required=False, description='The image identifier'),
-    'name': fields.String(attribute='image_name', required=False, description='The image name'),
-    'ext': fields.String(attribute='image_ext', required=False, description="The file extension of the image"),
-    'is_locked': fields.Boolean(required=False, description="A flag indicating whether the image is locked"),
-    'is_labeled': fields.Boolean(required=False, description="A flag indicating whether the image is labeled"),
-    'image_data': fields.String(required=False, description="The encoded image data")
-})
+image = api.model(
+    'image',
+    {
+        'id': fields.Integer(
+            attribute='image_id',
+            required=False,
+            description='The image identifier'),
+        'name': fields.String(
+            attribute='image_name',
+            required=False,
+            description='The image name',
+            example="image_123"),
+        'ext': fields.String(
+            attribute='image_ext',
+            required=False,
+            description="The file extension of the image",
+            example=".jpg"),
+        'is_locked': fields.Boolean(
+            required=False,
+            description="A flag indicating whether the image is locked"),
+        'is_labeled': fields.Boolean(
+            required=False,
+            description="A flag indicating whether the image is labeled"),
+        'image_data': fields.String(
+            required=False,
+            description="The encoded image data")})
 
 bulk_images = api.model('bulk_images', {
     'images': fields.List(fields.Nested(image))
@@ -41,14 +59,21 @@ annotation = api.model('annotation', {
     'bbox': fields.List(
         fields.Integer,
         required=True,
-        description="The bounding box coordinates"),
+        description="The bounding box coordinates",
+        min_items=4,
+        max_items=4,
+        example=[0, 0, 200, 200]),
     'shape': fields.List(
         fields.Integer,
         required=True,
-        description="The dimensions of the image in pixels"),
+        description="The dimensions of the image in pixels",
+        min_items=3,
+        max_items=3,
+        example=[1920, 1080, 3]),
     'class_name': fields.String(
         required=True,
-        description="The name of the class associated with this annotation")})
+        description="The name of the class associated with this annotation",
+        example="class_1")})
 
 bulk_annotations = api.model('bulk_annotations', {
     'image_id': fields.Integer(
@@ -63,6 +88,9 @@ bulk_image_request = api.model('bulk_image_request', {'ids': fields.List(
 
 @api.route("")
 class ImageList(Resource):
+    @api.response(200, "OK", bulk_images)
+    @api.response(400, "Invalid Payload")
+    @api.response(500, "Unexpected Failure", api.models["generic_response"])
     @api.expect(bulk_image_request)
     @api.param(
         'image-data',
@@ -123,8 +151,12 @@ class ImageList(Resource):
             return marshal(response, api.models["generic_response"]), code
 
 
+@api.doc(params={"iid": "An id associated with an existing image."})
 @api.route("/<int:iid>")
 class Image(Resource):
+    @api.response(200, "OK", image)
+    @api.response(404, "Resource Not Found", api.models["generic_response"])
+    @api.response(500, "Unexpected Failure", api.models["generic_response"])
     def get(self, iid):
         """
         Gets an image as referenced by its identifier.
@@ -139,11 +171,11 @@ class Image(Resource):
             response = {
                 "action": "failed",
                 "error": {
-                    "code": 400,
+                    "code": 500,
                     "message": e.msg
                 }
             }
-            code = 400
+            code = 500
         except IndexError:
             response = {
                 "action": "failed",
@@ -176,6 +208,9 @@ class Image(Resource):
             return marshal(
                 response, api.models["generic_response"], skip_none=True), code
 
+    @api.response(200, "OK")
+    @api.response(400, "Invalid Payload")
+    @api.response(500, "Unexpected Failure")
     @api.marshal_with(api.models["generic_response"], skip_none=True)
     @api.expect(image)
     def put(self, iid):
@@ -218,11 +253,11 @@ class Image(Resource):
             response = {
                 "action": "failed",
                 "error": {
-                    "code": 400,
+                    "code": 500,
                     "message": e.msg
                 }
             }
-            code = 400
+            code = 500
         except BaseException as e:
             response = {
                 "action": "failed",
@@ -240,6 +275,8 @@ class Image(Resource):
             code = 200
         return response, code
 
+    @api.response(200, "OK")
+    @api.response(500, "Unexpected Failure")
     @api.marshal_with(api.models["generic_response"], skip_none=True)
     def delete(self, iid):
         """
@@ -256,11 +293,11 @@ class Image(Resource):
             response = {
                 "action": "failed",
                 "error": {
-                    "code": 400,
+                    "code": 500,
                     "message": e.msg
                 }
             }
-            code = 400
+            code = 500
         except BaseException as e:
             response = {
                 "action": "failed",
@@ -279,8 +316,11 @@ class Image(Resource):
         return response, code
 
 
+@api.doc(params={"iid": "An id associated with an existing image"})
 @api.route("/<int:iid>/annotation")
 class ImageAnnotationList(Resource):
+    @api.response(200, "OK", bulk_annotations)
+    @api.response(500, "Unexpected Failure", api.models["generic_response"])
     def get(self, iid):
         """
         Gets all the annotations associated with an image.
@@ -294,11 +334,11 @@ class ImageAnnotationList(Resource):
             response = {
                 "action": "failed",
                 "error": {
-                    "code": 400,
+                    "code": 500,
                     "message": e.msg
                 }
             }
-            code = 400
+            code = 500
         except BaseException as e:
             response = {
                 "action": "failed",
@@ -326,6 +366,8 @@ class ImageAnnotationList(Resource):
             return marshal(
                 response, api.models["generic_response"], skip_none=True), code
 
+    @api.response(200, "Partial Success")
+    @api.response(201, "Success")
     @api.marshal_with(api.models["bulk_response"], skip_none=True)
     @api.expect(bulk_annotations)
     def post(self, iid):
@@ -363,7 +405,8 @@ class ImageAnnotationList(Resource):
 
                 query = "REPLACE INTO instance_seg_meta (image_id, mask_path, info_path, class_name)"
                 query += " VALUES (%s,%s,%s,%s)"
-                _, aid = db.query(query, (iid, mask_path, info_path, row["class_name"]))
+                _, aid = db.query(
+                    query, (iid, mask_path, info_path, row["class_name"]))
 
                 utils.save_mask(mask, mask_path)
                 utils.save_info(
@@ -401,6 +444,8 @@ class ImageAnnotationList(Resource):
 
         return {"results": results}, code
 
+    @api.response(200, "OK")
+    @api.response(500, "Unexpected Failure")
     @api.marshal_with(api.models["generic_response"], skip_none=True)
     def delete(self, iid):
         """
@@ -413,11 +458,11 @@ class ImageAnnotationList(Resource):
             response = {
                 "action": "failed",
                 "error": {
-                    "code": 400,
+                    "code": 500,
                     "message": e.msg
                 }
             }
-            code = 400
+            code = 500
         except BaseException as e:
             response = {
                 "action": "failed",

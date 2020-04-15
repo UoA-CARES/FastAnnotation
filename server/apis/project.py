@@ -71,6 +71,7 @@ bulk_image_upload = api.model('bulk_image_upload', {
 
 @api.route("")
 class ProjectList(Resource):
+    @api.response(200, "OK")
     @api.marshal_with(project_bulk, skip_none=True)
     def get(self):
         """
@@ -80,6 +81,8 @@ class ProjectList(Resource):
             "SELECT project_id, project_name, labeled_count, unlabeled_count, last_uploaded FROM project")[0]
         return {"projects": results}, 200
 
+    @api.response(200, "Partial Success")
+    @api.response(201, "Success")
     @api.marshal_with(api.models['bulk_response'], skip_none=True)
     @api.expect(project_bulk)
     def post(self):
@@ -88,8 +91,7 @@ class ProjectList(Resource):
         """
         content = request.json["projects"]
 
-        failure = False
-        success = False
+        code = 201
         bulk_response = []
 
         for row in content:
@@ -102,12 +104,12 @@ class ProjectList(Resource):
                 result = {
                     "action": "failed",
                     "error": {
-                        "code": 400,
+                        "code": 500,
                         "message": e.msg
                     }
                 }
                 bulk_response.append(result)
-                failure = True
+                code = 200
             except BaseException as e:
                 result = {
                     "action": "failed",
@@ -117,24 +119,21 @@ class ProjectList(Resource):
                     }
                 }
                 bulk_response.append(result)
-                failure = True
+                code = 200
             else:
                 result = {
                     "action": "created",
                     "id": id
                 }
                 bulk_response.append(result)
-                success = True
-
-        code = 200
-        if not success and failure:
-            code = 400
 
         return {"results": bulk_response}, code
 
 
+@api.doc(params={"pid": "An id associated with an existing project."})
 @api.route("/<int:pid>")
 class Project(Resource):
+    @api.response(200, "OK")
     @api.marshal_with(project, skip_none=True)
     def get(self, pid):
         """
@@ -146,6 +145,8 @@ class Project(Resource):
         results = db.query(query, (pid,))[0]
         return results, 200
 
+    @api.response(200, "OK")
+    @api.response(500, "Unexpected Failure")
     @api.marshal_with(api.models["generic_response"], skip_none=True)
     def delete(self, pid):
         """
@@ -165,11 +166,11 @@ class Project(Resource):
             response = {
                 "action": "failed",
                 "error": {
-                    "code": 400,
+                    "code": 500,
                     "message": e.msg
                 }
             }
-            code = 400
+            code = 500
         except BaseException as e:
             response = {
                 "action": "failed",
@@ -187,8 +188,11 @@ class Project(Resource):
         return response, code
 
 
+@api.doc(params={"pid": "An id associated with a project."})
 @api.route("/<int:pid>/images")
 class ProjectImageList(Resource):
+    @api.response(200, "OK")
+    @api.response(500, "Unexpected Failure")
     @api.marshal_with(api.models['generic_response'], skip_none=True)
     @api.expect(image_filter)
     def get(self, pid):
@@ -224,11 +228,11 @@ class ProjectImageList(Resource):
             response = {
                 "action": "failed",
                 "error": {
-                    "code": 400,
+                    "code": 500,
                     "message": e.msg
                 }
             }
-            code = 400
+            code = 500
         except BaseException as e:
             response = {
                 "action": "failed",
@@ -245,6 +249,8 @@ class ProjectImageList(Resource):
             }
         return response, code
 
+    @api.response(200, "Partial Success")
+    @api.response(201, "Success")
     @api.expect(bulk_image_upload)
     @api.marshal_with(api.models['bulk_response'], skip_none=True)
     def post(self, pid):
@@ -253,10 +259,15 @@ class ProjectImageList(Resource):
         """
         content = request.json["images"]
 
+        code = 201
+
         success_count = 0
         bulk_response = []
         for row in content:
-            array = np.fromstring(base64.b64decode(row["image_data"]), np.uint8)
+            array = np.fromstring(
+                base64.b64decode(
+                    row["image_data"]),
+                np.uint8)
             img = cv2.imdecode(array, cv2.IMREAD_COLOR)
             img_dir = os.path.join(
                 ServerConfig.DATA_ROOT_DIR,
@@ -271,16 +282,18 @@ class ProjectImageList(Resource):
             query = "INSERT INTO image (project_fid, image_path, image_name, image_ext) "
             query += "VALUES (%s, %s, %s, %s);"
             try:
-                _, id = db.query(query, (pid, img_path, row["name"], ServerConfig.DEFAULT_IMAGE_EXT))
+                _, id = db.query(
+                    query, (pid, img_path, row["name"], ServerConfig.DEFAULT_IMAGE_EXT))
                 cv2.imwrite(img_path, img)
             except DatabaseError as e:
                 response = {
                     "action": "failed",
                     "error": {
-                        "code": 400,
+                        "code": 500,
                         "message": e.msg
                     }
                 }
+                code = 200
             except BaseException as e:
                 response = {
                     "action": "failed",
@@ -289,6 +302,7 @@ class ProjectImageList(Resource):
                         "message": str(e)
                     }
                 }
+                code = 200
             else:
                 response = {
                     "action": "created",
@@ -306,14 +320,16 @@ class ProjectImageList(Resource):
                 response = {
                     "action": "failed",
                     "error": {
-                        "code": 400,
+                        "code": 500,
                         "message": e.msg
                     }
                 }
                 bulk_response.append(response)
-        code = 200 if success_count > 0 else 400
+                code = 200
         return {"results": bulk_response}, code
 
+    @api.response(200, "OK")
+    @api.response(500, "Unexpected Failure")
     @api.marshal_with(api.models['generic_response'], skip_none=True)
     def delete(self, pid):
         """
@@ -334,11 +350,11 @@ class ProjectImageList(Resource):
             response = {
                 "action": "failed",
                 "error": {
-                    "code": 400,
+                    "code": 500,
                     "message": e.msg
                 }
             }
-            code = 400
+            code = 500
         except BaseException as e:
             response = {
                 "action": "failed",
@@ -356,4 +372,3 @@ class ProjectImageList(Resource):
             code = 200
 
         return response, code
-
