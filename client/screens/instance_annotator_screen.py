@@ -310,8 +310,10 @@ class InstanceAnnotatorScreen(Screen):
                                    on_success=self.handle_image_unlock_success)
 
     def handle_image_lock_success(self, request, result):
+
         locked_id = result["id"]
         print("Locked Image %d" % locked_id)
+        App.get_running_app().register_image(locked_id)
         utils.get_image_by_id(
             locked_id,
             on_success=self.handle_image_request_success)
@@ -328,6 +330,7 @@ class InstanceAnnotatorScreen(Screen):
     def handle_image_unlock_success(self, request, result):
         unlocked_id = result["id"]
         print("Locked Image %d" % unlocked_id)
+        App.get_running_app().register_image(unlocked_id)
         self.window_cache[unlocked_id].image_opened = False
         self.right_control.image_queue.mark_item(
             unlocked_id, opened=False, locked=False)
