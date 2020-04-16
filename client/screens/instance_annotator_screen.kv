@@ -195,8 +195,6 @@
             text: "X"
             on_release: root.layer_view.delete_layer_item(root.layer_name)
 
-
-
 <ImageCanvas>:
     image_id: self.image_id
     scatter: scatter
@@ -215,6 +213,7 @@
         pos: (0,0)
         ScrollView:
             scroll_type: ['bars', 'content']
+            scroll_timeout: 5
             bar_width: '10dp'
             id: scroll_view
             width: root.width / root.scatter.scale
