@@ -1,15 +1,16 @@
-import time
+import traceback
 import requests
-import client.utils as utils
-from client.client_config import ClientConfig
-from client.screens.instance_annotator_screen import InstanceAnnotatorScreen
-from client.screens.image_view_screen import ImageViewScreen
-from client.screens.project_tool_screen import ProjectToolScreen
-from client.screens.project_select_screen import ProjectSelectScreen
-from kivy.uix.screenmanager import ScreenManager
-from kivy.properties import StringProperty, NumericProperty
 from kivy.app import App
 from kivy.config import Config
+from kivy.properties import StringProperty, NumericProperty
+from kivy.uix.screenmanager import ScreenManager
+
+from client.client_config import ClientConfig
+from client.screens.image_view_screen import ImageViewScreen
+from client.screens.instance_annotator_screen import InstanceAnnotatorScreen
+from client.screens.project_select_screen import ProjectSelectScreen
+from client.screens.project_tool_screen import ProjectToolScreen
+
 Config.set('input', 'mouse', 'mouse,disable_multitouch')
 
 
@@ -68,6 +69,8 @@ if __name__ == "__main__":
         app.run()
     except Exception as e:
         print(str(e))
+        tb = traceback.format_exc()
+        print(tb)
     finally:
         print(app.open_images)
         for image_id in app.open_images:

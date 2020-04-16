@@ -683,7 +683,6 @@ class DrawTool(MouseDrawnTool):
     def unbind_keyboard(self):
         self._keyboard.unbind(on_key_down=self.on_key_down)
         self._keyboard.unbind(on_key_up=self.on_key_up)
-        self._keyboard = None
 
     def on_key_down(self, keyboard, keycode, text, modifiers):
         if keycode[1] in self.keycode_buffer:
