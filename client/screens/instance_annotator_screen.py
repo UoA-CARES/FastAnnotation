@@ -945,7 +945,7 @@ class DrawableLayer(FloatLayout):
 
     def toggle_mask(self):
         self.mask_visible = not self.mask_visible
-        self.paint_window.canvas.opacity = int(self.mask_visible)
+        self.paint_window.mask_layer.canvas.opacity = int(self.mask_visible)
 
     def toggle_bbox(self):
         self.bbox_visible = not self.bbox_visible
