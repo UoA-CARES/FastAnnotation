@@ -1,14 +1,16 @@
+import time
+import requests
+import client.utils as utils
+from client.client_config import ClientConfig
+from client.screens.instance_annotator_screen import InstanceAnnotatorScreen
+from client.screens.image_view_screen import ImageViewScreen
+from client.screens.project_tool_screen import ProjectToolScreen
+from client.screens.project_select_screen import ProjectSelectScreen
+from kivy.uix.screenmanager import ScreenManager
+from kivy.properties import StringProperty, NumericProperty
+from kivy.app import App
 from kivy.config import Config
 Config.set('input', 'mouse', 'mouse,disable_multitouch')
-
-from kivy.app import App
-from kivy.properties import StringProperty, NumericProperty
-from kivy.uix.screenmanager import ScreenManager
-
-from client.screens.project_select_screen import ProjectSelectScreen
-from client.screens.project_tool_screen import ProjectToolScreen
-from client.screens.image_view_screen import ImageViewScreen
-from client.screens.instance_annotator_screen import InstanceAnnotatorScreen
 
 
 class MyScreenManager(ScreenManager):
@@ -33,6 +35,13 @@ class AnnotationClientApp(App):
     current_project_name = StringProperty("")
     current_project_id = NumericProperty(0)
     sm = None
+    open_images = []
+
+    def register_image(self, image_id):
+        self.open_images.append(image_id)
+
+    def deregister_image(self, image_id):
+        self.open_images.remove(image_id)
 
     def build(self):
         self.sm = MyScreenManager()
@@ -54,4 +63,19 @@ class AnnotationClientApp(App):
 
 
 if __name__ == "__main__":
-    AnnotationClientApp().run()
+    app = AnnotationClientApp()
+    try:
+        app.run()
+    except Exception as e:
+        print(str(e))
+    finally:
+        print(app.open_images)
+        for image_id in app.open_images:
+            url = ClientConfig.SERVER_URL + \
+                "images/" + str(image_id) + "/unlock"
+            headers = {"Accept": "application/json"}
+            response = requests.put(url, headers=headers)
+            if response.status_code == 200:
+                print("Unlocked %d" % image_id)
+            else:
+                print("Failed to unlock %d" % image_id)

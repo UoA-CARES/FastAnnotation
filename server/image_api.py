@@ -62,7 +62,7 @@ def get_bulk_image_metas():
 
     image_ids = content["ids"]
 
-    query = "SELECT image_id, image_name, image_ext, is_locked, is_labelled FROM image "
+    query = "SELECT image_id, image_name, image_ext, is_locked, is_labeled FROM image "
     query += "WHERE image_id in ("
     query += ','.join(["%s"] * len(image_ids))
     query += ")"
@@ -71,13 +71,13 @@ def get_bulk_image_metas():
     body = []
 
     for row in result:
-        iid, name, ext, is_locked, is_labelled = row
+        iid, name, ext, is_locked, is_labeled = row
         body.append({
             'id': iid,
             'name': name,
             'ext': ext,
             'is_locked': bool(is_locked),
-            'is_labelled': bool(is_labelled)
+            'is_labeled': bool(is_labeled)
         })
     return jsonify(body)
 
@@ -112,19 +112,19 @@ def get_image_by_id(iid):
 @image_blueprint.route("<int:iid>/meta", methods=['GET'])
 @produces('application/json')
 def get_image_meta_by_id(iid):
-    query = "SELECT image_name, image_ext, is_locked, is_labelled FROM image "
+    query = "SELECT image_name, image_ext, is_locked, is_labeled FROM image "
     query += "WHERE image_id = %s"
 
     result, _ = db.query(query, (iid,))
     body = {}
 
     if result:
-        name, ext, is_locked, is_labelled = result[0]
+        name, ext, is_locked, is_labeled = result[0]
         body['id'] = iid
         body['name'] = name
         body['ext'] = ext
         body['is_locked'] = bool(is_locked)
-        body['is_labelled'] = bool(is_labelled)
+        body['is_labeled'] = bool(is_labeled)
 
         return jsonify(body)
 
@@ -137,7 +137,7 @@ def get_image_meta_by_id(iid):
 @image_blueprint.route("<int:iid>/lock", methods=['PUT'])
 @produces('application/json')
 def lock_image_by_id(iid):
-    query = "SELECT image_name, image_ext, is_locked, is_labelled FROM image "
+    query = "SELECT image_name, image_ext, is_locked, is_labeled FROM image "
     query += "WHERE image_id = %s"
 
     result, _ = db.query(query, (iid,))
@@ -147,7 +147,7 @@ def lock_image_by_id(iid):
         response.status_code = 404
         return response
 
-    name, ext, is_locked, is_labelled = result[0]
+    name, ext, is_locked, is_labeled = result[0]
 
     if bool(is_locked):
         body = {"err": "Resource is already locked."}
@@ -165,7 +165,7 @@ def lock_image_by_id(iid):
 @image_blueprint.route("<int:iid>/unlock", methods=['PUT'])
 @produces('application/json')
 def unlock_image_by_id(iid):
-    query = "SELECT image_name, image_ext, is_locked, is_labelled FROM image "
+    query = "SELECT image_name, image_ext, is_locked, is_labeled FROM image "
     query += "WHERE image_id = %s"
 
     result, _ = db.query(query, (iid,))
