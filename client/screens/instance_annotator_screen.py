@@ -1,4 +1,3 @@
-from collections import deque
 import cv2
 import kivy.utils
 from kivy.app import App
@@ -661,6 +660,7 @@ class DrawTool(MouseDrawnTool):
     def __init__(self, **kwargs):
         self.layer_view = None
 
+        self.keyboard_shortcuts = {}
         self.keycode_buffer = {}
         self._keyboard = Window.request_keyboard(
             self.unbind_keyboard, self, 'text')
@@ -668,6 +668,8 @@ class DrawTool(MouseDrawnTool):
 
         self.mask_stack = []
         self.delete_stack = []
+
+        self.bind_shortcuts()
         super().__init__(**kwargs)
 
     def bind_layer_view(self, layer_view):
@@ -676,7 +678,11 @@ class DrawTool(MouseDrawnTool):
     def bind_class_picker(self, class_picker):
         class_picker.fbind('eraser_enabled', self.setter('erase'))
 
-    def bind_keyboard(self,):
+    def bind_shortcuts(self):
+        self.keyboard_shortcuts[("lctrl", "z")] = self.undo
+        self.keyboard_shortcuts[("lctrl", "y")] = self.redo
+
+    def bind_keyboard(self):
         self._keyboard.bind(on_key_down=self.on_key_down)
         self._keyboard.bind(on_key_up=self.on_key_up)
 
@@ -692,11 +698,11 @@ class DrawTool(MouseDrawnTool):
 
     def on_key_up(self, keyboard, keycode):
         print("UP: %s" % (str(keycode[1])))
-        if 'lctrl' in self.keycode_buffer:
-            if keycode[1] == 'z':
-                self.undo()
-            elif keycode[1] == 'y':
-                self.redo()
+
+        for shortcut in self.keyboard_shortcuts.keys():
+            if keycode[1] in shortcut and set(shortcut).issubset(self.keycode_buffer):
+                self.keyboard_shortcuts[shortcut]()
+
         self.keycode_buffer.pop(keycode[1])
 
     def undo(self):
