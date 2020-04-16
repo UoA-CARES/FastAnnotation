@@ -974,11 +974,8 @@ class ImageCanvas(BoxLayout):
         super(ImageCanvas, self).on_touch_down(touch)
 
     def zoom(self, scale):
-        print(
-            "pos: %s size: %s" %
-            (str(
-                self.scatter.pos), str(
-                self.scatter.size)))
+        print("pos: %s size: %s" % (str(self.scatter.pos),
+                                    str(self.scatter.size)))
         self.scatter.scale = np.clip(self.scatter.scale * scale,
                                      self.min_scale,
                                      self.max_scale)
