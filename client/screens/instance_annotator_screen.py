@@ -662,8 +662,7 @@ class DrawTool(MouseDrawnTool):
 
         self.keyboard_shortcuts = {}
         self.keycode_buffer = {}
-        self._keyboard = Window.request_keyboard(
-            self.unbind_keyboard, self, 'text')
+        self._keyboard = Window.request_keyboard(lambda: None, self)
         self._consecutive_selects = 0
 
         self.mask_stack = []
