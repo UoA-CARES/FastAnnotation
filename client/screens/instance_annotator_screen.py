@@ -1,4 +1,3 @@
-from collections import deque
 import cv2
 import kivy.utils
 from kivy.app import App
