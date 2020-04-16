@@ -864,7 +864,6 @@ class DrawTool(MouseDrawnTool):
         g.add(Rectangle(size=(width, height),
                         pos=tuple(self.layer.bbox_bounds[:2]),
                         texture=utils.mat2texture(mat)))
-
         self.add_action(g)
 
 

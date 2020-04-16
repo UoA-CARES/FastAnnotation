@@ -61,6 +61,8 @@
         Label:
             text: "pen size"
         NumericInput:
+            min: 1
+            max: 100
             value: 10
             step: 5
             on_value: root.set_pencil_size(self.value)
