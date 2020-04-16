@@ -480,9 +480,9 @@ class LayerView(GridLayout):
         selected_items = []
         for layer_item in self.layer_item_dict.values():
             layer = layer_item.layer
-            bl = np.array(layer.bbox_bot_left)
-            tr = np.array(layer.bbox_top_right)
-            if np.all(np.logical_and(bl <= pos, pos <= tr)):
+            bl = np.array(layer.bbox_bounds[:2])
+            tr = bl + np.array(layer.bbox_bounds[2:])
+            if np.all(np.logical_and(bl < pos, pos < tr)):
                 selected_items.append(layer_item)
         return selected_items
 
@@ -744,6 +744,8 @@ class DrawTool(MouseDrawnTool):
             return
         if 'lctrl' in self.keycode_buffer:
             select_items = self.layer_view.get_items_at_pos(touch.pos)
+            if not select_items:
+                return
             item = select_items[self._consecutive_selects % len(select_items)]
             self.layer_view.select_layer_item(item.layer_name)
             self._consecutive_selects += 1
@@ -820,9 +822,8 @@ class DrawTool(MouseDrawnTool):
             y2 -= 1
 
         bounds = [x1, y1, x2 - x1, y2 - y1]
-        if np.product(bounds[2:]) <= 0:
+        if bounds[2] <= 0 or bounds[3] <= 0:
             bounds = [0, 0, 0, 0]
-            print("Failed Bounds")
 
         layer.bbox_bounds = bounds
 
@@ -901,6 +902,7 @@ class DrawableLayer(FloatLayout):
     bbox_thickness = NumericProperty(1)
 
     bbox_bounds = ObjectProperty([0, 0, 0, 0])
+    """ A bounding rectangle represented in the form (x, y, width, height)"""
 
     def __init__(
             self,
@@ -975,7 +977,8 @@ class ImageCanvas(BoxLayout):
         super(ImageCanvas, self).on_touch_down(touch)
 
     def zoom(self, scale):
-        print("pos: %s size: %s" % (str(self.scatter.pos), str(self.scatter.size)))
+        print("pos: %s size: %s" % (str(self.scatter.pos),
+                                    str(self.scatter.size)))
         self.scatter.scale = np.clip(self.scatter.scale * scale,
                                      self.min_scale,
                                      self.max_scale)
