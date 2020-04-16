@@ -26,7 +26,9 @@ Note: For the following Installation steps please ensure pip is run with adminis
 1. Flask installation
     ```
     python -m pip install flask
+    python -m pip install flask-restplus
     python -m pip install flask_negotiate
+    python -m pip install python-dateutil
     python -m pip install mysql-connector-python
     ```
 
