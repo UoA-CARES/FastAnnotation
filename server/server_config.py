@@ -23,8 +23,8 @@ class ServerConfig:
             False: "is_locked = 0"
         },
         "labelled": {
-            True: "is_labelled = 1",
-            False: "is_labelled = 0"
+            True: "is_labeled = 1",
+            False: "is_labeled = 0"
         }
     }
 

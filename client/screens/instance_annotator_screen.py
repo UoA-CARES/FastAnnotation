@@ -1,4 +1,3 @@
-from collections import deque
 import cv2
 import kivy.utils
 from kivy.app import App
@@ -142,6 +141,8 @@ class InstanceAnnotatorScreen(Screen):
             self.image_canvas.draw_tool)
         self.left_control.tool_select.bind_class_picker(
             self.left_control.class_picker)
+        self.left_control.tool_select.bind_layer_stack(
+            self.image_canvas.layer_stack)
 
         # Layer View Binds
         self.left_control.layer_view.bind_draw_tool(
@@ -230,10 +231,11 @@ class InstanceAnnotatorScreen(Screen):
 
     def add_layer(self):
         layer = DrawableLayer(size=self.current_state.image_texture.size)
-        layer.mask_color = self.left_control.class_picker.current_color
+        layer.mask_color = self.left_control.class_picker.current_color[:3] + \
+                           (self.left_control.tool_select.alpha.value,)
         layer_name = self.left_control.layer_view.add_layer_item(layer)
         self.left_control.layer_view.select_layer_item(layer_name)
-
+        
     def clear_stale_window_states(self):
         stale_keys = []
         for key in self.window_cache:
@@ -307,8 +309,10 @@ class InstanceAnnotatorScreen(Screen):
         pass
 
     def handle_image_lock_success(self, request, result):
+
         locked_id = result["id"]
         print("Locked Image %d" % locked_id)
+        App.get_running_app().register_image(locked_id)
         utils.get_image_by_id(
             locked_id,
             on_success=self.handle_image_request_success)
@@ -325,6 +329,7 @@ class InstanceAnnotatorScreen(Screen):
     def handle_image_unlock_success(self, request, result):
         unlocked_id = result["id"]
         print("Locked Image %d" % unlocked_id)
+        App.get_running_app().register_image(unlocked_id)
         self.window_cache[unlocked_id].image_opened = False
         self.right_control.image_queue.mark_item(
             unlocked_id, opened=False, locked=False)
@@ -364,6 +369,8 @@ class LeftControlColumn(BoxLayout):
 
 
 class ToolSelect(GridLayout):
+    pen_size = ObjectProperty(None)
+    alpha = ObjectProperty(None)
     class_color = ObjectProperty(None)
     class_name = StringProperty("")
 
@@ -371,6 +378,7 @@ class ToolSelect(GridLayout):
         super().__init__(**kw)
         self.app = App.get_running_app()
         self.draw_tool = None
+        self.layer_stack = None
 
     def bind_draw_tool(self, draw_tool):
         self.draw_tool = draw_tool
@@ -378,6 +386,9 @@ class ToolSelect(GridLayout):
     def bind_class_picker(self, class_picker):
         class_picker.fbind('current_color', self.setter('class_color'))
         class_picker.fbind('current_name', self.setter('class_name'))
+
+    def bind_layer_stack(self, layer_stack):
+        self.layer_stack = layer_stack
 
     def on_parent(self, *args):
         Clock.schedule_once(lambda dt: self.late_init())
@@ -396,9 +407,7 @@ class ToolSelect(GridLayout):
 
     def set_alpha(self, alpha):
         print("Alpha: %s" % str(alpha))
-        layer_color = self.draw_tool.layer_color
-        layer_color = layer_color[:-1] + (alpha,)
-        self.draw_tool.layer_color = layer_color
+        self.layer_stack.set_alpha(alpha)
 
     def set_pencil_size(self, size):
         print("size: %s" % str(size))
@@ -474,9 +483,9 @@ class LayerView(GridLayout):
         selected_items = []
         for layer_item in self.layer_item_dict.values():
             layer = layer_item.layer
-            bl = np.array(layer.bbox_bot_left)
-            tr = np.array(layer.bbox_top_right)
-            if np.all(np.logical_and(bl <= pos, pos <= tr)):
+            bl = np.array(layer.bbox_bounds[:2])
+            tr = bl + np.array(layer.bbox_bounds[2:])
+            if np.all(np.logical_and(bl < pos, pos < tr)):
                 selected_items.append(layer_item)
         return selected_items
 
@@ -655,13 +664,15 @@ class DrawTool(MouseDrawnTool):
     def __init__(self, **kwargs):
         self.layer_view = None
 
+        self.keyboard_shortcuts = {}
         self.keycode_buffer = {}
-        self._keyboard = Window.request_keyboard(
-            self.unbind_keyboard, self, 'text')
+        self._keyboard = Window.request_keyboard(lambda: None, self)
         self._consecutive_selects = 0
 
         self.mask_stack = []
         self.delete_stack = []
+
+        self.bind_shortcuts()
         super().__init__(**kwargs)
 
     def bind_layer_view(self, layer_view):
@@ -670,14 +681,17 @@ class DrawTool(MouseDrawnTool):
     def bind_class_picker(self, class_picker):
         class_picker.fbind('eraser_enabled', self.setter('erase'))
 
-    def bind_keyboard(self,):
+    def bind_shortcuts(self):
+        self.keyboard_shortcuts[("lctrl", "z")] = self.undo
+        self.keyboard_shortcuts[("lctrl", "y")] = self.redo
+
+    def bind_keyboard(self):
         self._keyboard.bind(on_key_down=self.on_key_down)
         self._keyboard.bind(on_key_up=self.on_key_up)
 
     def unbind_keyboard(self):
         self._keyboard.unbind(on_key_down=self.on_key_down)
         self._keyboard.unbind(on_key_up=self.on_key_up)
-        self._keyboard = None
 
     def on_key_down(self, keyboard, keycode, text, modifiers):
         if keycode[1] in self.keycode_buffer:
@@ -687,11 +701,11 @@ class DrawTool(MouseDrawnTool):
 
     def on_key_up(self, keyboard, keycode):
         print("UP: %s" % (str(keycode[1])))
-        if 'lctrl' in self.keycode_buffer:
-            if keycode[1] == 'z':
-                self.undo()
-            elif keycode[1] == 'y':
-                self.redo()
+
+        for shortcut in self.keyboard_shortcuts.keys():
+            if keycode[1] in shortcut and set(shortcut).issubset(self.keycode_buffer):
+                self.keyboard_shortcuts[shortcut]()
+
         self.keycode_buffer.pop(keycode[1])
 
     def undo(self):
@@ -729,15 +743,19 @@ class DrawTool(MouseDrawnTool):
 
         self.color_bind = self.fbind(
             'layer_color', self.layer.setter('mask_color'))
+        self.layer_color = self.layer.mask_color
 
         self.name_bind = self.fbind(
             'class_name', self.layer.setter('class_name'))
+        self.class_name = self.layer.class_name
 
     def on_touch_down_hook(self, touch):
         if not self.layer:
             return
         if 'lctrl' in self.keycode_buffer:
             select_items = self.layer_view.get_items_at_pos(touch.pos)
+            if not select_items:
+                return
             item = select_items[self._consecutive_selects % len(select_items)]
             self.layer_view.select_layer_item(item.layer_name)
             self._consecutive_selects += 1
@@ -814,9 +832,8 @@ class DrawTool(MouseDrawnTool):
             y2 -= 1
 
         bounds = [x1, y1, x2 - x1, y2 - y1]
-        if np.product(bounds[2:]) <= 0:
+        if bounds[2] <= 0 or bounds[3] <= 0:
             bounds = [0, 0, 0, 0]
-            print("Failed Bounds")
 
         layer.bbox_bounds = bounds
 
@@ -830,6 +847,11 @@ class DrawTool(MouseDrawnTool):
         if np.sum(fbo.get_pixel_color(*pos)) > 0:
             return
 
+        bounds = self.layer.bbox_bounds
+        valid = bounds[0] < pos[0] < bounds[0] + bounds[2] and bounds[1] < pos[1] < bounds[1] + bounds[3]
+        if not valid:
+            return
+
         region = fbo.texture.get_region(*self.layer.bbox_bounds)
         relative_pos = np.array(pos) - np.array(self.layer.bbox_bounds[:2])
 
@@ -841,7 +863,6 @@ class DrawTool(MouseDrawnTool):
         mat_copy = mat.copy()
         mask = np.zeros((height + 2, width + 2), dtype=np.uint8)
         cv2.floodFill(mat_copy, mask, tuple(cv2_pos), (255, 255, 255))
-        cv2.circle(mat_copy, tuple(cv2_pos), 3, (0, 255, 0))
 
         mat = np.clip(mat_copy - mat, 0, 255)
         mat = cv2.flip(mat, 0)
@@ -852,7 +873,6 @@ class DrawTool(MouseDrawnTool):
         g.add(Rectangle(size=(width, height),
                         pos=tuple(self.layer.bbox_bounds[:2]),
                         texture=utils.mat2texture(mat)))
-
         self.add_action(g)
 
 
@@ -865,6 +885,10 @@ class LayerStack(FloatLayout):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
+
+    def set_alpha(self, alpha):
+        for layer in self.layer_list:
+            layer.mask_color = layer.mask_color[:3] + (alpha,)
 
     def add_layer(self, layer):
         self.add_widget(layer)
@@ -895,6 +919,7 @@ class DrawableLayer(FloatLayout):
     bbox_thickness = NumericProperty(1)
 
     bbox_bounds = ObjectProperty([0, 0, 0, 0])
+    """ A bounding rectangle represented in the form (x, y, width, height)"""
 
     def __init__(
             self,
@@ -942,7 +967,7 @@ class DrawableLayer(FloatLayout):
 
     def toggle_mask(self):
         self.mask_visible = not self.mask_visible
-        self.paint_window.canvas.opacity = int(self.mask_visible)
+        self.paint_window.mask_layer.canvas.opacity = int(self.mask_visible)
 
     def toggle_bbox(self):
         self.bbox_visible = not self.bbox_visible
@@ -969,7 +994,8 @@ class ImageCanvas(BoxLayout):
         super(ImageCanvas, self).on_touch_down(touch)
 
     def zoom(self, scale):
-        print("pos: %s size: %s" % (str(self.scatter.pos), str(self.scatter.size)))
+        print("pos: %s size: %s" % (str(self.scatter.pos),
+                                    str(self.scatter.size)))
         self.scatter.scale = np.clip(self.scatter.scale * scale,
                                      self.min_scale,
                                      self.max_scale)

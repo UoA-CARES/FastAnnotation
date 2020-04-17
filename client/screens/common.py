@@ -1,5 +1,5 @@
 import os
-
+import math
 import numpy as np
 from kivy.graphics import Rectangle, Fbo
 from kivy.lang import Builder
@@ -63,6 +63,7 @@ class MouseDrawnTool(FloatLayout):
 
 
 class NumericInput(StackLayout):
+    decimal_places = NumericProperty(0)
     value = NumericProperty(0)
     min = NumericProperty(-float('inf'))
     max = NumericProperty(float('inf'))
@@ -73,14 +74,29 @@ class NumericInput(StackLayout):
         try:
             user_input = float(self.text_input.text)
         except ValueError:
-            self.text_input.text = str(self.value)
+            pass
         else:
-            self.value = type(
-                self.value)(
+            self.value = type(self.value)(
                 np.clip(
                     user_input,
                     self.min,
                     self.max))
+        finally:
+            self.text_input.text = str(self.value)
+
+    def increment(self, n):
+        # To accommodate for floating point division
+        x = round(self.value / self.step, 10)
+        # Round down to the nearest 'step size'
+        x = math.floor(x) * self.step
+        # Add n 'step size'
+        x = x + (n * self.step)
+        # Round to desired display decimal places
+        x = round(x, self.decimal_places)
+        # Clip to bounds
+        x = np.clip(x, self.min, self.max)
+        # Maintain type of value (int or float)
+        self.value = type(self.value)(x)
 
 
 class TransparentBlackEffect(EffectBase):

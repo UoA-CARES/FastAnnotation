@@ -49,6 +49,8 @@
         id: layer_view
 
 <ToolSelect>:
+    pen_size: pen_size
+    alpha: alpha
     cols: 1
     Label:
         text: "Tool Options"
@@ -61,6 +63,9 @@
         Label:
             text: "pen size"
         NumericInput:
+            id: pen_size
+            min: 1
+            max: 100
             value: 10
             step: 5
             on_value: root.set_pencil_size(self.value)
@@ -71,6 +76,7 @@
         Label:
             text: "alpha"
         NumericInput:
+            id: alpha
             min: 0.0
             max: 1.0
             value: 1.0
@@ -195,8 +201,6 @@
             text: "X"
             on_release: root.layer_view.delete_layer_item(root.layer_name)
 
-
-
 <ImageCanvas>:
     image_id: self.image_id
     scatter: scatter
@@ -215,6 +219,7 @@
         pos: (0,0)
         ScrollView:
             scroll_type: ['bars', 'content']
+            scroll_timeout: 5
             bar_width: '10dp'
             id: scroll_view
             width: root.width / root.scatter.scale
@@ -251,8 +256,6 @@
     bbox_layer: bbox_layer
     bbox_color: self.bbox_color
     bbox_thickness: self.bbox_thickness
-    bbox_top_right: self.bbox_top_right
-    bbox_bot_left: self.bbox_bot_left
     bbox_bounds: self.bbox_bounds
 
     PaintWindow:

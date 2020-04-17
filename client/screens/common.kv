@@ -70,13 +70,11 @@
         Button:
             text: '+'
             disabled: root.value >= root.max
-            on_release:
-                root.value = round(min(root.value + root.step, root.max), root.decimal_places)
+            on_release: root.increment(1)
         Button:
             text: '-'
             disabled: root.value <= root.min
-            on_release:
-                root.value = round(max(root.value - root.step, root.min), root.decimal_places)
+            on_release: root.increment(-1)
 
 <PaintWindow>
     mask_layer: mask_layer
