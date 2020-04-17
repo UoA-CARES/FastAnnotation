@@ -740,9 +740,11 @@ class DrawTool(MouseDrawnTool):
 
         self.color_bind = self.fbind(
             'layer_color', self.layer.setter('mask_color'))
+        self.layer_color = self.layer.mask_color
 
         self.name_bind = self.fbind(
             'class_name', self.layer.setter('class_name'))
+        self.class_name = self.layer.class_name
 
     def on_touch_down_hook(self, touch):
         if not self.layer:
