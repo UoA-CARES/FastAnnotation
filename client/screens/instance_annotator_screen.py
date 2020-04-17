@@ -850,6 +850,11 @@ class DrawTool(MouseDrawnTool):
         if np.sum(fbo.get_pixel_color(*pos)) > 0:
             return
 
+        bounds = self.layer.bbox_bounds
+        valid = bounds[0] < pos[0] < bounds[0] + bounds[2] and bounds[1] < pos[1] < bounds[1] + bounds[3]
+        if not valid:
+            return
+
         region = fbo.texture.get_region(*self.layer.bbox_bounds)
         relative_pos = np.array(pos) - np.array(self.layer.bbox_bounds[:2])
 
@@ -861,7 +866,6 @@ class DrawTool(MouseDrawnTool):
         mat_copy = mat.copy()
         mask = np.zeros((height + 2, width + 2), dtype=np.uint8)
         cv2.floodFill(mat_copy, mask, tuple(cv2_pos), (255, 255, 255))
-        cv2.circle(mat_copy, tuple(cv2_pos), 3, (0, 255, 0))
 
         mat = np.clip(mat_copy - mat, 0, 255)
         mat = cv2.flip(mat, 0)
