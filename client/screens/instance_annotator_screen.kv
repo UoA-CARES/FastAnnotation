@@ -49,6 +49,8 @@
         id: layer_view
 
 <ToolSelect>:
+    pen_size: pen_size
+    alpha: alpha
     cols: 1
     Label:
         text: "Tool Options"
@@ -61,6 +63,7 @@
         Label:
             text: "pen size"
         NumericInput:
+            id: pen_size
             min: 1
             max: 100
             value: 10
@@ -73,6 +76,7 @@
         Label:
             text: "alpha"
         NumericInput:
+            id: alpha
             min: 0.0
             max: 1.0
             value: 1.0

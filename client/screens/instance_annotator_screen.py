@@ -146,6 +146,8 @@ class InstanceAnnotatorScreen(Screen):
             self.image_canvas.draw_tool)
         self.left_control.tool_select.bind_class_picker(
             self.left_control.class_picker)
+        self.left_control.tool_select.bind_layer_stack(
+            self.image_canvas.layer_stack)
 
         # Layer View Binds
         self.left_control.layer_view.bind_draw_tool(
@@ -234,10 +236,11 @@ class InstanceAnnotatorScreen(Screen):
 
     def add_layer(self):
         layer = DrawableLayer(size=self.current_state.image_texture.size)
-        layer.mask_color = self.left_control.class_picker.current_color
+        layer.mask_color = self.left_control.class_picker.current_color[:3] + \
+                           (self.left_control.tool_select.alpha.value,)
         layer_name = self.left_control.layer_view.add_layer_item(layer)
         self.left_control.layer_view.select_layer_item(layer_name)
-
+        
     def clear_stale_window_states(self):
         stale_keys = []
         for key in self.window_cache:
@@ -369,6 +372,8 @@ class LeftControlColumn(BoxLayout):
 
 
 class ToolSelect(GridLayout):
+    pen_size = ObjectProperty(None)
+    alpha = ObjectProperty(None)
     class_color = ObjectProperty(None)
     class_name = StringProperty("")
 
@@ -376,6 +381,7 @@ class ToolSelect(GridLayout):
         super().__init__(**kw)
         self.app = App.get_running_app()
         self.draw_tool = None
+        self.layer_stack = None
 
     def bind_draw_tool(self, draw_tool):
         self.draw_tool = draw_tool
@@ -383,6 +389,9 @@ class ToolSelect(GridLayout):
     def bind_class_picker(self, class_picker):
         class_picker.fbind('current_color', self.setter('class_color'))
         class_picker.fbind('current_name', self.setter('class_name'))
+
+    def bind_layer_stack(self, layer_stack):
+        self.layer_stack = layer_stack
 
     def on_parent(self, *args):
         Clock.schedule_once(lambda dt: self.late_init())
@@ -401,9 +410,7 @@ class ToolSelect(GridLayout):
 
     def set_alpha(self, alpha):
         print("Alpha: %s" % str(alpha))
-        layer_color = self.draw_tool.layer_color
-        layer_color = layer_color[:-1] + (alpha,)
-        self.draw_tool.layer_color = layer_color
+        self.layer_stack.set_alpha(alpha)
 
     def set_pencil_size(self, size):
         print("size: %s" % str(size))
@@ -739,9 +746,11 @@ class DrawTool(MouseDrawnTool):
 
         self.color_bind = self.fbind(
             'layer_color', self.layer.setter('mask_color'))
+        self.layer_color = self.layer.mask_color
 
         self.name_bind = self.fbind(
             'class_name', self.layer.setter('class_name'))
+        self.class_name = self.layer.class_name
 
     def on_touch_down_hook(self, touch):
         if not self.layer:
@@ -875,6 +884,10 @@ class LayerStack(FloatLayout):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
+
+    def set_alpha(self, alpha):
+        for layer in self.layer_list:
+            layer.mask_color = layer.mask_color[:3] + (alpha,)
 
     def add_layer(self, layer):
         self.add_widget(layer)
