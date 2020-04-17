@@ -33,20 +33,18 @@ def load_mask(filepath):
     return mask
 
 
-def save_info(info, filepath):
+def save_info(shape, bbox, class_name, filepath):
     create_info_file(filepath)
 
     root = ET.parse(filepath).getroot()
 
-    shape = info["source_shape"]
     obj = root.find('size')
     obj.find('width').text = str(shape[0])
     obj.find('height').text = str(shape[1])
     obj.find('depth').text = str(shape[2])
 
-    bbox = info["bbox"]
     obj = root.find('object')
-    obj.find("name").text = info["class_name"]
+    obj.find("name").text = class_name
 
     obj.find("bndbox/xmin").text = str(bbox[0])
     obj.find("bndbox/ymin").text = str(bbox[1])
