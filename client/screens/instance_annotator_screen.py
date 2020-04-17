@@ -850,6 +850,11 @@ class DrawTool(MouseDrawnTool):
         if np.sum(fbo.get_pixel_color(*pos)) > 0:
             return
 
+        bounds = self.layer.bbox_bounds
+        valid = bounds[0] < pos[0] < bounds[0] + bounds[2] and bounds[1] < pos[1] < bounds[1] + bounds[3]
+        if not valid:
+            return
+
         region = fbo.texture.get_region(*self.layer.bbox_bounds)
         relative_pos = np.array(pos) - np.array(self.layer.bbox_bounds[:2])
 
