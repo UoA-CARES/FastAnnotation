@@ -47,7 +47,7 @@ def add_projects(names, on_success=None, on_fail=None):
 
     body = []
     for n in names:
-        body.append({'project_name': n})
+        body.append({'name': n})
 
     route = ClientConfig.SERVER_URL + "projects"
     headers = {"Content-Type": "application/json"}
@@ -55,7 +55,7 @@ def add_projects(names, on_success=None, on_fail=None):
         route,
         req_headers=headers,
         method="POST",
-        req_body=json.dumps(body),
+        req_body=json.dumps({"projects": body}),
         on_success=on_success,
         on_failure=on_fail,
         on_error=on_fail)
@@ -82,16 +82,16 @@ def add_project_images(project_id, image_paths, on_success=None, on_fail=None):
         ext = "." + str(filename.split('.')[-1])
         filename = '.'.join(filename.split('.')[:-1])
 
-        body.append({'name': filename, 'type': ext,
-                     'image': encode_image(path)})
+        body.append({'name': filename, 'ext': ext,
+                     'image_data': encode_image(path)})
 
     route = ClientConfig.SERVER_URL + "projects/" + str(project_id) + "/images"
-    headers = {"Content-Type": "application/json"}
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
     UrlRequest(
         route,
         req_headers=headers,
         method="POST",
-        req_body=json.dumps(body),
+        req_body=json.dumps({'images': body}),
         on_success=on_success,
         on_failure=on_fail,
         on_error=on_fail)
@@ -106,6 +106,7 @@ def get_project_images(
         str(project_id) + "/images"
     headers = {"Accept": "application/json",
                "Content-Type": "application/json"}
+
     if not filter_details:
         filter_details = {}
     UrlRequest(
@@ -118,14 +119,24 @@ def get_project_images(
         on_error=on_fail)
 
 
-def get_image_lock_by_id(image_id, lock=True, on_success=None, on_fail=None):
+def update_image_meta_by_id(image_id, name=None, lock=None, labeled=None, on_success=None, on_fail=None):
     route = ClientConfig.SERVER_URL + "images/" + str(image_id)
-    route += "/lock" if lock else "/unlock"
-    headers = {"Accept": "application/json"}
+
+    image_meta = {}
+    if name is not None:
+        image_meta["name"] = str(name)
+    if lock is not None:
+        image_meta["is_locked"] = bool(lock)
+    if labeled is not None:
+        image_meta["is_labeled"] = bool(labeled)
+
+    headers = {"Accept": "application/json",
+               "Content-Type": "application/json"}
     UrlRequest(
         route,
         req_headers=headers,
         method="PUT",
+        req_body=json.dumps(image_meta),
         on_success=on_success,
         on_failure=on_fail,
         on_error=on_fail)
@@ -171,7 +182,7 @@ def get_image_meta_by_id(image_id, on_success=None, on_fail=None):
 
 
 def get_image_metas_by_ids(image_ids, on_success=None, on_fail=None):
-    route = ClientConfig.SERVER_URL + "images/meta"
+    route = ClientConfig.SERVER_URL + "images?image-data=False"
     headers = {"Accept": "application/json",
                "Content-Type": "application/json"}
     body = {"ids": image_ids}
@@ -195,7 +206,7 @@ def add_image_annotation(
                "Content-Type": "application/json"}
     print("Client Send BBOX {")
     for row in annotation["annotations"]:
-        print("\t%s" % str(row["info"]["bbox"]))
+        print("\t%s" % str(row["bbox"]))
     print("}")
     UrlRequest(
         route,

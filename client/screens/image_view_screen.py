@@ -27,8 +27,8 @@ class ImageViewScreen(Screen):
         self.tile_view.clear_widgets()
         print("Loading Images")
         filter_details = {
-            "order": {
-                "by": "name",
+            "order_by": {
+                "key": "name",
                 "ascending": True
             }
         }
@@ -46,8 +46,8 @@ class ImageViewScreen(Screen):
             on_fail=self._on_load_images_fail)
 
     def _on_load_images_success(self, request, result):
-        for row in result:
-            img = utils.decode_image(row["image"])
+        for row in result["images"]:
+            img = utils.decode_image(row["image_data"])
             self.add_thumbnail(img)
 
     def _on_load_images_fail(self, request, result):

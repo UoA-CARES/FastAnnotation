@@ -11,6 +11,9 @@ from kivy.uix.screenmanager import Screen
 import client.utils as utils
 from client.screens.common import *
 
+from client.model.instance_annotator_model import InstanceAnnotatorModel
+from client.controller.instance_annotator_controller import InstanceAnnotatorController
+
 # Load corresponding kivy file
 Builder.load_file(
     os.path.join(
@@ -71,11 +74,11 @@ class LayerState:
             self.bbox[3] += drawable_layer.bbox_bounds[1]
         elif config:
             self.mask = utils.decode_mask(
-                config["mask"], config["info"]["source_shape"][:2])
-            self.class_name = config["info"]["class_name"]
+                config["mask_data"], config["shape"][:2])
+            self.class_name = config["class_name"]
             if self.class_picker:
                 self.mask_color = self.class_picker.class_map[self.class_name]
-            self.bbox = config["info"]["bbox"]
+            self.bbox = config["bbox"]
         elif empty_size:
             self.mask = np.zeros(shape=empty_size, dtype=bool)
             if self.class_picker:
@@ -117,15 +120,10 @@ class LayerState:
 
     def to_dict(self):
         body = {}
-        body['mask'] = utils.encode_mask(self.get_mask())
-        info = {
-            'source_shape': tuple(
-                reversed(
-                    self.texture.size)) + (
-                3,), 'class_name': self.class_name, 'bbox': np.array(
-                    self.bbox).tolist()}
-
-        body['info'] = info
+        body['mask_data'] = utils.encode_mask(self.get_mask())
+        body['bbox'] = np.array(self.bbox).tolist()
+        body['class_name'] = self.class_name
+        body['shape'] = tuple(reversed(self.texture.size)) + (3,)
         return body
 
 
@@ -137,8 +135,18 @@ class InstanceAnnotatorScreen(Screen):
     def __init__(self, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
+        self.model = InstanceAnnotatorModel()
+        self.controller = InstanceAnnotatorController(self.model)
         self.current_state = WindowState()
         self.window_cache = {}
+
+
+    def update_canvas(self):
+        pass
+
+    def update_labels(self):
+        pass
+
 
     def on_enter(self, *args):
         # Tool Select Binds
@@ -254,7 +262,6 @@ class InstanceAnnotatorScreen(Screen):
         print("Refreshing Image Queue")
         # clear queue of stale items
         self.clear_stale_window_states()
-
         self.right_control.image_queue.clear()
         for state in self.window_cache.values():
             if state.image_opened and state.image_id > 0:
@@ -264,8 +271,8 @@ class InstanceAnnotatorScreen(Screen):
                     opened=True)
 
         filter_details = {
-            "order": {
-                "by": "name",
+            "order_by": {
+                "key": "name",
                 "ascending": True
             }
         }
@@ -298,18 +305,21 @@ class InstanceAnnotatorScreen(Screen):
             self.load_state(image_id)
             return
 
-        utils.get_image_lock_by_id(image_id,
-                                   lock=True,
-                                   on_success=self.handle_image_lock_success,
-                                   on_fail=self.handle_image_lock_fail)
+        utils.update_image_meta_by_id(image_id,
+                                      lock=True,
+                                      on_success=self.handle_image_lock_success,
+                                      on_fail=self.handle_image_lock_fail)
 
     def save_image(self):
         self.save_state()
         annotation = self.current_state.to_dict()
-        utils.add_image_annotation(self.current_state.image_id, annotation)
-        utils.get_image_lock_by_id(self.current_state.image_id,
-                                   lock=False,
-                                   on_success=self.handle_image_unlock_success)
+        utils.add_image_annotation(self.current_state.image_id, annotation, on_success=self.handle_annotation, on_fail=self.handle_annotation)
+        utils.update_image_meta_by_id(self.current_state.image_id,
+                                      lock=False,
+                                      on_success=self.handle_image_unlock_success, on_fail=self.handle_annotation)
+
+    def handle_annotation(self, request, result):
+        pass
 
     def handle_image_lock_success(self, request, result):
 
@@ -339,7 +349,7 @@ class InstanceAnnotatorScreen(Screen):
         self.right_control.image_queue_control.btn_save.disabled = True
 
     def handle_image_request_success(self, request, result):
-        img_bytes = utils.decode_image(result["image"])
+        img_bytes = utils.decode_image(result["image_data"])
         texture = utils.bytes2texture(img_bytes, "jpg")
         self.add_state(
             image_id=result["id"],
@@ -420,6 +430,9 @@ class ToolSelect(GridLayout):
 class ClassPicker(GridLayout):
     eraser_enabled = BooleanProperty(False)
 
+    grid = ObjectProperty(None)
+
+    current_label = ObjectProperty(None)
     current_class = ObjectProperty(None)
     current_color = ObjectProperty(None)
     current_name = StringProperty("")
@@ -429,6 +442,26 @@ class ClassPicker(GridLayout):
         if not isinstance(item, ClassPickerItem):
             return
         self.class_map[item.class_name] = item.class_color
+
+    def change_label(self, instance):
+        if self.current_label:
+            self.current_label.disable_cb()
+        self.current_label = instance
+        self.current_label.enable_cb()
+
+    def add_label(self, name, color):
+        if name in self.class_map:
+            print("Label name already exists")
+            return
+        item = ClassPickerItem()
+        item.class_name = name
+        item.color = np.array(tuple(color) + (255,)) / 255
+        item.enable_cb = item.enable
+        item.disable_cb = item.disable
+        item.bind(on_release=lambda: self.change_label(item))
+        self.grid.add_widget(item)
+
+
 
     def change_class(self, instance):
         if self.current_class:
@@ -442,7 +475,6 @@ class ClassPicker(GridLayout):
         self.eraser_enabled = False
 
     def enable_eraser(self, instance):
-        print("ERASER")
         self.eraser_enabled = True
         if self.current_class:
             self.current_class.state = 'normal'
@@ -455,14 +487,14 @@ class ClassPickerItem(Button):
     class_name = StringProperty("")
     class_id = NumericProperty(-1)
 
-    def on_parent(self, screen, parent):
-        class_picker = parent
-        while not isinstance(class_picker, ClassPicker) and class_picker:
-            class_picker = class_picker.parent
+    enable_cb = ObjectProperty(None)
+    disable_cb = ObjectProperty(None)
 
-        if not class_picker:
-            return
-        Clock.schedule_once(lambda dt: class_picker.register(self))
+    def enable(self):
+        self.state = 'down'
+
+    def disable(self):
+        self.state = 'normal'
 
 
 class LayerView(GridLayout):
@@ -1051,7 +1083,7 @@ class ImageQueue(GridLayout):
             new_ids, on_success=self.handle_image_meta)
 
     def handle_image_meta(self, request, result):
-        for row in result:
+        for row in result["images"]:
             self.add_item(row["name"], row["id"], locked=row["is_locked"])
 
     def add_item(self, name, image_id, locked=False, opened=False):

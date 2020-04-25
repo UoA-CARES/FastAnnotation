@@ -85,6 +85,7 @@
 
 <ClassPicker>:
     current_class: self.current_class
+    grid: grid
     cols: 1
     Label:
         text: "Class Picker"
@@ -92,6 +93,7 @@
         height: 50
 
     GridLayout:
+        id: grid
         cols: 2
         ClassPickerItem:
             class_name: "Eraser"
