@@ -7,8 +7,9 @@ from kivy.graphics import Color, Ellipse, InstructionGroup, Line
 from kivy.properties import BooleanProperty
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.screenmanager import Screen
-
+from kivy.clock import mainthread
 import client.utils as utils
+from client.utils import ApiException
 from client.screens.common import *
 
 from client.model.instance_annotator_model import InstanceAnnotatorModel
@@ -188,6 +189,7 @@ class InstanceAnnotatorScreen(Screen):
                 self.current_state.image_texture,
                 self.current_state.image_id))
 
+    @mainthread
     def load_state(self, index):
         if index not in self.window_cache:
             return
@@ -195,10 +197,16 @@ class InstanceAnnotatorScreen(Screen):
 
         state.image_opened = True
         self.image_canvas.load_image(state.image_texture, index)
-        self.left_control.layer_view.clear()
+        self.load_layers(state.layer_states)
 
+        # Record as current state
+        self.current_state = state
+
+    @mainthread
+    def load_layers(self, layer_states):
+        self.left_control.layer_view.clear()
         layer_name = None
-        for layer_state in state.layer_states:
+        for layer_state in layer_states:
             # Build Layer
             layer = DrawableLayer(
                 size=layer_state.get_size(),
@@ -208,9 +216,6 @@ class InstanceAnnotatorScreen(Screen):
                 bbox=layer_state.bbox)
             layer_name = self.left_control.layer_view.add_layer_item(layer)
         self.left_control.layer_view.select_layer_item(layer_name)
-
-        # Record as current state
-        self.current_state = state
 
     # Saves the currently opened state
     def save_state(self):
@@ -231,7 +236,7 @@ class InstanceAnnotatorScreen(Screen):
             window_state.layer_states = layer_states
         self.window_cache[self.image_canvas.image_id] = window_state
 
-    # Add a new state with a given id
+    @mainthread
     def add_state(self, image_id, image_name, texture):
         window_state = WindowState(
             image_id=image_id,
@@ -260,7 +265,7 @@ class InstanceAnnotatorScreen(Screen):
 
     def refresh_image_queue(self):
         print("Refreshing Image Queue")
-        # clear queue of stale items
+        # TODO: Implement a window cache which keeps track of local and remote states
         self.clear_stale_window_states()
         self.right_control.image_queue.clear()
         for state in self.window_cache.values():
@@ -270,16 +275,8 @@ class InstanceAnnotatorScreen(Screen):
                     state.image_id,
                     opened=True)
 
-        filter_details = {
-            "order_by": {
-                "key": "name",
-                "ascending": True
-            }
-        }
-        utils.get_project_images(
-            self.app.current_project_id,
-            filter_details=filter_details,
-            on_success=self.right_control.image_queue.handle_image_ids)
+        self.right_control.image_queue.refresh()
+
 
     def load_image(self, image_id=-1):
         # Save current window state
@@ -305,65 +302,43 @@ class InstanceAnnotatorScreen(Screen):
             self.load_state(image_id)
             return
 
-        utils.update_image_meta_by_id(image_id,
-                                      lock=True,
-                                      on_success=self.handle_image_lock_success,
-                                      on_fail=self.handle_image_lock_fail)
+        future = self.app.thread_pool.submit(self._load_image, image_id)
+        future.add_done_callback(self.app.alert_user)
 
-    def save_image(self):
-        self.save_state()
-        annotation = self.current_state.to_dict()
-        utils.add_image_annotation(self.current_state.image_id, annotation, on_success=self.handle_annotation, on_fail=self.handle_annotation)
-        utils.update_image_meta_by_id(self.current_state.image_id,
-                                      lock=False,
-                                      on_success=self.handle_image_unlock_success, on_fail=self.handle_annotation)
+    def _load_image(self, image_id):
+        resp = utils.update_image_meta_by_id(image_id, lock=True)
+        if resp.status_code != 200:
+            raise ApiException("Failed to lock image with id %d" % image_id, resp.status_code)
 
-    def handle_annotation(self, request, result):
-        pass
+        self.app.register_image(image_id)
 
-    def handle_image_lock_success(self, request, result):
-
-        locked_id = result["id"]
-        print("Locked Image %d" % locked_id)
-        App.get_running_app().register_image(locked_id)
-        utils.get_image_by_id(
-            locked_id,
-            on_success=self.handle_image_request_success)
         self.right_control.image_queue.mark_item(
-            result["id"], opened=True, locked=False)
+            image_id, opened=True, locked=False)
         self.right_control.image_queue_control.btn_save.disabled = False
 
-    def handle_image_lock_fail(self, request, result):
-        popup = Alert()
-        popup.title = "Image unavailable"
-        popup.alert_message = "Image is already locked, please try again later."
-        popup.open()
+        resp = utils.get_image_by_id(image_id)
+        if resp.status_code == 404:
+            raise ApiException("Image does not exist with id %d." % image_id, resp.status_code)
+        elif resp.status_code != 200:
+            raise ApiException("Failed to retrieve image with id %d." % image_id, resp.status_code)
 
-    def handle_image_unlock_success(self, request, result):
-        unlocked_id = result["id"]
-        print("Locked Image %d" % unlocked_id)
-        App.get_running_app().register_image(unlocked_id)
-        self.window_cache[unlocked_id].image_opened = False
-        self.right_control.image_queue.mark_item(
-            unlocked_id, opened=False, locked=False)
-        self.right_control.image_queue_control.btn_save.disabled = True
-
-    def handle_image_request_success(self, request, result):
+        result = resp.json()
         img_bytes = utils.decode_image(result["image_data"])
         texture = utils.bytes2texture(img_bytes, "jpg")
         self.add_state(
-            image_id=result["id"],
+            image_id=image_id,
             image_name=result["name"],
             texture=texture
         )
-        self.load_state(result["id"])
-        utils.get_image_annotation(
-            result["id"],
-            on_success=self.handle_annotation_request_success)
+        self.load_state(image_id)
 
-    def handle_annotation_request_success(self, request, result):
+        resp = utils.get_image_annotation(image_id)
+        if resp.status_code != 200:
+            raise ApiException("Failed to retrieve annotations for the image with id %d." % image_id, resp.status_code)
+
+        result = resp.json()
         # Add layer state info to correct window state
-        window_state = self.window_cache[result["image_id"]]
+        window_state = self.window_cache[image_id]
 
         layer_states = []
         for row in result["annotations"]:
@@ -372,7 +347,38 @@ class InstanceAnnotatorScreen(Screen):
         if layer_states:
             window_state.layer_states = layer_states
 
-        self.load_state(result["image_id"])
+        self.load_state(image_id)
+
+    def save_image(self):
+        self.save_state()
+        annotation = self.current_state.to_dict()
+        future = self.app.thread_pool.submit(self._save_image, self.current_state.image_id, annotation)
+        future.add_done_callback(self.app.alert_user)
+
+    def _save_image(self, image_id, annotation):
+        resp = utils.add_image_annotation(image_id, annotation)
+        if resp.status_code == 200:
+            result = resp.json()
+            msg = []
+            for row in result["results"]:
+                msg.append(row["error"]["message"])
+            msg = '\n'.join(msg)
+            raise ApiException(
+                message="The following errors occurred while saving annotations to the image with id %d:\n %s" %
+                        (image_id, msg),
+                code=resp.status_code)
+        elif resp.status_code != 201:
+            raise ApiException("Failed to save annotations to the image with id %d." % image_id, resp.status_code)
+
+        resp = utils.update_image_meta_by_id(image_id, lock=False)
+        if resp.status_code != 200:
+            raise ApiException("Failed to unlock the image with id %d." % image_id)
+
+        self.app.deregister_image(image_id)
+        self.window_cache[image_id].image_opened = False
+        self.right_control.image_queue.mark_item(
+            image_id, opened=False, locked=False)
+        self.right_control.image_queue_control.btn_save.disabled = True
 
 
 class LeftControlColumn(BoxLayout):
@@ -1041,6 +1047,7 @@ class ImageCanvas(BoxLayout):
         self.image.texture = texture
         self.image.size = texture.size
 
+
     def refresh_image(self):
         print("refreshing")
         window_state = App.get_running_app().root.current_screen.current_state
@@ -1066,6 +1073,10 @@ class ImageQueue(GridLayout):
     queue = ObjectProperty(None)
     queue_item_dict = {}
 
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.app = App.get_running_app()
+
     def clear(self):
         self.queue.clear_widgets()
         self.queue_item_dict.clear()
@@ -1075,14 +1086,31 @@ class ImageQueue(GridLayout):
             return
         self.queue_item_dict[image_id].set_status(lock=locked, opened=opened)
 
-    def handle_image_ids(self, request, result):
-        # No need to handle existing ids
+    def refresh(self):
+        filter_details = {
+            "order_by": {
+                "key": "name",
+                "ascending": True
+            }
+        }
+        future = self.app.thread_pool.submit(self._refresh_queue, self.app.current_project_id, filter_details)
+        future.add_done_callback(self.app.alert_user)
+
+    def _refresh_queue(self, pid, filter_details):
+        resp = utils.get_project_images(pid, filter_details)
+
+        if resp.status_code != 200:
+            raise ApiException("Failed to retrieve project image ids.", resp.status_code)
+
+        result = resp.json()
         new_ids = [x for x in result["ids"]
                    if x not in self.queue_item_dict.keys()]
-        utils.get_image_metas_by_ids(
-            new_ids, on_success=self.handle_image_meta)
 
-    def handle_image_meta(self, request, result):
+        resp = utils.get_image_metas_by_ids(new_ids)
+        if resp.status_code != 200:
+            raise ApiException("Failed to retrieve image meta information.", resp.status_code)
+
+        result = resp.json()
         for row in result["images"]:
             self.add_item(row["name"], row["id"], locked=row["is_locked"])
 

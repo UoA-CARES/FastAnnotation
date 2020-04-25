@@ -1,6 +1,7 @@
 from kivy.app import App
 from kivy.uix.screenmanager import Screen
 
+from client.utils import ApiException
 import client.utils as utils
 from client.screens.common import *
 
@@ -32,29 +33,20 @@ class ImageViewScreen(Screen):
                 "ascending": True
             }
         }
-        utils.get_project_images(
-            self.app.current_project_id,
-            filter_details=filter_details,
-            on_success=self._get_image_ids_success)
+        future = self.app.thread_pool.submit(self._load_images, self.app.current_project_id, filter_details)
+        future.add_done_callback(self.app.alert_user)
 
-    def _get_image_ids_success(self, request, result):
-        print("Ids: %s" % str(result["ids"]))
+    def _load_images(self, pid, filter_details):
+        resp = utils.get_project_images(pid, filter_details=filter_details)
+        if resp.status_code != 200:
+            raise ApiException("Failed to load project images from server.", resp.status_code)
 
-        utils.get_images_by_ids(
-            result["ids"],
-            on_success=self._on_load_images_success,
-            on_fail=self._on_load_images_fail)
-
-    def _on_load_images_success(self, request, result):
+        result = resp.json()
         for row in result["images"]:
             img = utils.decode_image(row["image_data"])
             self.add_thumbnail(img)
 
-    def _on_load_images_fail(self, request, result):
-        print("FAILED")
-
     def add_thumbnail(self, image):
-
         img = utils.bytes2texture(image, "jpg")
         thumbnail = Thumbnail()
         thumbnail.cust_texture = img

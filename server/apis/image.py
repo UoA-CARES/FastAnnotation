@@ -208,15 +208,17 @@ class Image(Resource):
             return marshal(
                 response, api.models["generic_response"], skip_none=True), code
 
-    @api.response(200, "OK")
-    @api.response(400, "Invalid Payload")
-    @api.response(500, "Unexpected Failure")
+    @api.response(200, "OK", api.models["generic_response"])
+    @api.response(400, "Invalid Payload", api.models["generic_response"])
+    @api.response(500, "Unexpected Failure", api.models["generic_response"])
     @api.marshal_with(api.models["generic_response"], skip_none=True)
     @api.expect(image)
     def put(self, iid):
         """
         Update an images meta parameters.
         """
+
+        #TODO: Update to raise 409 when lock is requested on already locked object
 
         content = request.json
 
@@ -275,8 +277,8 @@ class Image(Resource):
             code = 200
         return response, code
 
-    @api.response(200, "OK")
-    @api.response(500, "Unexpected Failure")
+    @api.response(200, "OK", api.models["generic_response"])
+    @api.response(500, "Unexpected Failure", api.models["generic_response"])
     @api.marshal_with(api.models["generic_response"], skip_none=True)
     def delete(self, iid):
         """
@@ -366,8 +368,8 @@ class ImageAnnotationList(Resource):
             return marshal(
                 response, api.models["generic_response"], skip_none=True), code
 
-    @api.response(200, "Partial Success")
-    @api.response(201, "Success")
+    @api.response(200, "Partial Success", api.models["bulk_response"])
+    @api.response(201, "Success", api.models["bulk_response"])
     @api.marshal_with(api.models["bulk_response"], skip_none=True)
     @api.expect(bulk_annotations)
     def post(self, iid):
@@ -444,8 +446,8 @@ class ImageAnnotationList(Resource):
 
         return {"results": results}, code
 
-    @api.response(200, "OK")
-    @api.response(500, "Unexpected Failure")
+    @api.response(200, "OK", api.models["generic_response"])
+    @api.response(500, "Unexpected Failure", api.models["generic_response"])
     @api.marshal_with(api.models["generic_response"], skip_none=True)
     def delete(self, iid):
         """
