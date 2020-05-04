@@ -79,13 +79,9 @@
 <PaintWindow>
     mask_layer: mask_layer
     fbo: self.fbo
-    mask_color: self.mask_color
     EffectWidget:
         size: root.size
         effects: [common.TransparentBlackEffect()]
         Widget:
             size: root.size
             id: mask_layer
-            canvas:
-                Color:
-                    rgba: root.mask_color

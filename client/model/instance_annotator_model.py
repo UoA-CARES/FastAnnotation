@@ -1,3 +1,6 @@
+import uuid
+import numpy as np
+
 from threading import Lock
 from copy import deepcopy
 
@@ -73,6 +76,78 @@ class InstanceAnnotatorModel:
         self.images = ImageCache()
         self.labels = LabelCache()
         self.active = ActiveImages()
+        self.tool = ToolState()
+
+
+class ToolState:
+    """
+    A thread-safe object containing state related to the Instance Annotator Tool
+    """
+    _lock = Lock()
+
+    def __init__(
+            self,
+            pen_size=1,
+            alpha=0.0,
+            eraser=False,
+            current_image_id=-1,
+            current_label_name="",
+            current_layer_name=""):
+        self._pen_size = pen_size
+        self._alpha = alpha
+        self._eraser = eraser
+        self._current_image_id = current_image_id
+        self._current_label_name = current_label_name
+        self._current_layer_name = current_layer_name
+
+    def get_pen_size(self):
+        with self._lock:
+            return self._pen_size
+
+    def set_pen_size(self, value):
+        with self._lock:
+            self._pen_size = value
+
+    def get_alpha(self):
+        with self._lock:
+            return self._alpha
+
+    def set_alpha(self, value):
+        with self._lock:
+            self._alpha = value
+
+    def get_eraser(self):
+        with self._lock:
+            return self._eraser
+
+    def set_eraser(self, value):
+        with self._lock:
+            self._eraser = value
+
+    def get_current_image_id(self):
+        with self._lock:
+            return self._current_image_id
+
+    def set_current_image_id(self, value):
+        with self._lock:
+            self._current_image_id = value
+
+    def get_current_label_name(self):
+        with self._lock:
+            return self._current_label_name
+
+    def set_current_label_name(self, value):
+        with self._lock:
+            self._current_label_name = value
+
+    def get_current_layer_name(self):
+        with self._lock:
+            return self._current_layer_name
+
+    def set_current_layer_name(self, value):
+        with self._lock:
+            print("[Layer_Name]: %s" % value)
+            self._current_layer_name = value
 
 
 class ActiveImages(BlockingList):
@@ -103,10 +178,12 @@ class ImageState:
                  name="",
                  is_open=False,
                  is_locked=False,
+                 unsaved=False,
                  image=None,
                  annotations=None):
         self.id = id
         self.name = name
+        self.unsaved = unsaved
         self.is_open = is_open
         self.is_locked = is_locked
 
@@ -115,17 +192,47 @@ class ImageState:
         self.shape = (0, 0, 0)  # (width, height, depth)
         self.annotations = annotations
 
+    def get_unique_annotation_name(self):
+        name = uuid.uuid1()
+        return str(name)
+
+    def detect_collisions(self, pos):
+        collisions = []
+        for annotation in self.annotations:
+            if annotation.collision(pos):
+                collisions.append(annotation)
+        return collisions
+
 
 class AnnotationState:
     """
     State associated with an annotation
     """
 
-    def __init__(self, annotation_name, class_name, mask, bbox):
+    def __init__(
+            self,
+            annotation_name,
+            class_name,
+            mask,
+            bbox,
+            mask_enabled=True,
+            bbox_enabled=True):
         self.annotation_name = annotation_name
         self.class_name = class_name
-        self.mask = mask  # binary bool matrix
-        self.bbox = bbox  # (x1, x2, w, h)
+        self.mask = mask  # A BGR mat with 1,1,1 at labeled locations and 0,0,0 otherwise
+        self.bbox = bbox  # (x1, y1, w, h)
+        self.mask_enabled = mask_enabled
+        self.bbox_enabled = bbox_enabled
+
+    def collision(self, pos):
+        """
+        Detects whether a point collides with this annotations bounding box
+        :param pos:  position in the form (x,y)
+        :return True if collision occurs, False otherwise:
+        """
+        bl = np.array(self.bbox[:2])
+        tr = bl + np.array(self.bbox[2:])
+        return np.all(np.logical_and(bl < pos, pos < tr))
 
 
 class LabelCache(BlockingCache):
@@ -141,4 +248,4 @@ class LabelState:
 
     def __init__(self, name, color):
         self.name = name
-        self.color = color  # (r,g,b)
+        self.color = (np.array(color) / 255).tolist()

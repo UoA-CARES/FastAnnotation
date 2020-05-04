@@ -8,7 +8,7 @@ from kivy.uix.screenmanager import ScreenManager
 
 from client.client_config import ClientConfig
 from client.screens.image_view_screen import ImageViewScreen
-from client.screens.instance_annotator_screen import InstanceAnnotatorScreen
+from client.screens.test_annotator import InstanceAnnotatorScreen
 from client.screens.project_select_screen import ProjectSelectScreen
 from client.screens.project_tool_screen import ProjectToolScreen
 
@@ -74,6 +74,11 @@ class AnnotationClientApp(App):
             return
 
         exception = future.exception()
+        try:
+            raise exception
+        except Exception:
+            tb = traceback.format_exc()
+            print(tb)
 
         pop_up = Alert()
         if isinstance(exception, ApiException):

@@ -277,7 +277,6 @@ class InstanceAnnotatorScreen(Screen):
 
         self.right_control.image_queue.refresh()
 
-
     def load_image(self, image_id=-1):
         # Save current window state
         self.save_state()

@@ -202,7 +202,6 @@ def mat2bytes(mat, ext):
     return buf[1].tostring()
 
 
-@mainthread
 def bytes2texture(bytes, ext):
     data = io.BytesIO(bytes)
     return CoreImage(data, ext=ext).texture
@@ -219,12 +218,11 @@ def texture2bytes(texture):
     return b.getvalue()
 
 
-@mainthread
 def mat2texture(mat):
     mat = cv2.flip(mat, 0)
     mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGBA)
-    indices = np.where(mat[:, :, :3] == (0, 0, 0))
-    mat[indices[0], indices[1], 3] = 0
+    # indices = np.where(mat[:, :, :3] == (0, 0, 0))
+    # mat[indices[0], indices[1], 3] = 0
     buf = mat.tostring()
     tex = Texture.create(size=(mat.shape[1], mat.shape[0]), colorfmt='rgba')
     tex.blit_buffer(buf, colorfmt='rgba', bufferfmt='ubyte')

@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import client.utils as utils
 from client.utils import ApiException
@@ -84,20 +85,20 @@ class InstanceAnnotatorController:
                 image_id, resp.status_code)
 
         result = resp.json()
-        annotations = []
+        annotations = {}
         i = 0
         for row in result["annotations"]:
             # TODO: Add actual annotation names to database
-            annotation_name = "PLACEHOLDER %d" % i
+            annotation_name = image_model.get_unique_annotation_name()
             class_name = row["class_name"]
             mask = utils.decode_mask(row["mask_data"], row["shape"][:2])
+            mask = cv2.cvtColor(mask.astype(np.uint8), cv2.COLOR_GRAY2BGR)
             bbox = row["bbox"]
             bbox[2] = bbox[2] - bbox[0]
             bbox[3] = bbox[3] - bbox[1]
-            annotations.append(AnnotationState(annotation_name=annotation_name,
-                                               class_name=class_name,
-                                               mask=mask,
-                                               bbox=bbox))
+            annotations[annotation_name] = AnnotationState(
+                annotation_name=annotation_name, class_name=class_name, mask=mask, bbox=bbox)
+
             i += 1
 
         image_model.annotations = annotations
@@ -109,16 +110,17 @@ class InstanceAnnotatorController:
         :param project_id: The ID for this project.
         :return:
         """
+        print("Fetching Class Labels")
 
         # TODO: These arent stored in the database yet
 
         data = [
-            LabelState("Trunk", [120, 80, 0]),
-            LabelState("Cane", [150, 250, 0]),
-            LabelState("Shoot", [0, 130, 200]),
-            LabelState("Node", [255, 100, 190]),
-            LabelState("Wire", [255, 128, 0]),
-            LabelState("Post", [128, 128, 0])
+            LabelState("Trunk", [120, 80, 0, 255]),
+            LabelState("Cane", [150, 250, 0, 255]),
+            LabelState("Shoot", [0, 130, 200, 255]),
+            LabelState("Node", [255, 100, 190, 255]),
+            LabelState("Wire", [255, 128, 0, 255]),
+            LabelState("Post", [128, 128, 0, 255])
         ]
 
         for label in data:
@@ -136,8 +138,13 @@ class InstanceAnnotatorController:
         if not image_model or not image_model.image:
             self.fetch_image(image_id)
 
+        if not self.model.images.contains(image_id):
+            return
+
         if not self.model.active.contains(image_id):
             self.model.active.append(image_id)
+
+        self.model.tool.set_current_image_id(image_id)
 
     def save_image(self, image_canvas):
         """
@@ -155,18 +162,17 @@ class InstanceAnnotatorController:
                 iid)
 
         # Build annotations
-        annotations = []
+        annotations = {}
         i = 0
         for layer in image_canvas.layer_stack.layer_list:
-            annotation_name = "PLACEHOLDER %d" % i
+            annotation_name = image_model.get_unique_annotation_name()
             mask = utils.texture2mat(layer.get_fbo().texture)
-            mask = np.all(mask.astype(bool), axis=2)
 
             annotation = AnnotationState(annotation_name=annotation_name,
                                          class_name=layer.class_name,
                                          mask=mask,
                                          bbox=layer.bbox_bounds)
-            annotations.append(annotation)
+            annotations[annotation_name] = annotation
             i += 1
 
         image_model.annotations = annotations
@@ -194,3 +200,83 @@ class InstanceAnnotatorController:
 
         self.model.images.add(iid, image_model)
 
+    def update_tool_state(self,
+                          pen_size=None,
+                          alpha=None,
+                          eraser=None,
+                          current_label=None,
+                          current_layer=None):
+        if pen_size is not None:
+            self.model.tool.set_pen_size(pen_size)
+        if alpha is not None:
+            self.model.tool.set_alpha(alpha)
+        if eraser is not None:
+            self.model.tool.set_eraser(eraser)
+        if current_label is not None:
+            self.model.tool.set_current_label_name(current_label)
+        if current_layer is not None:
+            self.model.tool.set_current_layer_name(current_layer)
+
+    def update_annotation(self, iid=None, layer_name=None, bbox=None, texture=None, label_name=None):
+        # Populate iid and layer_name with current values if None
+        if iid is None:
+            iid = self.model.tool.get_current_image_id()
+        if layer_name is None:
+            layer_name = self.model.tool.get_current_layer_name()
+
+        image = self.model.images.get(iid)
+        if image is None:
+            return
+
+        annotation = image.annotations.get(layer_name, None)
+        if annotation is None:
+            return
+
+        if bbox is not None:
+            annotation.bbox = bbox
+
+        if texture is not None:
+            annotation.mask = utils.texture2mat(texture)
+
+        if label_name is not None:
+            annotation.class_name = label_name
+
+        image.annotations[layer_name] = annotation
+        self.model.images.add(iid, image)
+
+    def update_image_meta(self, iid, is_locked=None, is_open=None, unsaved=None):
+        image = self.model.images.get(iid)
+        if image is None:
+            return
+
+        if is_locked is not None:
+            image.is_locked = is_locked
+
+        if is_open is not None:
+            image.is_open = is_open
+
+        if unsaved is not None:
+            print("Controller: Marking as unsaved")
+            image.unsaved = unsaved
+
+        self.model.images.add(iid, image)
+
+    def add_blank_layer(self, iid):
+        img = self.model.images.get(iid)
+        layer_name = img.get_unique_annotation_name()
+        class_name = self.model.tool.get_current_label_name()
+        mask = np.zeros(shape=img.shape, dtype=np.uint8)
+        bbox = (0, 0, 0, 0)
+        annotation = AnnotationState(layer_name, class_name, mask, bbox)
+        img.annotations[layer_name] = annotation
+        self.model.images.add(iid, img)
+        self.model.tool.set_current_layer_name(layer_name)
+        print("Controller: Adding blank layer (%s)" % layer_name)
+
+    def delete_layer(self, iid, layer_name):
+        img = self.model.images.get(iid)
+        img.annotations.pop(layer_name, None)
+        self.model.images.add(iid, img)
+        if self.model.tool.get_current_layer_name() is layer_name:
+            self.model.tool.set_current_layer_name(None)
+        print("Controller: Deleting layer (%s)" % layer_name)
