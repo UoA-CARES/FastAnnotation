@@ -198,7 +198,7 @@ class ImageState:
 
     def detect_collisions(self, pos):
         collisions = []
-        for annotation in self.annotations:
+        for annotation in self.annotations.values():
             if annotation.collision(pos):
                 collisions.append(annotation)
         return collisions

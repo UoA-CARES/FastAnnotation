@@ -86,7 +86,7 @@ class InstanceAnnotatorScreen(Screen):
         if image is not None and image.annotations is not None:
             self.left_control.layer_view.clear()
             for annotation in image.annotations.values():
-                self.left_control.layer_view.add_layer_item(annotation.annotation_name)
+                self.left_control.layer_view.add_layer_item(annotation)
 
         self.left_control.layer_view.select(
             self.model.tool.get_current_layer_name())
@@ -330,12 +330,14 @@ class LayerView(GridLayout):
             return
         self._change_layer(item)
 
-    def add_layer_item(self, name):
-        item = LayerViewItem(name)
+    def add_layer_item(self, annotation):
+        item = LayerViewItem(annotation.annotation_name)
         item.layer_select_cb = lambda: self._change_layer(item)
         item.layer_delete_cb = lambda: self._delete_layer(item)
+        item.mask_enabled = annotation.mask_enabled
+        item.bbox_enabled = annotation.bbox_enabled
         self.layer_item_layout.add_widget(item)
-        self.layers[name] = item
+        self.layers[annotation.annotation_name] = item
 
     def _change_layer(self, instance):
         if self.current_selection:
@@ -377,6 +379,18 @@ class LayerViewItem(RelativeLayout):
         self.app = App.get_running_app()
         self.layer_name = name
 
+    def on_mask_enabled(self, instance, value):
+        self.btn_mask.background_color = self.button_down_color if value else self.button_up_color
+        self.btn_mask.state = 'down' if value else 'normal'
+        self.app.root.current_screen.controller.update_annotation(layer_name=self.layer_name, mask_enabled=value)
+        self.app.root.current_screen.queue_update()
+
+    def on_bbox_enabled(self, instance, value):
+        self.btn_bbox.background_color = self.button_down_color if value else self.button_up_color
+        self.btn_bbox.state = 'down' if value else 'normal'
+        self.app.root.current_screen.controller.update_annotation(layer_name=self.layer_name, bbox_enabled=value)
+        self.app.root.current_screen.queue_update()
+
     def select(self):
         self.btn_base.background_color = self.button_down_color
         self.btn_base.state = 'down'
@@ -384,16 +398,6 @@ class LayerViewItem(RelativeLayout):
     def deselect(self):
         self.btn_base.background_color = self.button_up_color
         self.btn_base.state = 'normal'
-
-    def toggle_mask(self):
-        self.mask_enabled = not self.mask_enabled
-        self.btn_mask.background_color = self.button_down_color if self.mask_enabled else self.button_up_color
-        self.btn_mask.state = 'down' if self.mask_enabled else 'normal'
-
-    def toggle_bbox(self):
-        self.bbox_enabled = not self.bbox_enabled
-        self.btn_bbox.background_color = self.button_down_color if self.mask_enabled else self.button_up_color
-        self.btn_bbox.state = 'down' if self.mask_enabled else 'normal'
 
 
 class MaskInstruction(InstructionGroup):
@@ -709,7 +713,7 @@ class DrawableLayer(FloatLayout):
         self.size = size
         self.class_name = class_name
         self.texture = texture
-        self._mask_color = mask_color
+        self._mask_color = list(mask_color)
 
         if bbox is not None:
             self.bbox_bounds = bbox
@@ -759,13 +763,11 @@ class DrawableLayer(FloatLayout):
     def remove_instruction(self, instruction):
         self.paint_window.remove_instruction(instruction)
 
-    def toggle_mask(self):
-        self.mask_visible = not self.mask_visible
-        self.paint_window.mask_layer.canvas.opacity = int(self.mask_visible)
+    def set_mask_visible(self, visible=True):
+        self.paint_window.set_visible(visible)
 
-    def toggle_bbox(self):
-        self.bbox_visible = not self.bbox_visible
-        self.bbox_layer.canvas.opacity = int(self.bbox_visible)
+    def set_bbox_visible(self, visible=True):
+        self.bbox_layer.canvas.opacity = float(visible)
 
 
 class ImageCanvas(BoxLayout):
@@ -830,15 +832,13 @@ class ImageCanvas(BoxLayout):
             if overwrite or layer is None:
                 layer = DrawableLayer(
                     layer_name=annotation.annotation_name,
-                    class_name=label.name,
                     size=annotation.mask.shape[1::-1],
-                    mask_color=label.color,
-                    texture=utils.mat2texture(annotation.mask),
-                    bbox=annotation.bbox)
+                    texture=utils.mat2texture(annotation.mask))
                 self.layer_stack.add_layer(layer)
-            else:
-                layer.update_label(label)
-                layer.update_bbox(annotation.bbox)
+            layer.update_label(label)
+            layer.update_bbox(annotation.bbox)
+            layer.set_mask_visible(annotation.mask_enabled)
+            layer.set_bbox_visible(annotation.bbox_enabled)
 
     def on_touch_down(self, touch):
         if 'lctrl' in self.draw_tool.keycode_buffer and touch.is_mouse_scrolling:

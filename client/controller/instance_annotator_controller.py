@@ -222,7 +222,7 @@ class InstanceAnnotatorController:
         if current_label is not None:
             self.model.tool.set_current_label_name(current_label)
 
-    def update_annotation(self, iid=None, layer_name=None, bbox=None, texture=None, label_name=None):
+    def update_annotation(self, iid=None, layer_name=None, bbox=None, texture=None, label_name=None, mask_enabled=None, bbox_enabled=None):
         # Populate iid and layer_name with current values if None
         if iid is None:
             iid = self.model.tool.get_current_image_id()
@@ -245,6 +245,12 @@ class InstanceAnnotatorController:
 
         if label_name is not None:
             annotation.class_name = label_name
+
+        if mask_enabled is not None:
+            annotation.mask_enabled = bool(mask_enabled)
+
+        if bbox_enabled is not None:
+            annotation.bbox_enabled = bool(bbox_enabled)
 
         image.annotations[layer_name] = annotation
         self.model.images.add(iid, image)

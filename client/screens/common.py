@@ -125,6 +125,9 @@ class PaintWindow(Widget):
             self.fbo = Fbo(size=self.size)
             Rectangle(size=self.size, texture=self.fbo.texture)
 
+    def set_visible(self, visible=True):
+        self.mask_layer.canvas.opacity = float(visible)
+
     def update_color(self, color):
         if self.color is None:
             return

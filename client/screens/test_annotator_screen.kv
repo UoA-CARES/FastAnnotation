@@ -156,14 +156,14 @@
             text: "M"
             size_hint_x: None
             width: self.height
-            on_release: root.toggle_mask()
+            on_release: root.mask_enabled = not root.mask_enabled
             background_color: root.button_down_color
         Button:
             id: btn_bbox
             text: "B"
             size_hint_x: None
             width: self.height
-            on_release: root.toggle_bbox()
+            on_release: root.bbox_enabled = not root.bbox_enabled
             background_color: root.button_down_color
         Label:
             text: root.layer_name
@@ -249,7 +249,7 @@
         size: root.size
     Widget:
         id: bbox_layer
-        canvas.before:
+        canvas:
             Color:
                 rgba: root.bbox_color
             Line:
