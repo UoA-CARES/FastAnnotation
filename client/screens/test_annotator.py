@@ -495,7 +495,10 @@ class DrawTool(MouseDrawnTool):
 
     def set_layer(self, layer):
         print("Setting DrawTool Layer: %s" % layer.layer_name)
+        if self.layer is not None:
+            self.layer.set_bbox_highlight(active=False)
         self.layer = layer
+        self.layer.set_bbox_highlight(active=True)
 
     def on_touch_down_hook(self, touch):
         if not self.layer:
@@ -706,7 +709,6 @@ class DrawableLayer(FloatLayout):
         self.size = size
         self.class_name = class_name
         self.texture = texture
-
         self._mask_color = mask_color
 
         if bbox is not None:
@@ -717,6 +719,7 @@ class DrawableLayer(FloatLayout):
     def late_init(self):
         self.paint_window.refresh()
         self.load_texture(self.texture)
+        self.set_mask_color(self._mask_color)
 
     def load_texture(self, texture):
         if self.texture:
@@ -740,6 +743,12 @@ class DrawableLayer(FloatLayout):
 
     def update_bbox(self, bbox):
         self.bbox_bounds = bbox
+
+    def set_bbox_highlight(self, active=True):
+        if active:
+            self.bbox_color = kivy.utils.get_color_from_hex(ClientConfig.BBOX_SELECT)
+        else:
+            self.bbox_color = kivy.utils.get_color_from_hex(ClientConfig.BBOX_UNSELECT)
 
     def get_fbo(self):
         return self.paint_window.fbo
