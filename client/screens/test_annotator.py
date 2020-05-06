@@ -60,7 +60,8 @@ class InstanceAnnotatorScreen(Screen):
         # the model
 
         current_iid = self.model.tool.get_current_image_id()
-        current_label = self.model.labels.get(self.model.tool.get_current_label_name())
+        current_label_name = self.model.tool.get_current_label_name()
+        current_label = self.model.labels.get(current_label_name)
         current_layer = self.model.tool.get_current_layer_name()
         image = self.model.images.get(current_iid)
 
@@ -76,8 +77,9 @@ class InstanceAnnotatorScreen(Screen):
         for name in label_names:
             label = self.model.labels.get(name)
             self.left_control.class_picker.add_label(label.name, label.color)
-        print("\tSelecting Label: %s" % current_label.name)
-        self.left_control.class_picker.select(current_label.name)
+
+        print("\tSelecting Label: %s" % current_label_name)
+        self.left_control.class_picker.select(current_label_name)
 
         # Update Layer View
         print("Updating Layer View")
@@ -103,9 +105,9 @@ class InstanceAnnotatorScreen(Screen):
             if iid > 0:
                 image = self.model.images.get(iid)
                 self.image_canvas.load_image(image)
-                self.image_canvas.load_annotations(image.annotations, current_label)
+                self.image_canvas.load_annotations(image.annotations, overwrite=True)
         else:
-            self.image_canvas.update_annotations(image.annotations)
+            self.image_canvas.load_annotations(image.annotations)
 
         self.image_canvas.load_current_layer(current_layer)
 
@@ -228,7 +230,9 @@ class ClassPicker(GridLayout):
         print("Label: %s" % str(class_name))
         self.app.root.current_screen.controller.update_tool_state(
             current_label=class_name)
-        self.app.root.current_screen.controller.update_annotation(label_name=class_name)
+
+        if class_name not in ("", "eraser"):
+            self.app.root.current_screen.controller.update_annotation(label_name=class_name)
         self.app.root.current_screen.queue_update()
 
     def clear(self):
@@ -252,7 +256,7 @@ class ClassPicker(GridLayout):
             item.disable()
 
         name = "eraser"
-        item = self._make_label(name, (0, 0, 0))
+        item = self._make_label(name, [0.2, 0.2, 0.2, 1.0])
         item.enable_cb = eraser_enable
         item.disable_cb = eraser_disable
         self.grid.add_widget(item)
@@ -273,6 +277,7 @@ class ClassPicker(GridLayout):
         return item
 
     def _change_label(self, instance):
+        self.eraser_enabled = False
         if self.current_label:
             self.current_label.disable_cb()
         self.current_label = instance
@@ -489,7 +494,7 @@ class DrawTool(MouseDrawnTool):
         self.app.root.current_screen.controller.update_image_meta(iid, unsaved=True)
 
     def set_layer(self, layer):
-        print("Setting DrawTool Layer: %s" % layer)
+        print("Setting DrawTool Layer: %s" % layer.layer_name)
         self.layer = layer
 
     def on_touch_down_hook(self, touch):
@@ -806,29 +811,25 @@ class ImageCanvas(BoxLayout):
         self.image.texture = texture
         self.image.size = image_state.shape[1::-1]
 
-    def load_annotations(self, annotations, default_label):
+    def load_annotations(self, annotations, overwrite=False):
         print("Loading Annotations")
-        self.layer_stack.clear()
-        for annotation in annotations.values():
-            layer = DrawableLayer(
-                layer_name=annotation.annotation_name,
-                class_name=default_label.name,
-                size=annotation.mask.shape[1::-1],
-                mask_color=default_label.color,
-                texture=utils.mat2texture(annotation.mask),
-                bbox=annotation.bbox)
-
-            self.layer_stack.add_layer(layer)
-
-    def update_annotations(self, annotations):
+        if overwrite:
+            self.layer_stack.clear()
         for annotation in annotations.values():
             layer = self.layer_stack.get_layer(annotation.annotation_name)
-            if layer is None:
-                continue
             label = self.app.root.current_screen.model.labels.get(annotation.class_name)
-            if label is not None:
+            if overwrite or layer is None:
+                layer = DrawableLayer(
+                    layer_name=annotation.annotation_name,
+                    class_name=label.name,
+                    size=annotation.mask.shape[1::-1],
+                    mask_color=label.color,
+                    texture=utils.mat2texture(annotation.mask),
+                    bbox=annotation.bbox)
+                self.layer_stack.add_layer(layer)
+            else:
                 layer.update_label(label)
-            layer.update_bbox(annotation.bbox)
+                layer.update_bbox(annotation.bbox)
 
     def on_touch_down(self, touch):
         if 'lctrl' in self.draw_tool.keycode_buffer and touch.is_mouse_scrolling:

@@ -212,10 +212,15 @@ class InstanceAnnotatorController:
             self.model.tool.set_alpha(alpha)
         if eraser is not None:
             self.model.tool.set_eraser(eraser)
-        if current_label is not None:
-            self.model.tool.set_current_label_name(current_label)
         if current_layer is not None:
             self.model.tool.set_current_layer_name(current_layer)
+            # If current layer changes update current_label aswell
+            iid = self.model.tool.get_current_image_id()
+            img = self.model.images.get(iid)
+            annotation = img.annotations.get(current_layer, None)
+            self.model.tool.set_current_label_name(annotation.class_name)
+        if current_label is not None:
+            self.model.tool.set_current_label_name(current_label)
 
     def update_annotation(self, iid=None, layer_name=None, bbox=None, texture=None, label_name=None):
         # Populate iid and layer_name with current values if None
