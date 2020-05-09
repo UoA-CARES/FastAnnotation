@@ -142,7 +142,7 @@ def add_image_annotation(image_id, annotations):
     headers = {"Accept": "application/json",
                "Content-Type": "application/json"}
     payload = {"image_id": image_id, "annotations": []}
-    for layer in annotations:
+    for layer in annotations.values():
         body = {
             'mask_data': encode_mask(layer.mask),
             'bbox': np.array(layer.bbox).tolist(),

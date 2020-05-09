@@ -143,12 +143,15 @@ class InstanceAnnotatorController:
 
         if not self.model.active.contains(image_id):
             self.model.active.append(image_id)
+            print(self.model.active._list)
 
         self.model.tool.set_current_image_id(image_id)
 
     def save_image(self, image_canvas):
         """
         Save the changes from the image_canvas to the model and reflect these changes back to the server.
+
+        NOTE: Ensure the ImageCanvas has run prepare_to_save() on the mainthread before running this operation
         :param image_canvas: The ImageCanvas object
         :return:
         """
@@ -164,9 +167,9 @@ class InstanceAnnotatorController:
         # Build annotations
         annotations = {}
         i = 0
-        for layer in image_canvas.layer_stack.layer_list:
+        for layer in image_canvas.layer_stack.get_all_layers():
             annotation_name = image_model.get_unique_annotation_name()
-            mask = utils.texture2mat(layer.get_fbo().texture)
+            mask = layer.mat
 
             annotation = AnnotationState(annotation_name=annotation_name,
                                          class_name=layer.class_name,
@@ -197,6 +200,7 @@ class InstanceAnnotatorController:
             raise ApiException(message=msg, code=resp.status_code)
 
         image_model.is_locked = False
+        image_model.unsaved = False
 
         self.model.images.add(iid, image_model)
 

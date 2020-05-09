@@ -10,11 +10,13 @@ from kivy.graphics import Color, Ellipse, InstructionGroup, Line
 from kivy.properties import BooleanProperty
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.screenmanager import Screen
+from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem
 
 import client.utils as utils
 from client.controller.instance_annotator_controller import InstanceAnnotatorController
 from client.model.instance_annotator_model import InstanceAnnotatorModel
 from client.screens.common import *
+
 
 import random
 
@@ -37,7 +39,7 @@ def background(f):
 class InstanceAnnotatorScreen(Screen):
     left_control = ObjectProperty(None)
     right_control = ObjectProperty(None)
-    image_canvas = ObjectProperty(None)
+    tab_panel = ObjectProperty(None)
 
     _update_lock = Lock()
     _update_flag = False
@@ -47,6 +49,11 @@ class InstanceAnnotatorScreen(Screen):
         self.app = App.get_running_app()
         self.model = InstanceAnnotatorModel()
         self.controller = InstanceAnnotatorController(self.model)
+
+    def get_current_image_canvas(self):
+        if not isinstance(self.tab_panel.current_tab, ImageCanvasTab):
+            return None
+        return self.tab_panel.current_tab.image_canvas
 
     def queue_update(self):
         with self._update_lock:
@@ -93,23 +100,21 @@ class InstanceAnnotatorScreen(Screen):
 
         # Update ImageCanvas
         print("Updating Image Canvas")
-        self.image_canvas.load_pen_size(self.model.tool.get_pen_size())
-        self.image_canvas.load_global_alpha(self.model.tool.get_alpha())
-        self.image_canvas.load_eraser_state(self.model.tool.get_eraser())
+        if current_iid > 0 and not self.tab_panel.has_tab(current_iid):
+            self.tab_panel.add_tab(current_iid)
+            tab = self.tab_panel.get_tab(current_iid)
+            self.tab_panel.switch_to(tab, do_scroll=True)
+            image_canvas = self.get_current_image_canvas()
+            print(image_canvas.image.size)
 
-        self.image_canvas.load_current_label(current_label)
-
-        # TODO: Handle unsaved progress
-        if image is None or not image.unsaved:
-            iid = self.model.tool.get_current_image_id()
-            if iid > 0:
-                image = self.model.images.get(iid)
-                self.image_canvas.load_image(image)
-                self.image_canvas.load_annotations(image.annotations, overwrite=True)
-        else:
-            self.image_canvas.load_annotations(image.annotations)
-
-        self.image_canvas.load_current_layer(current_layer)
+        image_canvas = self.get_current_image_canvas()
+        if image_canvas is not None:
+            image_canvas.load_pen_size(self.model.tool.get_pen_size())
+            image_canvas.load_global_alpha(self.model.tool.get_alpha())
+            image_canvas.load_eraser_state(self.model.tool.get_eraser())
+            image_canvas.load_current_label(current_label)
+            image_canvas.load_annotations(image.annotations)
+            image_canvas.load_current_layer(current_layer)
 
         # Update ImageQueue
         print("Updating Image Queue")
@@ -119,19 +124,22 @@ class InstanceAnnotatorScreen(Screen):
         with self._update_lock:
             self._update_flag = False
 
+        print("Update Save Button")
+        if image is not None and image.unsaved:
+            self.right_control.image_queue_control.btn_save.disabled = False
+        else:
+            self.right_control.image_queue_control.btn_save.disabled = True
+
     def on_enter(self, *args):
         self.fetch_image_metas()
         self.fetch_class_labels()
         Window.bind(on_resize=self.auto_resize)
-        self.image_canvas.draw_tool.bind_keyboard()
 
-    def on_leave(self, *args):
-        self.image_canvas.draw_tool.unbind_keyboard()
-
-    @mainthread
     def auto_resize(self, *args):
-        image = self.model.images.get(self.model.tool.get_current_image_id())
-        self.image_canvas.load_image(image)
+        image_canvas = self.get_current_image_canvas()
+        if image_canvas is None:
+            return
+        image_canvas.resize()
 
     @background
     def load_next(self):
@@ -153,9 +161,20 @@ class InstanceAnnotatorScreen(Screen):
         self.controller.open_image(id)
         self.queue_update()
 
-    @background
+    @mainthread
     def save_image(self):
-        self.controller.save_image(self.image_canvas)
+        image_canvas = self.get_current_image_canvas()
+        if image_canvas is None:
+            return
+        image_canvas.prepare_to_save()
+        self._save_image()
+
+    @background
+    def _save_image(self):
+        image_canvas = self.get_current_image_canvas()
+        if image_canvas is None:
+            return
+        self.controller.save_image(image_canvas)
         self.queue_update()
 
     @background
@@ -673,6 +692,9 @@ class LayerStack(FloatLayout):
     def get_layer(self, name):
         return self.layer_dict.get(name, None)
 
+    def get_all_layers(self):
+        return self.layer_dict.values()
+
     def remove_layer(self, layer):
         self.remove_widget(layer)
         self.layer_dict.pop(layer.layer_name, None)
@@ -714,6 +736,7 @@ class DrawableLayer(FloatLayout):
         self.class_name = class_name
         self.texture = texture
         self._mask_color = list(mask_color)
+        self.mat = None
 
         if bbox is not None:
             self.bbox_bounds = bbox
@@ -731,6 +754,9 @@ class DrawableLayer(FloatLayout):
             g.add(Color(1, 1, 1, 1))
             g.add(Rectangle(size=self.get_fbo().size, texture=texture))
             self.paint_window.add_instruction(g)
+
+    def prepare_matrix(self):
+        self.mat = utils.texture2mat(self.get_fbo().texture)
 
     def set_mask_color(self, color):
         print("New Mask Color: %s" % color)
@@ -770,6 +796,44 @@ class DrawableLayer(FloatLayout):
         self.bbox_layer.canvas.opacity = float(visible)
 
 
+class ImageCanvasTabPanel(TabbedPanel):
+    def __init__(self, **kwargs):
+        self.app = App.get_running_app()
+        super().__init__(**kwargs)
+
+    def get_tab(self, iid):
+        for tab in self.tab_list:
+            if not isinstance(tab, ImageCanvasTab):
+                continue
+            if tab.image_canvas.image_id == iid:
+                return tab
+        return None
+
+    def has_tab(self, iid):
+        return self.get_tab(iid) is not None
+
+    def add_tab(self, iid):
+        image = self.app.root.current_screen.model.images.get(iid)
+        # Add Tab + Load everything
+        tab = ImageCanvasTab()
+        tab.text = image.name
+        tab.image_canvas.load_image(image)
+        tab.image_canvas.load_annotations(image.annotations, overwrite=True)
+        self.add_widget(tab)
+
+    def switch_to(self, header, do_scroll=False):
+        if isinstance(self.current_tab, ImageCanvasTab):
+            self.current_tab.image_canvas.draw_tool.unbind_keyboard()
+        if isinstance(header, ImageCanvasTab):
+            header.image_canvas.draw_tool.bind_keyboard()
+            header.image_canvas.resize()
+        return super(ImageCanvasTabPanel, self).switch_to(header, do_scroll)
+
+
+class ImageCanvasTab(TabbedPanelItem):
+    image_canvas = ObjectProperty(None)
+
+
 class ImageCanvas(BoxLayout):
     scatter = ObjectProperty(None)
     image = ObjectProperty(None)
@@ -785,6 +849,17 @@ class ImageCanvas(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.app = App.get_running_app()
+
+    @mainthread
+    def resize(self):
+        model = self.app.root.current_screen.model
+        image = model.images.get(model.tool.get_current_image_id())
+        self.load_image(image)
+
+    def prepare_to_save(self):
+        # Note: This method must be run on the main thread
+        for layer in self.layer_stack.get_all_layers():
+            layer.prepare_matrix()
 
     def load_save_status(self, unsaved):
         self.unsaved = unsaved
@@ -812,7 +887,6 @@ class ImageCanvas(BoxLayout):
             return
         self.draw_tool.set_layer(layer)
 
-    @mainthread
     def load_image(self, image_state):
         if image_state is None:
             return
