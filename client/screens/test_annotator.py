@@ -469,6 +469,7 @@ class DrawTool(MouseDrawnTool):
     def bind_shortcuts(self):
         self.keyboard_shortcuts[("lctrl", "z")] = self.undo
         self.keyboard_shortcuts[("lctrl", "y")] = self.redo
+        self.keyboard_shortcuts[("spacebar",)] = self.app.root.current_screen.add_layer
 
     def bind_keyboard(self):
         print("Binding keyboard")
