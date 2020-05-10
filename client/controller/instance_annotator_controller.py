@@ -89,17 +89,11 @@ class InstanceAnnotatorController:
         i = 0
         for row in result["annotations"]:
             # TODO: Add actual annotation names to database
-            annotation_name = image_model.get_unique_annotation_name()
+            annotation_name = row["name"]
             class_name = row["class_name"]
             mask = utils.decode_mask(row["mask_data"], row["shape"][:2])
 
-            cv2.imshow("CLIENT: incoming", utils.mask2mat(mask))
-            cv2.waitKey(0)
-
             bbox = row["bbox"]
-            # bbox[2] = bbox[2] - bbox[0]
-            # bbox[3] = bbox[3] - bbox[1]
-
             print("CLIENT: incoming bbox")
             print("\t%s" % str(bbox))
 
@@ -175,11 +169,8 @@ class InstanceAnnotatorController:
         annotations = {}
         i = 0
         for layer in image_canvas.layer_stack.get_all_layers():
-            annotation_name = image_model.get_unique_annotation_name()
+            annotation_name = layer.layer_name
             mask = layer.mask
-
-            cv2.imshow("CLIENT: outgoing mask", utils.mask2mat(mask))
-            cv2.waitKey(0)
 
             print("CLIENT: outgoing bbox")
             print("\t%s" % str(layer.bbox_bounds))
@@ -301,14 +292,15 @@ class InstanceAnnotatorController:
         bbox = (0, 0, 0, 0)
         annotation = AnnotationState(layer_name, class_name, mask, bbox)
         img.annotations[layer_name] = annotation
+        img.unsaved = True
         self.model.images.add(iid, img)
         self.model.tool.set_current_layer_name(layer_name)
-        self.update_image_meta(iid, unsaved=True)
         print("Controller: Adding blank layer (%s)" % layer_name)
 
     def delete_layer(self, iid, layer_name):
         img = self.model.images.get(iid)
         img.annotations.pop(layer_name, None)
+        img.unsaved = True
         self.model.images.add(iid, img)
         if self.model.tool.get_current_layer_name() is layer_name:
             self.model.tool.set_current_layer_name(None)

@@ -144,6 +144,7 @@ def add_image_annotation(image_id, annotations):
     payload = {"image_id": image_id, "annotations": []}
     for annotation in annotations.values():
         body = {
+            'name': annotation.annotation_name,
             'mask_data': encode_mask(mat2mask(annotation.mat)),
             'bbox': np.array(annotation.bbox).tolist(),
             'class_name': annotation.class_name,

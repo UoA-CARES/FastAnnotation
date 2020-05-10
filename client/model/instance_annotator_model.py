@@ -193,7 +193,7 @@ class ImageState:
         self.annotations = annotations
 
     def get_unique_annotation_name(self):
-        name = uuid.uuid1()
+        name = uuid.uuid1().hex
         return str(name)
 
     def detect_collisions(self, pos):

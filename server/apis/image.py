@@ -54,6 +54,11 @@ annotation = api.model('annotation', {
         attribute="annotation_id",
         required=False,
         description="The annotation identifier"),
+    'name': fields.String(
+        attribute="annotation_name",
+        required=True,
+        description="The name of the annotation",
+        example="Layer 1"),
     'mask_data': fields.String(
         required=True,
         description="The encoded mask data"),
@@ -329,7 +334,7 @@ class ImageAnnotationList(Resource):
         Gets all the annotations associated with an image.
         """
 
-        query = "SELECT annotation_id, mask_path, info_path, class_name FROM instance_seg_meta "
+        query = "SELECT annotation_id, annotation_name, mask_path, info_path, class_name FROM instance_seg_meta "
         query += "WHERE image_id = %s"
         try:
             result = db.query(query, (iid,))[0]
@@ -358,8 +363,6 @@ class ImageAnnotationList(Resource):
                 info = utils.load_info(row["info_path"])
                 row["mask_data"] = utils.encode_mask(mask)
 
-                cv2.imshow("SERVER: outgoing", utils.mask2mat(mask))
-                cv2.waitKey(0)
                 row["shape"] = info["source_shape"]
                 row["bbox"] = info["bbox"]
 
@@ -399,9 +402,6 @@ class ImageAnnotationList(Resource):
             try:
                 mask = utils.decode_mask(row['mask_data'], row['shape'])
 
-                cv2.imshow("SERVER: incoming", utils.mask2mat(mask))
-                cv2.waitKey(0)
-
                 print("SERVER: incoming bbox")
                 print("\t%s" % str(row["bbox"]))
 
@@ -410,18 +410,18 @@ class ImageAnnotationList(Resource):
                     "annotation",
                     str(iid),
                     "trimaps",
-                    "layer_%d.png" % i)
+                    "%s.png" % row["name"])
                 info_path = os.path.join(
                     ServerConfig.DATA_ROOT_DIR,
                     "annotation",
                     str(iid),
                     "xmls",
-                    "layer_%d.xml" % i)
+                    "%s.xml" % row["name"])
 
-                query = "REPLACE INTO instance_seg_meta (image_id, mask_path, info_path, class_name)"
-                query += " VALUES (%s,%s,%s,%s)"
+                query = "REPLACE INTO instance_seg_meta (annotation_name, image_id, mask_path, info_path, class_name)"
+                query += " VALUES (%s,%s,%s,%s,%s)"
                 _, aid = db.query(
-                    query, (iid, mask_path, info_path, row["class_name"]))
+                    query, (row['name'], iid, mask_path, info_path, row["class_name"]))
 
                 utils.save_mask(mask, mask_path)
                 utils.save_info(
