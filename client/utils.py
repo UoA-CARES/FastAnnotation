@@ -142,12 +142,12 @@ def add_image_annotation(image_id, annotations):
     headers = {"Accept": "application/json",
                "Content-Type": "application/json"}
     payload = {"image_id": image_id, "annotations": []}
-    for layer in annotations.values():
+    for annotation in annotations.values():
         body = {
-            'mask_data': encode_mask(layer.mask),
-            'bbox': np.array(layer.bbox).tolist(),
-            'class_name': layer.class_name,
-            'shape': layer.mask.shape + (3,)}
+            'mask_data': encode_mask(mat2mask(annotation.mat)),
+            'bbox': np.array(annotation.bbox).tolist(),
+            'class_name': annotation.class_name,
+            'shape': annotation.mat.shape}
         payload["annotations"].append(body)
 
     payload = json.dumps(payload)
@@ -181,15 +181,26 @@ def decode_image(b64_str):
     return base64.b64decode(img_bytes_b64)
 
 
+# Takes Boolean mask -> bytes
 def encode_mask(mask):
     encoded_mask = base64.b64encode(mask.tobytes(order='C'))
     return encoded_mask.decode('utf-8')
 
 
+# Takes bytes -> Boolean Mask
 def decode_mask(b64_str, shape):
     mask_bytes = base64.b64decode(b64_str.encode("utf-8"))
     flat = np.fromstring(mask_bytes, bool)
     return np.reshape(flat, newshape=shape[:2], order='C')
+
+
+def mask2mat(mask):
+    mat = mask.astype(np.uint8) * 255
+    return cv2.cvtColor(mat, cv2.COLOR_GRAY2BGR)
+
+
+def mat2mask(mat):
+    return np.sum(mat.astype(bool), axis=2, dtype=bool)
 
 
 def bytes2mat(bytes):
@@ -221,8 +232,6 @@ def texture2bytes(texture):
 def mat2texture(mat):
     mat = cv2.flip(mat, 0)
     mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGBA)
-    # indices = np.where(mat[:, :, :3] == (0, 0, 0))
-    # mat[indices[0], indices[1], 3] = 0
     buf = mat.tostring()
     tex = Texture.create(size=(mat.shape[1], mat.shape[0]), colorfmt='rgba')
     tex.blit_buffer(buf, colorfmt='rgba', bufferfmt='ubyte')

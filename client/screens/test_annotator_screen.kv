@@ -32,7 +32,10 @@
     do_default_tab: False
 
 <TabbedPanelItem>:
+    tab_name: self.tab_name
+    unsaved: self.unsaved
     image_canvas: image_canvas
+    text: self.tab_name + "*" * self.unsaved
     halign: 'left'
     valign: 'center'
     text_size: self.size
@@ -227,7 +230,6 @@
             Image:
                 id: image
                 keep_ratio: True
-                size: root.size
                 pos: root.pos
                 size_hint:(None, None)
                 FloatLayout:

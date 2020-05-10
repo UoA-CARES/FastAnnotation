@@ -116,6 +116,9 @@ class InstanceAnnotatorScreen(Screen):
             image_canvas.load_annotations(image.annotations)
             image_canvas.load_current_layer(current_layer)
 
+            if image is not None:
+                self.tab_panel.current_tab.unsaved = image.unsaved
+
         # Update ImageQueue
         print("Updating Image Queue")
         self.right_control.load_image_queue()
@@ -197,7 +200,7 @@ class InstanceAnnotatorScreen(Screen):
     def fetch_class_labels(self):
         self.controller.fetch_class_labels(self.app.current_project_id)
         if self.model.tool.get_current_label_name() is "":
-            self.model.tool.set_current_label_name(self.model.labels.keys()[0])
+            self.controller.update_tool_state(current_label=self.model.labels.keys()[0])
         self.queue_update()
 
 
@@ -513,8 +516,12 @@ class DrawTool(MouseDrawnTool):
         self.mask_stack.append(instruction_group)
         self.delete_stack.clear()
 
-        iid = self.app.root.current_screen.model.tool.get_current_image_id()
-        self.app.root.current_screen.controller.update_image_meta(iid, unsaved=True)
+        screen = self.app.root.current_screen
+        iid = screen.model.tool.get_current_image_id()
+        image = screen.model.images.get(iid)
+        if not image.unsaved:
+            screen.controller.update_image_meta(iid, unsaved=True)
+            screen.queue_update()
 
     def set_layer(self, layer):
         print("Setting DrawTool Layer: %s" % layer.layer_name)
@@ -724,19 +731,18 @@ class DrawableLayer(FloatLayout):
 
     def __init__(self,
                  layer_name,
-                 size,
+                 texture,
                  class_name="",
                  mask_color=(1, 1, 1, 1),
-                 texture=None,
                  bbox=None,
                  **kwargs):
         super().__init__(**kwargs)
         self.layer_name = layer_name
-        self.size = size
-        self.class_name = class_name
         self.texture = texture
+        self.size = self.texture.size
+        self.class_name = class_name
         self._mask_color = list(mask_color)
-        self.mat = None
+        self.mask = None
 
         if bbox is not None:
             self.bbox_bounds = bbox
@@ -756,7 +762,7 @@ class DrawableLayer(FloatLayout):
             self.paint_window.add_instruction(g)
 
     def prepare_matrix(self):
-        self.mat = utils.texture2mat(self.get_fbo().texture)
+        self.mask = utils.mat2mask(utils.texture2mat(self.get_fbo().texture))
 
     def set_mask_color(self, color):
         print("New Mask Color: %s" % color)
@@ -767,6 +773,8 @@ class DrawableLayer(FloatLayout):
         return self._mask_color
 
     def update_label(self, label):
+        if label is None:
+            return
         self.class_name = label.name
         new_color = label.color[:3] + [self.get_mask_color()[3],]
         self.set_mask_color(new_color)
@@ -815,23 +823,37 @@ class ImageCanvasTabPanel(TabbedPanel):
     def add_tab(self, iid):
         image = self.app.root.current_screen.model.images.get(iid)
         # Add Tab + Load everything
-        tab = ImageCanvasTab()
-        tab.text = image.name
+        tab = ImageCanvasTab(image.name)
         tab.image_canvas.load_image(image)
         tab.image_canvas.load_annotations(image.annotations, overwrite=True)
         self.add_widget(tab)
 
     def switch_to(self, header, do_scroll=False):
+        if not isinstance(header, ImageCanvasTab):
+            return
         if isinstance(self.current_tab, ImageCanvasTab):
             self.current_tab.image_canvas.draw_tool.unbind_keyboard()
-        if isinstance(header, ImageCanvasTab):
-            header.image_canvas.draw_tool.bind_keyboard()
-            header.image_canvas.resize()
+
+        header.image_canvas.draw_tool.bind_keyboard()
+        header.image_canvas.resize()
+
+        screen = self.app.root.current_screen
+        screen.controller.update_tool_state(current_iid=header.image_canvas.image_id)
+        screen.queue_update()
         return super(ImageCanvasTabPanel, self).switch_to(header, do_scroll)
 
 
 class ImageCanvasTab(TabbedPanelItem):
     image_canvas = ObjectProperty(None)
+    tab_name = StringProperty("")
+    unsaved = BooleanProperty(False)
+
+    def __init__(self, name, **kwargs):
+        self.tab_name = name
+        super().__init__(**kwargs)
+
+    def get_iid(self):
+        return self.image_canvas.image_id
 
 
 class ImageCanvas(BoxLayout):
@@ -906,8 +928,8 @@ class ImageCanvas(BoxLayout):
             if overwrite or layer is None:
                 layer = DrawableLayer(
                     layer_name=annotation.annotation_name,
-                    size=annotation.mask.shape[1::-1],
-                    texture=utils.mat2texture(annotation.mask))
+                    size=annotation.mat.shape[1::-1],
+                    texture=utils.mat2texture(annotation.mat))
                 self.layer_stack.add_layer(layer)
             layer.update_label(label)
             layer.update_bbox(annotation.bbox)

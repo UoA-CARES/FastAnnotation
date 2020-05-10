@@ -1,4 +1,5 @@
 import base64
+import cv2
 import os
 
 import server.utils as utils
@@ -356,8 +357,14 @@ class ImageAnnotationList(Resource):
                 mask = utils.load_mask(row["mask_path"])
                 info = utils.load_info(row["info_path"])
                 row["mask_data"] = utils.encode_mask(mask)
+
+                cv2.imshow("SERVER: outgoing", utils.mask2mat(mask))
+                cv2.waitKey(0)
                 row["shape"] = info["source_shape"]
                 row["bbox"] = info["bbox"]
+
+                print("SERVER: outgoing bbox")
+                print("\t%s" % str(row["bbox"]))
                 response.append(row)
 
             response = {"image_id": iid, "annotations": response}
@@ -391,6 +398,12 @@ class ImageAnnotationList(Resource):
         for row in content["annotations"]:
             try:
                 mask = utils.decode_mask(row['mask_data'], row['shape'])
+
+                cv2.imshow("SERVER: incoming", utils.mask2mat(mask))
+                cv2.waitKey(0)
+
+                print("SERVER: incoming bbox")
+                print("\t%s" % str(row["bbox"]))
 
                 mask_path = os.path.join(
                     ServerConfig.DATA_ROOT_DIR,

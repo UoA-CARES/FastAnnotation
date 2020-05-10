@@ -92,12 +92,19 @@ class InstanceAnnotatorController:
             annotation_name = image_model.get_unique_annotation_name()
             class_name = row["class_name"]
             mask = utils.decode_mask(row["mask_data"], row["shape"][:2])
-            mask = cv2.cvtColor(mask.astype(np.uint8), cv2.COLOR_GRAY2BGR)
+
+            cv2.imshow("CLIENT: incoming", utils.mask2mat(mask))
+            cv2.waitKey(0)
+
             bbox = row["bbox"]
-            bbox[2] = bbox[2] - bbox[0]
-            bbox[3] = bbox[3] - bbox[1]
+            # bbox[2] = bbox[2] - bbox[0]
+            # bbox[3] = bbox[3] - bbox[1]
+
+            print("CLIENT: incoming bbox")
+            print("\t%s" % str(bbox))
+
             annotations[annotation_name] = AnnotationState(
-                annotation_name=annotation_name, class_name=class_name, mask=mask, bbox=bbox)
+                annotation_name=annotation_name, class_name=class_name, mat=utils.mask2mat(mask), bbox=bbox)
 
             i += 1
 
@@ -135,7 +142,7 @@ class InstanceAnnotatorController:
 
         image_model = self.model.images.get(image_id)
 
-        if not image_model or not image_model.image:
+        if image_model is None or image_model.image is None:
             self.fetch_image(image_id)
 
         if not self.model.images.contains(image_id):
@@ -159,7 +166,7 @@ class InstanceAnnotatorController:
         iid = image_canvas.image_id
         image_model = self.model.images.get(iid)
 
-        if not image_model:
+        if image_model is None:
             raise ValueError(
                 "Image Canvas points to image id %d, which is not valid." %
                 iid)
@@ -169,11 +176,17 @@ class InstanceAnnotatorController:
         i = 0
         for layer in image_canvas.layer_stack.get_all_layers():
             annotation_name = image_model.get_unique_annotation_name()
-            mask = layer.mat
+            mask = layer.mask
+
+            cv2.imshow("CLIENT: outgoing mask", utils.mask2mat(mask))
+            cv2.waitKey(0)
+
+            print("CLIENT: outgoing bbox")
+            print("\t%s" % str(layer.bbox_bounds))
 
             annotation = AnnotationState(annotation_name=annotation_name,
                                          class_name=layer.class_name,
-                                         mask=mask,
+                                         mat=utils.mask2mat(mask),
                                          bbox=layer.bbox_bounds)
             annotations[annotation_name] = annotation
             i += 1
@@ -208,6 +221,7 @@ class InstanceAnnotatorController:
                           pen_size=None,
                           alpha=None,
                           eraser=None,
+                          current_iid=None,
                           current_label=None,
                           current_layer=None):
         if pen_size is not None:
@@ -216,13 +230,16 @@ class InstanceAnnotatorController:
             self.model.tool.set_alpha(alpha)
         if eraser is not None:
             self.model.tool.set_eraser(eraser)
+        if current_iid is not None:
+            self.model.tool.set_current_image_id(current_iid)
         if current_layer is not None:
             self.model.tool.set_current_layer_name(current_layer)
             # If current layer changes update current_label aswell
             iid = self.model.tool.get_current_image_id()
             img = self.model.images.get(iid)
-            annotation = img.annotations.get(current_layer, None)
-            self.model.tool.set_current_label_name(annotation.class_name)
+            if img is not None:
+                annotation = img.annotations.get(current_layer, None)
+                self.model.tool.set_current_label_name(annotation.class_name)
         if current_label is not None:
             self.model.tool.set_current_label_name(current_label)
 
@@ -245,7 +262,7 @@ class InstanceAnnotatorController:
             annotation.bbox = bbox
 
         if texture is not None:
-            annotation.mask = utils.texture2mat(texture)
+            annotation.mat = utils.texture2mat(texture)
 
         if label_name is not None:
             annotation.class_name = label_name
@@ -286,6 +303,7 @@ class InstanceAnnotatorController:
         img.annotations[layer_name] = annotation
         self.model.images.add(iid, img)
         self.model.tool.set_current_layer_name(layer_name)
+        self.update_image_meta(iid, unsaved=True)
         print("Controller: Adding blank layer (%s)" % layer_name)
 
     def delete_layer(self, iid, layer_name):

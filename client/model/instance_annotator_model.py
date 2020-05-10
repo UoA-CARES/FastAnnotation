@@ -213,13 +213,13 @@ class AnnotationState:
             self,
             annotation_name,
             class_name,
-            mask,
+            mat,
             bbox,
             mask_enabled=True,
             bbox_enabled=True):
         self.annotation_name = annotation_name
         self.class_name = class_name
-        self.mask = mask  # A BGR mat with 1,1,1 at labeled locations and 0,0,0 otherwise
+        self.mat = mat  # A BGR mat with 1,1,1 at labeled locations and 0,0,0 otherwise
         self.bbox = bbox  # (x1, y1, w, h)
         self.mask_enabled = mask_enabled
         self.bbox_enabled = bbox_enabled
