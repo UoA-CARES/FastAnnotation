@@ -1,6 +1,8 @@
-import os
 import math
+import os
+
 import numpy as np
+from kivy.graphics import Color
 from kivy.graphics import Rectangle, Fbo
 from kivy.lang import Builder
 from kivy.properties import ObjectProperty, StringProperty, NumericProperty
@@ -51,15 +53,15 @@ class MouseDrawnTool(FloatLayout):
     # Do not override these in child classes
     def on_touch_down(self, touch):
         self.on_touch_down_hook(touch)
-        return super(FloatLayout, self).on_touch_down(touch)
+        return super(MouseDrawnTool, self).on_touch_down(touch)
 
     def on_touch_move(self, touch):
         self.on_touch_move_hook(touch)
-        return super(FloatLayout, self).on_touch_move(touch)
+        return super(MouseDrawnTool, self).on_touch_move(touch)
 
     def on_touch_up(self, touch):
         self.on_touch_up_hook(touch)
-        return super(FloatLayout, self).on_touch_up(touch)
+        return super(MouseDrawnTool, self).on_touch_up(touch)
 
 
 class NumericInput(StackLayout):
@@ -105,8 +107,8 @@ class TransparentBlackEffect(EffectBase):
         self.glsl = """
         vec4 effect(vec4 color, sampler2D texture, vec2 tex_coords, vec2 coords)
         {
-            if (color.r == 0.0 && color.g == 0.0 && color.b == 0.0) {
-                return vec4(color.rgb,0.0);
+            if (color.r < 0.01 && color.g < 0.01 && color.b < 0.01) {
+                return vec4(0.0, 0.0, 0.0, 0.0);
             }
             return color;
         }
@@ -116,12 +118,21 @@ class TransparentBlackEffect(EffectBase):
 class PaintWindow(Widget):
     fbo = ObjectProperty(None)
     mask_layer = ObjectProperty(None)
-    mask_color = ObjectProperty([1, 1, 1, 1])
+    color = ObjectProperty(None)
 
     def refresh(self):
         with self.mask_layer.canvas:
+            self.color = Color([1, 0, 1, 1])
             self.fbo = Fbo(size=self.size)
             Rectangle(size=self.size, texture=self.fbo.texture)
+
+    def set_visible(self, visible=True):
+        self.mask_layer.canvas.opacity = float(visible)
+
+    def update_color(self, color):
+        if self.color is None:
+            return
+        self.color.rgba = color
 
     def add_instruction(self, instruction):
         self.fbo.add(instruction)

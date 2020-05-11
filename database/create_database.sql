@@ -29,6 +29,7 @@ DROP TABLE IF EXISTS `instance_seg_meta`;
 CREATE TABLE `instance_seg_meta` (
   `annotation_id` int NOT NULL AUTO_INCREMENT,
   `image_id` int NOT NULL,
+  `annotation_name` varchar(45) NOT NULL,
   `mask_path` varchar(260) NOT NULL,
   `info_path` varchar(260) NOT NULL,
   `class_name` varchar(45) NOT NULL,

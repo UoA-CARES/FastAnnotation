@@ -4,16 +4,13 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-
 from flask import request
 from flask_restplus import Namespace, Resource, fields
-
 from mysql.connector.errors import DatabaseError
 
 from server.core.common_dtos import common_store
 from server.server_config import DatabaseInstance
 from server.server_config import ServerConfig
-
 
 api = Namespace('projects', description='Project related operations')
 
@@ -71,7 +68,7 @@ bulk_image_upload = api.model('bulk_image_upload', {
 
 @api.route("")
 class ProjectList(Resource):
-    @api.response(200, "OK")
+    @api.response(200, "OK", project_bulk)
     @api.marshal_with(project_bulk, skip_none=True)
     def get(self):
         """
@@ -81,8 +78,8 @@ class ProjectList(Resource):
             "SELECT project_id, project_name, labeled_count, unlabeled_count, last_uploaded FROM project")[0]
         return {"projects": results}, 200
 
-    @api.response(200, "Partial Success")
-    @api.response(201, "Success")
+    @api.response(200, "Partial Success", api.models['bulk_response'])
+    @api.response(201, "Success", api.models['bulk_response'])
     @api.marshal_with(api.models['bulk_response'], skip_none=True)
     @api.expect(project_bulk)
     def post(self):
@@ -133,7 +130,7 @@ class ProjectList(Resource):
 @api.doc(params={"pid": "An id associated with an existing project."})
 @api.route("/<int:pid>")
 class Project(Resource):
-    @api.response(200, "OK")
+    @api.response(200, "OK", project)
     @api.marshal_with(project, skip_none=True)
     def get(self, pid):
         """
@@ -145,8 +142,8 @@ class Project(Resource):
         results = db.query(query, (pid,))[0]
         return results, 200
 
-    @api.response(200, "OK")
-    @api.response(500, "Unexpected Failure")
+    @api.response(200, "OK", api.models["generic_response"])
+    @api.response(500, "Unexpected Failure", api.models["generic_response"])
     @api.marshal_with(api.models["generic_response"], skip_none=True)
     def delete(self, pid):
         """
@@ -191,8 +188,8 @@ class Project(Resource):
 @api.doc(params={"pid": "An id associated with a project."})
 @api.route("/<int:pid>/images")
 class ProjectImageList(Resource):
-    @api.response(200, "OK")
-    @api.response(500, "Unexpected Failure")
+    @api.response(200, "OK", api.models['generic_response'])
+    @api.response(500, "Unexpected Failure", api.models['generic_response'])
     @api.marshal_with(api.models['generic_response'], skip_none=True)
     @api.expect(image_filter)
     def get(self, pid):
@@ -249,8 +246,8 @@ class ProjectImageList(Resource):
             }
         return response, code
 
-    @api.response(200, "Partial Success")
-    @api.response(201, "Success")
+    @api.response(200, "Partial Success", api.models['bulk_response'])
+    @api.response(201, "Success", api.models['bulk_response'])
     @api.expect(bulk_image_upload)
     @api.marshal_with(api.models['bulk_response'], skip_none=True)
     def post(self, pid):
@@ -328,8 +325,8 @@ class ProjectImageList(Resource):
                 code = 200
         return {"results": bulk_response}, code
 
-    @api.response(200, "OK")
-    @api.response(500, "Unexpected Failure")
+    @api.response(200, "OK", api.models['generic_response'])
+    @api.response(500, "Unexpected Failure", api.models['generic_response'])
     @api.marshal_with(api.models['generic_response'], skip_none=True)
     def delete(self, pid):
         """

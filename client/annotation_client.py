@@ -1,5 +1,6 @@
 import traceback
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from kivy.app import App
 from kivy.config import Config
 from kivy.properties import StringProperty, NumericProperty
@@ -10,6 +11,10 @@ from client.screens.image_view_screen import ImageViewScreen
 from client.screens.instance_annotator_screen import InstanceAnnotatorScreen
 from client.screens.project_select_screen import ProjectSelectScreen
 from client.screens.project_tool_screen import ProjectToolScreen
+
+import client.utils as utils
+from client.utils import ApiException
+from client.screens.common import Alert
 
 Config.set('input', 'mouse', 'mouse,disable_multitouch')
 
@@ -37,6 +42,7 @@ class AnnotationClientApp(App):
     current_project_id = NumericProperty(0)
     sm = None
     open_images = []
+    thread_pool = ThreadPoolExecutor(max_workers=ClientConfig.CLIENT_POOL_LIMIT)
 
     def register_image(self, image_id):
         self.open_images.append(image_id)
@@ -45,6 +51,7 @@ class AnnotationClientApp(App):
         self.open_images.remove(image_id)
 
     def build(self):
+        print("Building")
         self.sm = MyScreenManager()
         return self.sm
 
@@ -59,8 +66,27 @@ class AnnotationClientApp(App):
     def show_image_viewer(self):
         self.sm.current = "ImageView"
 
-    def open_instance_annotator(self):
+    def show_instance_annotator(self):
         self.sm.current = "InstanceAnnotator"
+
+    def alert_user(self, future):
+        if not future.exception():
+            return
+
+        exception = future.exception()
+        try:
+            raise exception
+        except Exception:
+            tb = traceback.format_exc()
+            print(tb)
+
+        pop_up = Alert()
+        if isinstance(exception, ApiException):
+            pop_up.title = "Server Error: %d" % exception.code
+        else:
+            pop_up.title = "Unknown Error: %s" % type(exception).__name__
+        pop_up.alert_message = str(exception)
+        pop_up.open()
 
 
 if __name__ == "__main__":
@@ -72,13 +98,11 @@ if __name__ == "__main__":
         tb = traceback.format_exc()
         print(tb)
     finally:
+        app.thread_pool.shutdown(wait=True)
         print(app.open_images)
-        for image_id in app.open_images:
-            url = ClientConfig.SERVER_URL + \
-                "images/" + str(image_id) + "/unlock"
-            headers = {"Accept": "application/json"}
-            response = requests.put(url, headers=headers)
+        for iid in app.open_images:
+            response = utils.update_image_meta_by_id(iid, lock=False)
             if response.status_code == 200:
-                print("Unlocked %d" % image_id)
+                print("Unlocked %d" % iid)
             else:
-                print("Failed to unlock %d" % image_id)
+                print("Failed to unlock %d" % iid)

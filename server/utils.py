@@ -20,6 +20,15 @@ def decode_mask(b64_str, shape):
     return np.reshape(flat, newshape=shape[:2], order='C')
 
 
+def mask2mat(mask):
+    mat = mask.astype(np.uint8) * 255
+    return cv2.cvtColor(mat, cv2.COLOR_GRAY2BGR)
+
+
+def mat2mask(mat):
+    return np.sum(mat.astype(bool), axis=2, dtype=bool)
+
+
 def save_mask(mask, filepath):
     folder = os.path.dirname(filepath)
     Path(folder).mkdir(parents=True, exist_ok=True)

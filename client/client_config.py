@@ -21,3 +21,5 @@ class ClientConfig:
     BBOX_UNSELECT = "#ebcf1a"
 
     SCREEN_DIR = os.path.join(ROOT_DIR, 'client', 'screens')
+
+    CLIENT_POOL_LIMIT = 50

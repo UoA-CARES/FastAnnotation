@@ -1,11 +1,11 @@
 import base64
 import os
 
-import server.utils as utils
 from flask import request
 from flask_restplus import Namespace, Resource, fields, marshal
 from mysql.connector.errors import DatabaseError
 
+import server.utils as utils
 from server.core.common_dtos import common_store
 from server.server_config import DatabaseInstance
 from server.server_config import ServerConfig
@@ -53,6 +53,11 @@ annotation = api.model('annotation', {
         attribute="annotation_id",
         required=False,
         description="The annotation identifier"),
+    'name': fields.String(
+        attribute="annotation_name",
+        required=True,
+        description="The name of the annotation",
+        example="Layer 1"),
     'mask_data': fields.String(
         required=True,
         description="The encoded mask data"),
@@ -208,15 +213,17 @@ class Image(Resource):
             return marshal(
                 response, api.models["generic_response"], skip_none=True), code
 
-    @api.response(200, "OK")
-    @api.response(400, "Invalid Payload")
-    @api.response(500, "Unexpected Failure")
+    @api.response(200, "OK", api.models["generic_response"])
+    @api.response(400, "Invalid Payload", api.models["generic_response"])
+    @api.response(500, "Unexpected Failure", api.models["generic_response"])
     @api.marshal_with(api.models["generic_response"], skip_none=True)
     @api.expect(image)
     def put(self, iid):
         """
         Update an images meta parameters.
         """
+
+        #TODO: Update to raise 409 when lock is requested on already locked object
 
         content = request.json
 
@@ -275,8 +282,8 @@ class Image(Resource):
             code = 200
         return response, code
 
-    @api.response(200, "OK")
-    @api.response(500, "Unexpected Failure")
+    @api.response(200, "OK", api.models["generic_response"])
+    @api.response(500, "Unexpected Failure", api.models["generic_response"])
     @api.marshal_with(api.models["generic_response"], skip_none=True)
     def delete(self, iid):
         """
@@ -326,7 +333,7 @@ class ImageAnnotationList(Resource):
         Gets all the annotations associated with an image.
         """
 
-        query = "SELECT annotation_id, mask_path, info_path, class_name FROM instance_seg_meta "
+        query = "SELECT annotation_id, annotation_name, mask_path, info_path, class_name FROM instance_seg_meta "
         query += "WHERE image_id = %s"
         try:
             result = db.query(query, (iid,))[0]
@@ -354,8 +361,12 @@ class ImageAnnotationList(Resource):
                 mask = utils.load_mask(row["mask_path"])
                 info = utils.load_info(row["info_path"])
                 row["mask_data"] = utils.encode_mask(mask)
+
                 row["shape"] = info["source_shape"]
                 row["bbox"] = info["bbox"]
+
+                print("SERVER: outgoing bbox")
+                print("\t%s" % str(row["bbox"]))
                 response.append(row)
 
             response = {"image_id": iid, "annotations": response}
@@ -366,8 +377,8 @@ class ImageAnnotationList(Resource):
             return marshal(
                 response, api.models["generic_response"], skip_none=True), code
 
-    @api.response(200, "Partial Success")
-    @api.response(201, "Success")
+    @api.response(200, "Partial Success", api.models["bulk_response"])
+    @api.response(201, "Success", api.models["bulk_response"])
     @api.marshal_with(api.models["bulk_response"], skip_none=True)
     @api.expect(bulk_annotations)
     def post(self, iid):
@@ -390,23 +401,26 @@ class ImageAnnotationList(Resource):
             try:
                 mask = utils.decode_mask(row['mask_data'], row['shape'])
 
+                print("SERVER: incoming bbox")
+                print("\t%s" % str(row["bbox"]))
+
                 mask_path = os.path.join(
                     ServerConfig.DATA_ROOT_DIR,
                     "annotation",
                     str(iid),
                     "trimaps",
-                    "layer_%d.png" % i)
+                    "%s.png" % row["name"])
                 info_path = os.path.join(
                     ServerConfig.DATA_ROOT_DIR,
                     "annotation",
                     str(iid),
                     "xmls",
-                    "layer_%d.xml" % i)
+                    "%s.xml" % row["name"])
 
-                query = "REPLACE INTO instance_seg_meta (image_id, mask_path, info_path, class_name)"
-                query += " VALUES (%s,%s,%s,%s)"
+                query = "REPLACE INTO instance_seg_meta (annotation_name, image_id, mask_path, info_path, class_name)"
+                query += " VALUES (%s,%s,%s,%s,%s)"
                 _, aid = db.query(
-                    query, (iid, mask_path, info_path, row["class_name"]))
+                    query, (row['name'], iid, mask_path, info_path, row["class_name"]))
 
                 utils.save_mask(mask, mask_path)
                 utils.save_info(
@@ -444,8 +458,8 @@ class ImageAnnotationList(Resource):
 
         return {"results": results}, code
 
-    @api.response(200, "OK")
-    @api.response(500, "Unexpected Failure")
+    @api.response(200, "OK", api.models["generic_response"])
+    @api.response(500, "Unexpected Failure", api.models["generic_response"])
     @api.marshal_with(api.models["generic_response"], skip_none=True)
     def delete(self, iid):
         """
