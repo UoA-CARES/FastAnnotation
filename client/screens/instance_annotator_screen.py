@@ -1,19 +1,24 @@
+from threading import Lock
+
 import cv2
 import kivy.utils
 from kivy.app import App
 from kivy.clock import Clock
+from kivy.clock import mainthread
 from kivy.core.window import Window
 from kivy.graphics import Color, Ellipse, InstructionGroup, Line
 from kivy.properties import BooleanProperty
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.screenmanager import Screen
-from kivy.clock import mainthread
+from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem
+
 import client.utils as utils
-from client.utils import ApiException
+from client.controller.instance_annotator_controller import InstanceAnnotatorController
+from client.model.instance_annotator_model import InstanceAnnotatorModel
 from client.screens.common import *
 
-from client.model.instance_annotator_model import InstanceAnnotatorModel
-from client.controller.instance_annotator_controller import InstanceAnnotatorController
+
+import random
 
 # Load corresponding kivy file
 Builder.load_file(
@@ -22,362 +27,181 @@ Builder.load_file(
         'instance_annotator_screen.kv'))
 
 
-class WindowState:
-    def __init__(
-            self,
-            image_id=-1,
-            image_name="",
-            image_texture=None,
-            image_opened=False,
-            layer_states=None):
-        self.image_id = image_id
-        self.image_name = image_name
-        self.image_texture = image_texture
-        self.image_opened = image_opened
-        self.layer_states = layer_states
-
-        if not self.image_texture:
-            self.image_texture = utils.mat2texture(
-                np.ones(shape=(3000, 3000, 3), dtype=np.uint8))
-
-        if not self.layer_states:
-            self.layer_states = [
-                LayerState(
-                    empty_size=self.image_texture.size)]
-
-    def to_dict(self):
-        output = {}
-        output['image_id'] = self.image_id
-        output['image_name'] = self.image_name
-        layers = []
-        for state in self.layer_states:
-            layers.append(state.to_dict())
-        output['annotations'] = layers
-        return output
-
-
-class LayerState:
-    class_picker = None
-
-    def __init__(self, drawable_layer=None, config=None, empty_size=None):
-        self.mask = None
-        self.texture = None
-        self.class_name = ""
-        self.mask_color = [1, 1, 1, 1]
-        # bbox in (x1, y1, x2, y2) format
-        self.bbox = None
-        if drawable_layer:
-            self.texture = drawable_layer.get_fbo().texture
-            self.class_name = drawable_layer.class_name
-            self.mask_color = drawable_layer.mask_color
-            self.bbox = drawable_layer.bbox_bounds
-            self.bbox[2] += drawable_layer.bbox_bounds[0]
-            self.bbox[3] += drawable_layer.bbox_bounds[1]
-        elif config:
-            self.mask = utils.decode_mask(
-                config["mask_data"], config["shape"][:2])
-            self.class_name = config["class_name"]
-            if self.class_picker:
-                self.mask_color = self.class_picker.class_map[self.class_name]
-            self.bbox = config["bbox"]
-        elif empty_size:
-            self.mask = np.zeros(shape=empty_size, dtype=bool)
-            if self.class_picker:
-                self.class_name = self.class_picker.current_class.class_name
-                self.mask_color = self.class_picker.current_class.class_color
-            else:
-                self.class_name = ""
-                self.mask_color = [1, 1, 1, 1]
-        else:
-            raise ValueError("One of keyword parameters must be set.")
-
-    @staticmethod
-    def bind_class_picker(class_picker):
-        LayerState.class_picker = class_picker
-
-    def get_size(self):
-        if self.mask is not None:
-            return self.mask.shape
-        elif self.texture is not None:
-            return self.texture.size
-        return None
-
-    def get_mask(self):
-        if self.mask is not None:
-            return self.mask
-        self.mask = utils.texture2mat(self.texture)
-        self.mask = np.all(self.mask.astype(bool), axis=2)
-        return self.mask
-
-    def get_texture(self):
-        if self.texture is not None:
-            return self.texture
-        mat = cv2.cvtColor(
-            self.mask.astype(
-                np.uint8) * 255,
-            cv2.COLOR_GRAY2BGR)
-        self.texture = utils.mat2texture(mat)
-        return self.texture
-
-    def to_dict(self):
-        body = {}
-        body['mask_data'] = utils.encode_mask(self.get_mask())
-        body['bbox'] = np.array(self.bbox).tolist()
-        body['class_name'] = self.class_name
-        body['shape'] = tuple(reversed(self.texture.size)) + (3,)
-        return body
+def background(f):
+    def aux(*xs, **kws):
+        app = App.get_running_app()
+        future = app.thread_pool.submit(f, *xs, **kws)
+        future.add_done_callback(app.alert_user)
+        return future
+    return aux
 
 
 class InstanceAnnotatorScreen(Screen):
     left_control = ObjectProperty(None)
     right_control = ObjectProperty(None)
-    image_canvas = ObjectProperty(None)
+    tab_panel = ObjectProperty(None)
+
+    _update_lock = Lock()
+    _update_flag = False
 
     def __init__(self, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
         self.model = InstanceAnnotatorModel()
         self.controller = InstanceAnnotatorController(self.model)
-        self.current_state = WindowState()
-        self.window_cache = {}
 
+    def get_current_image_canvas(self):
+        if not isinstance(self.tab_panel.current_tab, ImageCanvasTab):
+            return None
+        return self.tab_panel.current_tab.image_canvas
 
-    def update_canvas(self):
-        pass
+    def queue_update(self):
+        with self._update_lock:
+            if not self._update_flag:
+                self._update_flag = True
+                self._update()
 
-    def update_labels(self):
-        pass
+    @mainthread
+    def _update(self):
+        # TODO: Implement a diff system which only updates changed sections of
+        # the model
 
+        current_iid = self.model.tool.get_current_image_id()
+        current_label_name = self.model.tool.get_current_label_name()
+        current_label = self.model.labels.get(current_label_name)
+        current_layer = self.model.tool.get_current_layer_name()
+        image = self.model.images.get(current_iid)
+
+        # Update ToolSelect
+        print("Updating Tool Select")
+        self.left_control.tool_select.alpha.value = self.model.tool.get_alpha()
+        self.left_control.tool_select.pen_size.value = self.model.tool.get_pen_size()
+
+        # Update Class Picker
+        print("Updating Class Picker")
+        label_names = self.model.labels.keys()
+        self.left_control.class_picker.clear()
+        for name in label_names:
+            label = self.model.labels.get(name)
+            self.left_control.class_picker.add_label(label.name, label.color)
+
+        print("\tSelecting Label: %s" % current_label_name)
+        self.left_control.class_picker.select(current_label_name)
+
+        # Update Layer View
+        print("Updating Layer View")
+        if image is not None and image.annotations is not None:
+            self.left_control.layer_view.clear()
+            for annotation in image.annotations.values():
+                self.left_control.layer_view.add_layer_item(annotation)
+
+        self.left_control.layer_view.select(
+            self.model.tool.get_current_layer_name())
+
+        # Update ImageCanvas
+        print("Updating Image Canvas")
+        if current_iid > 0 and not self.tab_panel.has_tab(current_iid):
+            self.tab_panel.add_tab(current_iid)
+            tab = self.tab_panel.get_tab(current_iid)
+            self.tab_panel.switch_to(tab, do_scroll=True)
+            image_canvas = self.get_current_image_canvas()
+            print(image_canvas.image.size)
+
+        image_canvas = self.get_current_image_canvas()
+        if image_canvas is not None:
+            image_canvas.load_pen_size(self.model.tool.get_pen_size())
+            image_canvas.load_global_alpha(self.model.tool.get_alpha())
+            image_canvas.load_eraser_state(self.model.tool.get_eraser())
+            image_canvas.load_current_label(current_label)
+            image_canvas.load_annotations(image.annotations)
+            image_canvas.load_current_layer(current_layer)
+
+            if image is not None:
+                self.tab_panel.current_tab.unsaved = image.unsaved
+
+        # Update ImageQueue
+        print("Updating Image Queue")
+        self.right_control.load_image_queue()
+
+        # Reset update flag
+        with self._update_lock:
+            self._update_flag = False
+
+        print("Update Save Button")
+        if image is not None and image.unsaved:
+            self.right_control.image_queue_control.btn_save.disabled = False
+        else:
+            self.right_control.image_queue_control.btn_save.disabled = True
 
     def on_enter(self, *args):
-        # Tool Select Binds
-        self.left_control.tool_select.bind_draw_tool(
-            self.image_canvas.draw_tool)
-        self.left_control.tool_select.bind_class_picker(
-            self.left_control.class_picker)
-        self.left_control.tool_select.bind_layer_stack(
-            self.image_canvas.layer_stack)
-
-        # Layer View Binds
-        self.left_control.layer_view.bind_draw_tool(
-            self.image_canvas.draw_tool)
-        self.left_control.layer_view.bind_layer_stack(
-            self.image_canvas.layer_stack)
-
-        # Draw Tool Binds
-        self.image_canvas.draw_tool.bind_layer_view(
-            self.left_control.layer_view)
-        self.image_canvas.draw_tool.bind_class_picker(
-            self.left_control.class_picker)
-        self.image_canvas.draw_tool.bind_keyboard()
-
-        self.add_state(image_id=-1, image_name="", texture=None)
-        self.load_state(index=-1)
-        self.refresh_image_queue()
-
-        print("ENTER")
-        LayerState.bind_class_picker(self.left_control.class_picker)
-
+        self.fetch_image_metas()
+        self.fetch_class_labels()
         Window.bind(on_resize=self.auto_resize)
 
-    def on_leave(self, *args):
-        self.image_canvas.draw_tool.unbind_keyboard()
-
     def auto_resize(self, *args):
-        Clock.schedule_once(
-            lambda dt: self.image_canvas.load_image(
-                self.current_state.image_texture,
-                self.current_state.image_id))
+        image_canvas = self.get_current_image_canvas()
+        if image_canvas is None:
+            return
+        image_canvas.resize()
+
+    @background
+    def load_next(self):
+        image_ids = self.model.images.keys()
+        current_id = self.model.tool.get_current_image_id()
+        idx = 0
+        if current_id > 0:
+            idx = image_ids.index(current_id)
+            idx += 1
+
+        while self.model.images.get(image_ids[idx]).is_locked:
+            idx += 1
+        next_id = image_ids[idx]
+        self.controller.open_image(next_id)
+        self.queue_update()
+
+    @background
+    def load_image(self, id):
+        self.controller.open_image(id)
+        self.queue_update()
 
     @mainthread
-    def load_state(self, index):
-        if index not in self.window_cache:
-            return
-        state = self.window_cache[index]
-
-        state.image_opened = True
-        self.image_canvas.load_image(state.image_texture, index)
-        self.load_layers(state.layer_states)
-
-        # Record as current state
-        self.current_state = state
-
-    @mainthread
-    def load_layers(self, layer_states):
-        self.left_control.layer_view.clear()
-        layer_name = None
-        for layer_state in layer_states:
-            # Build Layer
-            layer = DrawableLayer(
-                size=layer_state.get_size(),
-                mask_color=layer_state.mask_color,
-                class_name=layer_state.class_name,
-                texture=layer_state.get_texture(),
-                bbox=layer_state.bbox)
-            layer_name = self.left_control.layer_view.add_layer_item(layer)
-        self.left_control.layer_view.select_layer_item(layer_name)
-
-    # Saves the currently opened state
-    def save_state(self):
-        if self.image_canvas.image_id not in self.window_cache:
-            return
-
-        # Build WindowState
-        window_state = self.window_cache[self.image_canvas.image_id]
-        window_state.image_texture = self.image_canvas.image.texture
-        window_state.image_opened = True
-
-        # Build Layer States
-        layer_states = []
-        for layer in self.image_canvas.layer_stack.layer_list:
-            layer_states.append(LayerState(drawable_layer=layer))
-
-        if layer_states:
-            window_state.layer_states = layer_states
-        self.window_cache[self.image_canvas.image_id] = window_state
-
-    @mainthread
-    def add_state(self, image_id, image_name, texture):
-        window_state = WindowState(
-            image_id=image_id,
-            image_name=image_name,
-            image_texture=texture,
-            image_opened=True
-        )
-        window_state.layer_states[0].mask_color = self.left_control.class_picker.current_color
-        self.window_cache[image_id] = window_state
-
-    def add_layer(self):
-        layer = DrawableLayer(size=self.current_state.image_texture.size)
-        layer.mask_color = self.left_control.class_picker.current_color[:3] + \
-                           (self.left_control.tool_select.alpha.value,)
-        layer_name = self.left_control.layer_view.add_layer_item(layer)
-        self.left_control.layer_view.select_layer_item(layer_name)
-        
-    def clear_stale_window_states(self):
-        stale_keys = []
-        for key in self.window_cache:
-            if not self.window_cache[key].image_opened:
-                stale_keys.append(key)
-
-        for key in stale_keys:
-            self.window_cache.pop(key, None)
-
-    def refresh_image_queue(self):
-        print("Refreshing Image Queue")
-        # TODO: Implement a window cache which keeps track of local and remote states
-        self.clear_stale_window_states()
-        self.right_control.image_queue.clear()
-        for state in self.window_cache.values():
-            if state.image_opened and state.image_id > 0:
-                self.right_control.image_queue.add_item(
-                    state.image_name,
-                    state.image_id,
-                    opened=True)
-
-        self.right_control.image_queue.refresh()
-
-    def load_image(self, image_id=-1):
-        # Save current window state
-        self.save_state()
-
-        if image_id < 0:
-            # For some reason children of a widget are pushed on like a stack
-            for w in reversed(self.right_control.image_queue.queue.children):
-                if not w.image_locked and not w.image_open:
-                    image_id = w.image_id
-                    break
-
-            if image_id < 0:
-                popup = Alert()
-                popup.title = "Out of images"
-                popup.alert_message = "There is no valid image to load next. Please try again later or upload more " \
-                                      "images to this project. "
-                popup.open()
-                return
-            print("Next image is %d" % image_id)
-
-        if image_id in self.window_cache:
-            self.load_state(image_id)
-            return
-
-        future = self.app.thread_pool.submit(self._load_image, image_id)
-        future.add_done_callback(self.app.alert_user)
-
-    def _load_image(self, image_id):
-        resp = utils.update_image_meta_by_id(image_id, lock=True)
-        if resp.status_code != 200:
-            raise ApiException("Failed to lock image with id %d" % image_id, resp.status_code)
-
-        self.app.register_image(image_id)
-
-        self.right_control.image_queue.mark_item(
-            image_id, opened=True, locked=False)
-        self.right_control.image_queue_control.btn_save.disabled = False
-
-        resp = utils.get_image_by_id(image_id)
-        if resp.status_code == 404:
-            raise ApiException("Image does not exist with id %d." % image_id, resp.status_code)
-        elif resp.status_code != 200:
-            raise ApiException("Failed to retrieve image with id %d." % image_id, resp.status_code)
-
-        result = resp.json()
-        img_bytes = utils.decode_image(result["image_data"])
-        texture = utils.bytes2texture(img_bytes, "jpg")
-        self.add_state(
-            image_id=image_id,
-            image_name=result["name"],
-            texture=texture
-        )
-        self.load_state(image_id)
-
-        resp = utils.get_image_annotation(image_id)
-        if resp.status_code != 200:
-            raise ApiException("Failed to retrieve annotations for the image with id %d." % image_id, resp.status_code)
-
-        result = resp.json()
-        # Add layer state info to correct window state
-        window_state = self.window_cache[image_id]
-
-        layer_states = []
-        for row in result["annotations"]:
-            layer_states.append(LayerState(config=row))
-
-        if layer_states:
-            window_state.layer_states = layer_states
-
-        self.load_state(image_id)
-
     def save_image(self):
-        self.save_state()
-        annotation = self.current_state.to_dict()
-        future = self.app.thread_pool.submit(self._save_image, self.current_state.image_id, annotation)
-        future.add_done_callback(self.app.alert_user)
+        image_canvas = self.get_current_image_canvas()
+        if image_canvas is None:
+            return
+        image_canvas.prepare_to_save()
+        self._save_image()
 
-    def _save_image(self, image_id, annotation):
-        resp = utils.add_image_annotation(image_id, annotation)
-        if resp.status_code == 200:
-            result = resp.json()
-            msg = []
-            for row in result["results"]:
-                msg.append(row["error"]["message"])
-            msg = '\n'.join(msg)
-            raise ApiException(
-                message="The following errors occurred while saving annotations to the image with id %d:\n %s" %
-                        (image_id, msg),
-                code=resp.status_code)
-        elif resp.status_code != 201:
-            raise ApiException("Failed to save annotations to the image with id %d." % image_id, resp.status_code)
+    @background
+    def _save_image(self):
+        image_canvas = self.get_current_image_canvas()
+        if image_canvas is None:
+            return
+        self.controller.save_image(image_canvas)
+        self.queue_update()
 
-        resp = utils.update_image_meta_by_id(image_id, lock=False)
-        if resp.status_code != 200:
-            raise ApiException("Failed to unlock the image with id %d." % image_id)
+    @background
+    def add_layer(self):
+        self.controller.add_blank_layer(self.model.tool.get_current_image_id())
+        self.queue_update()
 
-        self.app.deregister_image(image_id)
-        self.window_cache[image_id].image_opened = False
-        self.right_control.image_queue.mark_item(
-            image_id, opened=False, locked=False)
-        self.right_control.image_queue_control.btn_save.disabled = True
+    @background
+    def fetch_image_metas(self):
+        filter_details = {
+            "order_by": {
+                "key": "name",
+                "ascending": True
+            }
+        }
+        self.controller.fetch_image_metas(self.app.current_project_id, filter_details)
+        self.queue_update()
+
+    @background
+    def fetch_class_labels(self):
+        self.controller.fetch_class_labels(self.app.current_project_id)
+        if self.model.tool.get_current_label_name() is "":
+            self.controller.update_tool_state(current_label=self.model.labels.keys()[0])
+        self.queue_update()
 
 
 class LeftControlColumn(BoxLayout):
@@ -389,102 +213,98 @@ class LeftControlColumn(BoxLayout):
 class ToolSelect(GridLayout):
     pen_size = ObjectProperty(None)
     alpha = ObjectProperty(None)
-    class_color = ObjectProperty(None)
-    class_name = StringProperty("")
 
     def __init__(self, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
-        self.draw_tool = None
-        self.layer_stack = None
-
-    def bind_draw_tool(self, draw_tool):
-        self.draw_tool = draw_tool
-
-    def bind_class_picker(self, class_picker):
-        class_picker.fbind('current_color', self.setter('class_color'))
-        class_picker.fbind('current_name', self.setter('class_name'))
-
-    def bind_layer_stack(self, layer_stack):
-        self.layer_stack = layer_stack
-
-    def on_parent(self, *args):
-        Clock.schedule_once(lambda dt: self.late_init())
-
-    def late_init(self):
-        self.draw_tool = App.get_running_app().root.get_screen(
-            "InstanceAnnotator").image_canvas.draw_tool
-
-    def on_class_color(self, *args):
-        print("Color: %s" % str(self.class_color))
-        self.draw_tool.layer_color = self.class_color[
-            :-1] + self.draw_tool.layer_color[-1:]
-
-    def on_class_name(self, *args):
-        self.draw_tool.class_name = self.class_name
 
     def set_alpha(self, alpha):
         print("Alpha: %s" % str(alpha))
-        self.layer_stack.set_alpha(alpha)
+        self.app.root.current_screen.controller.update_tool_state(alpha=alpha)
+        self.app.root.current_screen.queue_update()
 
     def set_pencil_size(self, size):
-        print("size: %s" % str(size))
-        self.draw_tool.pen_size = size
+        print("Pen Size: %s" % str(size))
+        self.app.root.current_screen.controller.update_tool_state(
+            pen_size=size)
+        self.app.root.current_screen.queue_update()
 
 
 class ClassPicker(GridLayout):
     eraser_enabled = BooleanProperty(False)
-
+    current_label = ObjectProperty(None, allownone=True)
     grid = ObjectProperty(None)
 
-    current_label = ObjectProperty(None)
-    current_class = ObjectProperty(None)
-    current_color = ObjectProperty(None)
-    current_name = StringProperty("")
-    class_map = {}
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.app = App.get_running_app()
+        self.label_dict = {}
 
-    def register(self, item):
-        if not isinstance(item, ClassPickerItem):
+    def on_eraser_enabled(self, instance, value):
+        print("Eraser: %s" % str(value))
+        self.app.root.current_screen.controller.update_tool_state(eraser=value)
+
+    def on_current_label(self, instance, value):
+        class_name = ""
+        if value is not None:
+            class_name = value.class_name
+
+        print("Label: %s" % str(class_name))
+        self.app.root.current_screen.controller.update_tool_state(
+            current_label=class_name)
+
+        if class_name not in ("", "eraser"):
+            self.app.root.current_screen.controller.update_annotation(label_name=class_name)
+        self.app.root.current_screen.queue_update()
+
+    def clear(self):
+        self.grid.clear_widgets()
+        self.label_dict.clear()
+        self.add_eraser()
+
+    def select(self, name):
+        label = self.label_dict.get(name, None)
+        if label is None:
             return
-        self.class_map[item.class_name] = item.class_color
+        self._change_label(label)
 
-    def change_label(self, instance):
+    def add_eraser(self):
+        def eraser_enable():
+            self.eraser_enabled = True
+            item.enable()
+
+        def eraser_disable():
+            self.eraser_enabled = False
+            item.disable()
+
+        name = "eraser"
+        item = self._make_label(name, [0.2, 0.2, 0.2, 1.0])
+        item.enable_cb = eraser_enable
+        item.disable_cb = eraser_disable
+        self.grid.add_widget(item)
+        self.label_dict[name] = item
+
+    def add_label(self, name, color):
+        item = self._make_label(name, color)
+        self.grid.add_widget(item)
+        self.label_dict[name] = item
+
+    def _make_label(self, name, color):
+        item = ClassPickerItem()
+        item.class_name = name
+        item.class_color = color
+        item.enable_cb = item.enable
+        item.disable_cb = item.disable
+        item.bind(on_release=lambda *args: self._change_label(item))
+        return item
+
+    def _change_label(self, instance):
+        self.eraser_enabled = False
         if self.current_label:
             self.current_label.disable_cb()
         self.current_label = instance
         self.current_label.enable_cb()
-
-    def add_label(self, name, color):
-        if name in self.class_map:
-            print("Label name already exists")
-            return
-        item = ClassPickerItem()
-        item.class_name = name
-        item.color = np.array(tuple(color) + (255,)) / 255
-        item.enable_cb = item.enable
-        item.disable_cb = item.disable
-        item.bind(on_release=lambda: self.change_label(item))
-        self.grid.add_widget(item)
-
-
-
-    def change_class(self, instance):
-        if self.current_class:
-            self.current_class.state = 'normal'
-        self.current_class = instance
-        self.current_class.state = 'down'
-
-        # Set properties
-        self.current_color = self.current_class.class_color
-        self.current_name = self.current_class.class_name
-        self.eraser_enabled = False
-
-    def enable_eraser(self, instance):
-        self.eraser_enabled = True
-        if self.current_class:
-            self.current_class.state = 'normal'
-        self.current_class = instance
-        self.current_class.state = 'down'
+        self.app.root.current_screen.queue_update()
 
 
 class ClassPickerItem(Button):
@@ -509,90 +329,61 @@ class LayerView(GridLayout):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.draw_tool = None
-        self.layer_stack = None
-        self.layer_item_dict = {}
+        self.app = App.get_running_app()
+        self.layers = {}
 
-    def bind_draw_tool(self, draw_tool):
-        self.draw_tool = draw_tool
-
-    def bind_layer_stack(self, layer_stack):
-        self.layer_stack = layer_stack
-
-    def get_items_at_pos(self, pos):
-        selected_items = []
-        for layer_item in self.layer_item_dict.values():
-            layer = layer_item.layer
-            bl = np.array(layer.bbox_bounds[:2])
-            tr = bl + np.array(layer.bbox_bounds[2:])
-            if np.all(np.logical_and(bl < pos, pos < tr)):
-                selected_items.append(layer_item)
-        return selected_items
-
-    def add_layer_item(self, layer):
-        # Add to Layer Stack
-        stack_index = self.layer_stack.add_layer(layer)
-
-        layer_name = "Layer %d" % stack_index
-        while layer_name in self.layer_item_dict.keys():
-            stack_index += 1
-            layer_name = "Layer %d" % stack_index
-
-        # Build Layer Item
-        item = LayerViewItem(layer_name)
-        item.bind_to_layer(layer)
-        item.bind_to_layer_view(self)
-
-        # Add to LayerView
-        self.layer_item_dict[layer_name] = item
-        self.layer_item_layout.add_widget(item)
-
-        # Fit bounding box
-        self.draw_tool.fit_bbox(layer)
-
-        return layer_name
-
-    def select_layer_item(self, name):
-        if self.current_selection:
-            prev_item = self.layer_item_dict[self.current_selection]
-            prev_item.deselect()
-        self.current_selection = name
-
-        layer_item = self.layer_item_dict[name]
-        layer = layer_item.layer
-
-        # Draw Tool bind
-        self.draw_tool.set_layer(layer)
-        layer_item.select()
-
-    def delete_layer_item(self, name):
-        self.current_selection = None
-        layer_item = self.layer_item_dict.pop(name, None)
-        layer = layer_item.layer
-
-        # Remove from LayerView
-        self.layer_item_layout.remove_widget(layer_item)
-
-        # Remove from LayerStack
-        self.layer_stack.remove_layer(layer)
-
-        # Unbind from Drawtool
-        self.draw_tool.set_layer(None)
+    def on_current_selection(self, instance, value):
+        layer_name = ""
+        if value is None:
+            print("Setting LayerView Layer to None")
+        else:
+            layer_name = value.layer_name
+        print("Layer: %s" % str(value))
+        self.app.root.current_screen.controller.update_tool_state(
+            current_layer=layer_name)
 
     def clear(self):
-        self.current_selection = None
         self.layer_item_layout.clear_widgets()
-        self.layer_item_dict.clear()
-        self.layer_stack.clear()
-        self.draw_tool.set_layer(None)
+        self.layers.clear()
+
+    def select(self, layer_name):
+        item = self.layers.get(layer_name, None)
+        if item is None:
+            return
+        self._change_layer(item)
+
+    def add_layer_item(self, annotation):
+        item = LayerViewItem(annotation.annotation_name)
+        item.layer_select_cb = lambda: self._change_layer(item)
+        item.layer_delete_cb = lambda: self._delete_layer(item)
+        item.mask_enabled = annotation.mask_enabled
+        item.bbox_enabled = annotation.bbox_enabled
+        self.layer_item_layout.add_widget(item)
+        self.layers[annotation.annotation_name] = item
+
+    def _change_layer(self, instance):
+        if self.current_selection:
+            self.current_selection.deselect()
+        self.current_selection = instance
+        self.current_selection.select()
+        self.app.root.current_screen.queue_update()
+
+    def _delete_layer(self, instance):
+        if instance is self.current_selection:
+            self.current_selection = None
+        self.layer_item_layout.remove_widget(instance)
+        iid = self.app.root.current_screen.model.tool.get_current_image_id()
+        self.app.root.current_screen.controller.delete_layer(iid, instance.layer_name)
+        self.app.root.current_screen.queue_update()
 
 
 class LayerViewItem(RelativeLayout):
-    layer_index = NumericProperty(0)
     layer_name = StringProperty('')
     mask_enabled = BooleanProperty(True)
     bbox_enabled = BooleanProperty(True)
-    layer_selected = BooleanProperty(False)
+
+    layer_select_cb = ObjectProperty(None)
+    layer_delete_cb = ObjectProperty(None)
 
     btn_base = ObjectProperty(None)
     btn_mask = ObjectProperty(None)
@@ -608,60 +399,27 @@ class LayerViewItem(RelativeLayout):
     def __init__(self, name, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
-        self.layer = None
-        self.layer_view = None
         self.layer_name = name
 
-    def bind_to_layer(self, layer):
-        self.layer = layer
-        layer.fbind('mask_visible', self.setter('mask_enabled'))
-        layer.fbind('bbox_visible', self.setter('bbox_enabled'))
+    def on_mask_enabled(self, instance, value):
+        self.btn_mask.background_color = self.button_down_color if value else self.button_up_color
+        self.btn_mask.state = 'down' if value else 'normal'
+        self.app.root.current_screen.controller.update_annotation(layer_name=self.layer_name, mask_enabled=value)
+        self.app.root.current_screen.queue_update()
 
-    def bind_to_layer_view(self, layer_view):
-        self.layer_view = layer_view
+    def on_bbox_enabled(self, instance, value):
+        self.btn_bbox.background_color = self.button_down_color if value else self.button_up_color
+        self.btn_bbox.state = 'down' if value else 'normal'
+        self.app.root.current_screen.controller.update_annotation(layer_name=self.layer_name, bbox_enabled=value)
+        self.app.root.current_screen.queue_update()
 
     def select(self):
-        if not self.layer:
-            return
-        self.layer_selected = True
+        self.btn_base.background_color = self.button_down_color
+        self.btn_base.state = 'down'
 
     def deselect(self):
-        if not self.layer:
-            return
-        self.layer_selected = False
-
-    def on_mask_enabled(self, *args):
-        print("test")
-        if self.mask_enabled:
-            self.btn_mask.background_color = self.button_down_color
-            self.btn_mask.state = 'down'
-        else:
-            self.btn_mask.background_color = self.button_up_color
-            self.btn_mask.state = 'normal'
-
-    def on_bbox_enabled(self, *args):
-        if self.bbox_enabled:
-            self.btn_bbox.background_color = self.button_down_color
-        else:
-            self.btn_bbox.background_color = self.button_up_color
-
-    def on_layer_selected(self, *args):
-        if self.layer_selected:
-            self.layer.bbox_color = kivy.utils.get_color_from_hex(
-                ClientConfig.BBOX_SELECT)
-            self.btn_base.background_color = self.button_down_color
-        else:
-            self.layer.bbox_color = kivy.utils.get_color_from_hex(
-                ClientConfig.BBOX_UNSELECT)
-            self.btn_base.background_color = self.button_up_color
-
-    def toggle_mask(self):
-        if self.layer:
-            self.layer.toggle_mask()
-
-    def toggle_bbox(self):
-        if self.layer:
-            self.layer.toggle_bbox()
+        self.btn_base.background_color = self.button_up_color
+        self.btn_base.state = 'normal'
 
 
 class MaskInstruction(InstructionGroup):
@@ -692,18 +450,11 @@ class MaskInstruction(InstructionGroup):
 class DrawTool(MouseDrawnTool):
     layer = ObjectProperty(None, allownone=True)
     pen_size = NumericProperty(10)
-    layer_color = ObjectProperty((1, 1, 1, 1))
-    class_name = StringProperty("")
 
     erase = BooleanProperty(False)
 
-    # Stores binding id of last layer
-    color_bind = None
-    name_bind = None
-
     def __init__(self, **kwargs):
-        self.layer_view = None
-
+        self.app = App.get_running_app()
         self.keyboard_shortcuts = {}
         self.keycode_buffer = {}
         self._keyboard = Window.request_keyboard(lambda: None, self)
@@ -715,17 +466,13 @@ class DrawTool(MouseDrawnTool):
         self.bind_shortcuts()
         super().__init__(**kwargs)
 
-    def bind_layer_view(self, layer_view):
-        self.layer_view = layer_view
-
-    def bind_class_picker(self, class_picker):
-        class_picker.fbind('eraser_enabled', self.setter('erase'))
-
     def bind_shortcuts(self):
         self.keyboard_shortcuts[("lctrl", "z")] = self.undo
         self.keyboard_shortcuts[("lctrl", "y")] = self.redo
+        self.keyboard_shortcuts[("spacebar",)] = self.app.root.current_screen.add_layer
 
     def bind_keyboard(self):
+        print("Binding keyboard")
         self._keyboard.bind(on_key_down=self.on_key_down)
         self._keyboard.bind(on_key_up=self.on_key_up)
 
@@ -743,7 +490,8 @@ class DrawTool(MouseDrawnTool):
         print("UP: %s" % (str(keycode[1])))
 
         for shortcut in self.keyboard_shortcuts.keys():
-            if keycode[1] in shortcut and set(shortcut).issubset(self.keycode_buffer):
+            if keycode[1] in shortcut and set(
+                    shortcut).issubset(self.keycode_buffer):
                 self.keyboard_shortcuts[shortcut]()
 
         self.keycode_buffer.pop(keycode[1])
@@ -769,35 +517,33 @@ class DrawTool(MouseDrawnTool):
         self.mask_stack.append(instruction_group)
         self.delete_stack.clear()
 
+        screen = self.app.root.current_screen
+        iid = screen.model.tool.get_current_image_id()
+        image = screen.model.images.get(iid)
+        if not image.unsaved:
+            screen.controller.update_image_meta(iid, unsaved=True)
+            screen.queue_update()
+
     def set_layer(self, layer):
+        print("Setting DrawTool Layer: %s" % layer.layer_name)
+        if self.layer is not None:
+            self.layer.set_bbox_highlight(active=False)
         self.layer = layer
-
-        if self.color_bind:
-            self.unbind_uid('layer_color', self.color_bind)
-
-        if self.name_bind:
-            self.unbind_uid('class_name', self.name_bind)
-
-        if not layer:
-            return
-
-        self.color_bind = self.fbind(
-            'layer_color', self.layer.setter('mask_color'))
-        self.layer_color = self.layer.mask_color
-
-        self.name_bind = self.fbind(
-            'class_name', self.layer.setter('class_name'))
-        self.class_name = self.layer.class_name
+        self.layer.set_bbox_highlight(active=True)
 
     def on_touch_down_hook(self, touch):
         if not self.layer:
             return
         if 'lctrl' in self.keycode_buffer:
-            select_items = self.layer_view.get_items_at_pos(touch.pos)
+            image_id = self.app.root.current_screen.model.tool.get_current_image_id()
+            image = self.app.root.current_screen.model.images.get(image_id)
+            select_items = image.detect_collisions(touch.pos)
             if not select_items:
                 return
             item = select_items[self._consecutive_selects % len(select_items)]
-            self.layer_view.select_layer_item(item.layer_name)
+
+            self.app.root.current_screen.controller.update_tool_state(
+                current_layer=item.annotation_name)
             self._consecutive_selects += 1
             return
 
@@ -830,6 +576,10 @@ class DrawTool(MouseDrawnTool):
             return
 
         self.fit_bbox()
+        image_id = self.app.root.current_screen.model.tool.get_current_image_id()
+        layer_name = self.layer.layer_name
+        self.app.root.current_screen.controller.update_annotation(
+            image_id, layer_name, bbox=self.layer.bbox_bounds)
 
     def fit_bbox(self, layer=None):
         if layer is None:
@@ -888,7 +638,8 @@ class DrawTool(MouseDrawnTool):
             return
 
         bounds = self.layer.bbox_bounds
-        valid = bounds[0] < pos[0] < bounds[0] + bounds[2] and bounds[1] < pos[1] < bounds[1] + bounds[3]
+        valid = bounds[0] < pos[0] < bounds[0] + \
+            bounds[2] and bounds[1] < pos[1] < bounds[1] + bounds[3]
         if not valid:
             return
 
@@ -918,76 +669,91 @@ class DrawTool(MouseDrawnTool):
 
 class LayerStack(FloatLayout):
     layer_view = ObjectProperty(None)
-    layer_list = ObjectProperty([])
-    current_layer = NumericProperty(-1)
     layer_sizes = ObjectProperty(None)
+
+    alpha = NumericProperty(0)
 
     def __init__(self, **kw):
         super().__init__(**kw)
         self.app = App.get_running_app()
+        self.layer_dict = {}
 
     def set_alpha(self, alpha):
-        for layer in self.layer_list:
-            layer.mask_color = layer.mask_color[:3] + (alpha,)
+        if np.isclose(alpha, self.alpha):
+            return
+        self.alpha = alpha
+        for layer in self.layer_dict.values():
+            print("Layer Color: %s" % str(layer.mask_color))
+            new_color = layer.get_mask_color()
+            new_color[3] = float(alpha)
+            layer.set_mask_color(new_color)
 
     def add_layer(self, layer):
+        print("Adding Layer to Stack")
+        new_color = layer.get_mask_color()
+        new_color[3] = float(self.alpha)
+        layer.set_mask_color(new_color)
+
         self.add_widget(layer)
-        self.layer_list.append(layer)
-        return len(self.layer_list) - 1
+        self.layer_dict[layer.layer_name] = layer
+
+    def get_layer(self, name):
+        return self.layer_dict.get(name, None)
+
+    def get_all_layers(self):
+        return self.layer_dict.values()
 
     def remove_layer(self, layer):
         self.remove_widget(layer)
-        self.layer_list.remove(layer)
+        self.layer_dict.pop(layer.layer_name, None)
 
     def clear(self):
-        self.layer_list = []
+        print("Clearing Stack")
+        self.layer_dict = {}
         self.clear_widgets()
 
 
 class DrawableLayer(FloatLayout):
-    fbo = ObjectProperty(None)
+    layer_name = StringProperty("")
     class_name = StringProperty("")
 
-    mask_color = ObjectProperty((1, 1, 1, 1))
+    """ A bounding rectangle represented in the form (x, y, width, height)"""
+    bbox_bounds = ObjectProperty([0, 0, 0, 0])
+
+    bbox_visible = BooleanProperty(True)
     mask_visible = BooleanProperty(True)
 
+    # fbo = ObjectProperty(None)
     bbox_layer = ObjectProperty(None)
-    bbox_visible = BooleanProperty(True)
     bbox_color = ObjectProperty(
         kivy.utils.get_color_from_hex(
             ClientConfig.BBOX_UNSELECT))
     bbox_thickness = NumericProperty(1)
 
-    bbox_bounds = ObjectProperty([0, 0, 0, 0])
-    """ A bounding rectangle represented in the form (x, y, width, height)"""
-
-    def __init__(
-            self,
-            size,
-            class_name="",
-            mask_color=(1, 1, 1, 1),
-            texture=None,
-            bbox=None,
-            **kwargs):
+    def __init__(self,
+                 layer_name,
+                 texture,
+                 class_name="",
+                 mask_color=(1, 1, 1, 1),
+                 bbox=None,
+                 **kwargs):
         super().__init__(**kwargs)
-        self.size = size
-        self.class_name = class_name
-        self.mask_color = mask_color
+        self.layer_name = layer_name
         self.texture = texture
+        self.size = self.texture.size
+        self.class_name = class_name
+        self._mask_color = list(mask_color)
+        self.mask = None
 
         if bbox is not None:
-            self.bbox_bounds = [
-                bbox[0],
-                bbox[1],
-                bbox[2] - bbox[0],
-                bbox[3] - bbox[1]]
+            self.bbox_bounds = bbox
 
-        self.layer_view = None
         Clock.schedule_once(lambda dt: self.late_init())
 
     def late_init(self):
         self.paint_window.refresh()
         self.load_texture(self.texture)
+        self.set_mask_color(self._mask_color)
 
     def load_texture(self, texture):
         if self.texture:
@@ -995,6 +761,33 @@ class DrawableLayer(FloatLayout):
             g.add(Color(1, 1, 1, 1))
             g.add(Rectangle(size=self.get_fbo().size, texture=texture))
             self.paint_window.add_instruction(g)
+
+    def prepare_matrix(self):
+        self.mask = utils.mat2mask(utils.texture2mat(self.get_fbo().texture))
+
+    def set_mask_color(self, color):
+        print("New Mask Color: %s" % color)
+        self._mask_color = color
+        self.paint_window.update_color(color)
+
+    def get_mask_color(self):
+        return self._mask_color
+
+    def update_label(self, label):
+        if label is None:
+            return
+        self.class_name = label.name
+        new_color = label.color[:3] + [self.get_mask_color()[3],]
+        self.set_mask_color(new_color)
+
+    def update_bbox(self, bbox):
+        self.bbox_bounds = bbox
+
+    def set_bbox_highlight(self, active=True):
+        if active:
+            self.bbox_color = kivy.utils.get_color_from_hex(ClientConfig.BBOX_SELECT)
+        else:
+            self.bbox_color = kivy.utils.get_color_from_hex(ClientConfig.BBOX_UNSELECT)
 
     def get_fbo(self):
         return self.paint_window.fbo
@@ -1005,25 +798,144 @@ class DrawableLayer(FloatLayout):
     def remove_instruction(self, instruction):
         self.paint_window.remove_instruction(instruction)
 
-    def toggle_mask(self):
-        self.mask_visible = not self.mask_visible
-        self.paint_window.mask_layer.canvas.opacity = int(self.mask_visible)
+    def set_mask_visible(self, visible=True):
+        self.paint_window.set_visible(visible)
 
-    def toggle_bbox(self):
-        self.bbox_visible = not self.bbox_visible
-        self.bbox_layer.canvas.opacity = int(self.bbox_visible)
+    def set_bbox_visible(self, visible=True):
+        self.bbox_layer.canvas.opacity = float(visible)
+
+
+class ImageCanvasTabPanel(TabbedPanel):
+    def __init__(self, **kwargs):
+        self.app = App.get_running_app()
+        super().__init__(**kwargs)
+
+    def get_tab(self, iid):
+        for tab in self.tab_list:
+            if not isinstance(tab, ImageCanvasTab):
+                continue
+            if tab.image_canvas.image_id == iid:
+                return tab
+        return None
+
+    def has_tab(self, iid):
+        return self.get_tab(iid) is not None
+
+    def add_tab(self, iid):
+        image = self.app.root.current_screen.model.images.get(iid)
+        # Add Tab + Load everything
+        tab = ImageCanvasTab(image.name)
+        tab.image_canvas.load_image(image)
+        tab.image_canvas.load_annotations(image.annotations, overwrite=True)
+        self.add_widget(tab)
+
+    def switch_to(self, header, do_scroll=False):
+        if not isinstance(header, ImageCanvasTab):
+            return
+        if isinstance(self.current_tab, ImageCanvasTab):
+            self.current_tab.image_canvas.draw_tool.unbind_keyboard()
+
+        header.image_canvas.draw_tool.bind_keyboard()
+        header.image_canvas.resize()
+
+        screen = self.app.root.current_screen
+        screen.controller.update_tool_state(current_iid=header.image_canvas.image_id)
+        screen.queue_update()
+        return super(ImageCanvasTabPanel, self).switch_to(header, do_scroll)
+
+
+class ImageCanvasTab(TabbedPanelItem):
+    image_canvas = ObjectProperty(None)
+    tab_name = StringProperty("")
+    unsaved = BooleanProperty(False)
+
+    def __init__(self, name, **kwargs):
+        self.tab_name = name
+        super().__init__(**kwargs)
+
+    def get_iid(self):
+        return self.image_canvas.image_id
 
 
 class ImageCanvas(BoxLayout):
     scatter = ObjectProperty(None)
     image = ObjectProperty(None)
     image_id = NumericProperty(-1)
+    unsaved = BooleanProperty(False)
     draw_tool = ObjectProperty(None)
     layer_stack = ObjectProperty(None)
 
     max_scale = NumericProperty(10.0)
     min_scale = NumericProperty(0.5)
     step_scale = NumericProperty(0.1)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.app = App.get_running_app()
+
+    @mainthread
+    def resize(self):
+        model = self.app.root.current_screen.model
+        image = model.images.get(model.tool.get_current_image_id())
+        self.load_image(image)
+
+    def prepare_to_save(self):
+        # Note: This method must be run on the main thread
+        for layer in self.layer_stack.get_all_layers():
+            layer.prepare_matrix()
+
+    def load_save_status(self, unsaved):
+        self.unsaved = unsaved
+
+    def load_pen_size(self, size):
+        self.draw_tool.pen_size = size
+
+    def load_global_alpha(self, alpha):
+        self.layer_stack.set_alpha(alpha)
+
+    def load_eraser_state(self, eraser):
+        self.draw_tool.erase = eraser
+
+    def load_current_label(self, label):
+        if label is None or self.draw_tool.layer is None:
+            return
+        new_color = self.draw_tool.layer.get_mask_color()
+        new_color[:3] = label.color[:3]
+        self.draw_tool.layer.set_mask_color(new_color)
+
+    def load_current_layer(self, layer_name):
+        print("Loading Current Layer: %s" % layer_name)
+        layer = self.layer_stack.get_layer(layer_name)
+        if layer is None:
+            return
+        self.draw_tool.set_layer(layer)
+
+    def load_image(self, image_state):
+        if image_state is None:
+            return
+        print("Loading Image")
+        self.image_id = image_state.id
+        texture = utils.mat2texture(image_state.image)
+        self.image.texture = texture
+        self.image.size = image_state.shape[1::-1]
+
+    def load_annotations(self, annotations, overwrite=False):
+        print("Loading Annotations")
+        if overwrite:
+            self.layer_stack.clear()
+        for annotation in annotations.values():
+            layer = self.layer_stack.get_layer(annotation.annotation_name)
+            label = self.app.root.current_screen.model.labels.get(annotation.class_name)
+            if overwrite or layer is None:
+                layer = DrawableLayer(
+                    layer_name=annotation.annotation_name,
+                    size=annotation.mat.shape[1::-1],
+                    texture=utils.mat2texture(annotation.mat))
+                self.layer_stack.add_layer(layer)
+            layer.update_label(label)
+            layer.update_bbox(annotation.bbox)
+            layer.set_mask_visible(annotation.mask_enabled)
+            layer.set_bbox_visible(annotation.bbox_enabled)
 
     def on_touch_down(self, touch):
         if 'lctrl' in self.draw_tool.keycode_buffer and touch.is_mouse_scrolling:
@@ -1041,27 +953,24 @@ class ImageCanvas(BoxLayout):
                                      self.max_scale)
         self.scatter.pos = self.pos
 
-    def load_image(self, texture, image_id):
-        self.image_id = image_id
-        self.image.texture = texture
-        self.image.size = texture.size
-
-
-    def refresh_image(self):
-        print("refreshing")
-        window_state = App.get_running_app().root.current_screen.current_state
-        self.image.texture = window_state.image_texture
-        self.image.size = window_state.image_texture.size
-
-    def resize_image(self):
-        window_state = App.get_running_app().root.current_screen.current_state
-        self.image.texture = window_state.image_texture
-        self.image.size = window_state.image_texture.size
-
 
 class RightControlColumn(BoxLayout):
     image_queue = ObjectProperty(None)
     image_queue_control = ObjectProperty(None)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.app = App.get_running_app()
+
+    def load_image_queue(self):
+        self.image_queue.clear()
+        image_ids = self.app.root.current_screen.model.images.keys()
+        for iid in image_ids:
+            image = self.app.root.current_screen.model.images.get(iid)
+            self.image_queue.add_item(image.name,
+                                      iid,
+                                      locked=image.is_locked,
+                                      opened=image.is_open)
 
 
 class ImageQueueControl(GridLayout):
@@ -1070,48 +979,15 @@ class ImageQueueControl(GridLayout):
 
 class ImageQueue(GridLayout):
     queue = ObjectProperty(None)
-    queue_item_dict = {}
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.app = App.get_running_app()
+        self.queue_item_dict = {}
 
     def clear(self):
         self.queue.clear_widgets()
         self.queue_item_dict.clear()
-
-    def mark_item(self, image_id, locked=False, opened=False):
-        if image_id not in self.queue_item_dict:
-            return
-        self.queue_item_dict[image_id].set_status(lock=locked, opened=opened)
-
-    def refresh(self):
-        filter_details = {
-            "order_by": {
-                "key": "name",
-                "ascending": True
-            }
-        }
-        future = self.app.thread_pool.submit(self._refresh_queue, self.app.current_project_id, filter_details)
-        future.add_done_callback(self.app.alert_user)
-
-    def _refresh_queue(self, pid, filter_details):
-        resp = utils.get_project_images(pid, filter_details)
-
-        if resp.status_code != 200:
-            raise ApiException("Failed to retrieve project image ids.", resp.status_code)
-
-        result = resp.json()
-        new_ids = [x for x in result["ids"]
-                   if x not in self.queue_item_dict.keys()]
-
-        resp = utils.get_image_metas_by_ids(new_ids)
-        if resp.status_code != 200:
-            raise ApiException("Failed to retrieve image meta information.", resp.status_code)
-
-        result = resp.json()
-        for row in result["images"]:
-            self.add_item(row["name"], row["id"], locked=row["is_locked"])
 
     def add_item(self, name, image_id, locked=False, opened=False):
         item = ImageQueueItem()

@@ -5,7 +5,7 @@
 <InstanceAnnotatorScreen>:
     left_control: left_control
     right_control: right_control
-    image_canvas: image_canvas
+    tab_panel: tab_panel
     BoxLayout:
         orientation: "vertical"
         ActionBar:
@@ -21,11 +21,28 @@
             LeftControlColumn:
                 id: left_control
                 size_hint_x: 350 / root.width
-            ImageCanvas:
-                id: image_canvas
+            ImageCanvasTabPanel:
+                id: tab_panel
+
             RightControlColumn:
                 id: right_control
                 size_hint_x: 350 / root.width
+
+<ImageCanvasTabPanel>:
+    do_default_tab: False
+
+<TabbedPanelItem>:
+    tab_name: self.tab_name
+    unsaved: self.unsaved
+    image_canvas: image_canvas
+    text: self.tab_name + "*" * self.unsaved
+    halign: 'left'
+    valign: 'center'
+    text_size: self.size
+    padding: (10,0)
+    shorten: True
+    ImageCanvas:
+        id: image_canvas
 
 <LeftControlColumn>:
     tool_select: tool_select
@@ -91,35 +108,9 @@
         text: "Class Picker"
         size_hint_y: None
         height: 50
-
     GridLayout:
         id: grid
         cols: 2
-        ClassPickerItem:
-            class_name: "Eraser"
-            class_color: (0.1, 0.1, 0.1, 1)
-            on_release: root.enable_eraser(self)
-        ClassPickerItem:
-            class_name: "Green"
-            class_color: (0.3, 0.8, 0.2, 1)
-            on_parent: root.change_class(self)
-            on_release: root.change_class(self)
-        ClassPickerItem:
-            class_name: "Purple"
-            class_color: (0.5, 0.3, 0.9, 1)
-            on_release: root.change_class(self)
-        ClassPickerItem:
-            class_name: "Red"
-            class_color: (0.9, 0.2, 0.2, 1)
-            on_release: root.change_class(self)
-        ClassPickerItem:
-            class_name: "Blue"
-            class_color: (0.4, 0.7, 0.9, 1)
-            on_release: root.change_class(self)
-        ClassPickerItem:
-            class_name: "Yellow"
-            class_color: (0.9, 0.7, 0.0, 1)
-            on_release: root.change_class(self)
 
 <ClassPickerItem>
     class_color: self.class_color
@@ -132,6 +123,7 @@
     size_hint_y: None
     height: 50
     text: self.class_name
+
 <LayerView>:
     layer_item_layout: layer_item_layout
     cols: 1
@@ -149,9 +141,13 @@
 
 <LayerViewItem>:
     layer_name: self.layer_name
+
     mask_enabled: self.mask_enabled
     bbox_enabled: self.bbox_enabled
-    layer_index: self.layer_index
+    layer_selected: self.layer_selected
+
+    layer_select_cb: self.layer_select_cb
+    layer_delete_cb: self.layer_delete_cb
 
     button_up_color: self.button_up_color
     button_down_color : self.button_down_color
@@ -160,14 +156,13 @@
     btn_mask: btn_mask
     btn_bbox: btn_bbox
 
-
     height: 50
     size_hint_y: None
     Button:
         id: btn_base
         size_hint: (1,1)
         background_color: root.button_up_color
-        on_release: root.layer_view.select_layer_item(root.layer_name)
+        on_release: root.layer_select_cb()
     BoxLayout:
         size_hint: (1, 1)
         pos_hint: {'center_x': .5, 'center_y': .5}
@@ -178,20 +173,21 @@
             text: "M"
             size_hint_x: None
             width: self.height
-            on_release: root.toggle_mask()
+            on_release: root.mask_enabled = not root.mask_enabled
             background_color: root.button_down_color
         Button:
             id: btn_bbox
             text: "B"
             size_hint_x: None
             width: self.height
-            on_release: root.toggle_bbox()
+            on_release: root.bbox_enabled = not root.bbox_enabled
             background_color: root.button_down_color
         Label:
             text: root.layer_name
             halign: 'left'
             valign: 'center'
             text_size: self.size
+            shorten: True
     BoxLayout:
         pos_hint: {'right': 1, 'top': 1}
         size_hint_y: 0.5
@@ -201,10 +197,15 @@
         padding: 8
         Button:
             text: "X"
-            on_release: root.layer_view.delete_layer_item(root.layer_name)
+            on_release: root.layer_delete_cb()
 
 <ImageCanvas>:
     image_id: self.image_id
+    pen_size: self.pen_size
+    alpha: self.alpha
+    current_class: self.current_class
+    current_layer: self.current_layer
+
     scatter: scatter
     image: image
     layer_stack: layer_stack
@@ -212,7 +213,7 @@
     scroll_view: scroll_view
     canvas:
         Color:
-            rgba: 0.8, 0.8, 0.8, 0.8
+            rgba: 1.0, 0.0, 0.1, 0.8
         Rectangle:
             pos: self.pos
             size: self.size
@@ -229,7 +230,6 @@
             Image:
                 id: image
                 keep_ratio: True
-                size: root.size
                 pos: root.pos
                 size_hint:(None, None)
                 FloatLayout:
@@ -263,11 +263,9 @@
     PaintWindow:
         id: paint_window
         size: root.size
-        mask_color: root.mask_color
-
     Widget:
         id: bbox_layer
-        canvas.before:
+        canvas:
             Color:
                 rgba: root.bbox_color
             Line:
@@ -301,7 +299,7 @@
         text: "Next"
         size_hint_y: None
         height: 50
-        on_release: app.root.current_screen.load_image()
+        on_release: app.root.current_screen.load_next()
     Button:
         id: btn_save
         text: "Save"
@@ -313,7 +311,7 @@
         text: "Refresh"
         size_hint_y: None
         height: 50
-        on_release: app.root.current_screen.refresh_image_queue()
+        on_release: app.root.current_screen.fetch_image_metas()
 
 <ImageQueue>:
     queue: queue
