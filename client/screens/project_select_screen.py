@@ -1,17 +1,14 @@
-import json
 from datetime import datetime
+
 import dateutil.parser
-from multiprocessing import Pool
-from concurrent.futures import ThreadPoolExecutor
-
-
 from kivy.app import App
-from kivy.network.urlrequest import UrlRequest
+from kivy.clock import mainthread
 from kivy.uix.screenmanager import Screen
 
 import client.utils as utils
-from client.utils import ApiException
 from client.screens.common import *
+from client.utils import ApiException
+from client.utils import background
 
 # Load corresponding kivy file
 Builder.load_file(
@@ -31,11 +28,8 @@ class AddProjectPopup(Popup):
         super().__init__(**kwargs)
         self.app = App.get_running_app()
 
+    @background
     def add_project(self, project_name):
-        future = self.app.thread_pool.submit(self._add_project, project_name)
-        future.add_done_callback(self.app.alert_user)
-
-    def _add_project(self, project_name):
         resp = utils.add_projects(project_name)
 
         if resp.status_code == 200:
@@ -45,8 +39,8 @@ class AddProjectPopup(Popup):
                 msg.append(row["error"]["message"])
             msg = '\n'.join(msg)
             raise ApiException(
-                message="The following errors occurred while trying to add project '%s':\n %s" % (project_name, msg),
-                code=resp.status_code)
+                message="The following errors occurred while trying to add project '%s':\n %s" %
+                (project_name, msg), code=resp.status_code)
         elif resp.status_code != 201:
             raise ApiException("Failed to add project '%s'." % project_name)
 
@@ -64,7 +58,20 @@ class AddProjectPopup(Popup):
         self.dismiss()
 
 
+class ProjectSelectScreen(Screen):
+    project_view_window = ObjectProperty(None)
+    control_bar = ObjectProperty(None)
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.app = App.get_running_app()
+
+    def on_enter(self, *args):
+        self.project_view_window.refresh_projects()
+
+
 class ControlBar(BoxLayout):
+    @mainthread
     def open_add_project_popup(self):
         pop_up = AddProjectPopup()
         pop_up.open()
@@ -78,6 +85,7 @@ class ProjectViewWindow(TileView):
         super().__init__(**kwargs)
         self.app = App.get_running_app()
 
+    @mainthread
     def add_card(
             self,
             name,
@@ -96,14 +104,17 @@ class ProjectViewWindow(TileView):
         self.add_widget(card)
         card.format_last_updated_label()
 
-    def refresh_projects(self):
-        future = self.app.thread_pool.submit(self._refresh_projects)
-        future.add_done_callback(self.app.alert_user)
+    @mainthread
+    def remove_card(self, card):
+        self.remove_widget(card)
 
-    def _refresh_projects(self):
+    @background
+    def refresh_projects(self):
         resp = utils.get_projects()
         if resp.status_code != 200:
-            raise ApiException("Failed to refresh project list", resp.status_code)
+            raise ApiException(
+                "Failed to refresh project list",
+                resp.status_code)
 
         result = resp.json()
         self.clear_widgets()
@@ -134,7 +145,7 @@ class ProjectCard(BoxLayout):
         pop_up.confirmation_callback = self.delete_card
         pop_up.open()
 
-    def format_last_updated_label(self, *args):
+    def format_last_updated_label(self):
         delta = datetime.utcnow() - self.last_update_time
         seconds = delta.total_seconds()
 
@@ -170,32 +181,14 @@ class ProjectCard(BoxLayout):
         self.last_update_label.text = 'Updated [b][color=%s]%d %s[/color][/b] ago' % (
             ClientConfig.CLIENT_HIGHLIGHT_1, time, time_unit)
 
+    @background
     def delete_card(self):
-        future = self.app.thread_pool.submit(self._delete_card, self.project_id)
-        future.add_done_callback(self.app.alert_user)
-
-    def _delete_card(self, pid):
+        pid = self.project_id
         resp = utils.delete_project(pid)
         if resp.status_code != 200:
-            raise ApiException("Failed to delete project with id %d" % pid, resp.status_code)
+            raise ApiException(
+                "Failed to delete project with id %d" %
+                pid, resp.status_code)
 
         pvw = App.get_running_app().root.current_screen.project_view_window
-        pvw.remove_widget(self)
-
-
-class ProjectSelectScreen(Screen):
-    project_view_window = ObjectProperty(None)
-    control_bar = ObjectProperty(None)
-
-    def __init__(self, **kw):
-        super().__init__(**kw)
-        self.app = App.get_running_app()
-
-    def on_enter(self, *args):
-        self.project_view_window.refresh_projects()
-
-    def enter_project(self, name, id, *args):
-        self.app.current_project_name = name
-        self.app.current_project_id = id
-
-        self.app.sm.current = "ProjectTool"
+        pvw.remove_card(self)

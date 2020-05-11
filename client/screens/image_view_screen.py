@@ -1,9 +1,10 @@
 from kivy.app import App
 from kivy.uix.screenmanager import Screen
 
-from client.utils import ApiException
 import client.utils as utils
 from client.screens.common import *
+from client.utils import ApiException
+from client.utils import background
 
 # Load corresponding kivy file
 Builder.load_file(
@@ -33,13 +34,15 @@ class ImageViewScreen(Screen):
                 "ascending": True
             }
         }
-        future = self.app.thread_pool.submit(self._load_images, self.app.current_project_id, filter_details)
-        future.add_done_callback(self.app.alert_user)
+        self._load_images(self.app.current_project_id, filter_details)
 
+    @background
     def _load_images(self, pid, filter_details):
         resp = utils.get_project_images(pid, filter_details=filter_details)
         if resp.status_code != 200:
-            raise ApiException("Failed to load project images from server.", resp.status_code)
+            raise ApiException(
+                "Failed to load project images from server.",
+                resp.status_code)
 
         result = resp.json()
         for row in result["images"]:

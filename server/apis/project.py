@@ -4,16 +4,13 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-
 from flask import request
 from flask_restplus import Namespace, Resource, fields
-
 from mysql.connector.errors import DatabaseError
 
 from server.core.common_dtos import common_store
 from server.server_config import DatabaseInstance
 from server.server_config import ServerConfig
-
 
 api = Namespace('projects', description='Project related operations')
 

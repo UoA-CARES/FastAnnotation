@@ -5,8 +5,9 @@ from kivy.app import App
 from kivy.uix.screenmanager import Screen
 
 import client.utils as utils
-from client.utils import ApiException
 from client.screens.common import *
+from client.utils import ApiException
+from client.utils import background
 from definitions import ROOT_DIR
 
 # Load corresponding kivy file
@@ -31,9 +32,7 @@ class ProjectToolScreen(Screen):
                 # tkinter does not return windows style filepath
                 image_paths.append(root + '/' + f)
 
-        future = self.app.thread_pool(self._upload_images, self.app.current_project_id, image_paths)
-        future.add_done_callback(self.app.alert_user)
-
+    @background
     def _upload_images(self, pid, image_paths):
         resp = utils.add_project_images(pid, image_paths)
         if resp.status_code == 200:
@@ -43,7 +42,9 @@ class ProjectToolScreen(Screen):
                 msg.append(row["error"]["message"])
             msg = '\n'.join(msg)
             raise ApiException(
-                message="The following errors occurred while trying to upload images:\n %s" % (msg,),
-                code=resp.status_code)
+                message="The following errors occurred while trying to upload images:\n %s" %
+                (msg,), code=resp.status_code)
         elif resp.status_code != 201:
-            raise ApiException("Failed to upload images to project.", resp.status_code)
+            raise ApiException(
+                "Failed to upload images to project.",
+                resp.status_code)

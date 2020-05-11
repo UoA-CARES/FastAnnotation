@@ -1,9 +1,8 @@
-import cv2
 import numpy as np
-import client.utils as utils
-from client.utils import ApiException
 
+import client.utils as utils
 from client.model.instance_annotator_model import ImageState, AnnotationState, LabelState
+from client.utils import ApiException
 
 
 class InstanceAnnotatorController:
@@ -98,7 +97,10 @@ class InstanceAnnotatorController:
             print("\t%s" % str(bbox))
 
             annotations[annotation_name] = AnnotationState(
-                annotation_name=annotation_name, class_name=class_name, mat=utils.mask2mat(mask), bbox=bbox)
+                annotation_name=annotation_name,
+                class_name=class_name,
+                mat=utils.mask2mat(mask),
+                bbox=bbox)
 
             i += 1
 
@@ -234,7 +236,15 @@ class InstanceAnnotatorController:
         if current_label is not None:
             self.model.tool.set_current_label_name(current_label)
 
-    def update_annotation(self, iid=None, layer_name=None, bbox=None, texture=None, label_name=None, mask_enabled=None, bbox_enabled=None):
+    def update_annotation(
+            self,
+            iid=None,
+            layer_name=None,
+            bbox=None,
+            texture=None,
+            label_name=None,
+            mask_enabled=None,
+            bbox_enabled=None):
         # Populate iid and layer_name with current values if None
         if iid is None:
             iid = self.model.tool.get_current_image_id()
@@ -267,7 +277,12 @@ class InstanceAnnotatorController:
         image.annotations[layer_name] = annotation
         self.model.images.add(iid, image)
 
-    def update_image_meta(self, iid, is_locked=None, is_open=None, unsaved=None):
+    def update_image_meta(
+            self,
+            iid,
+            is_locked=None,
+            is_open=None,
+            unsaved=None):
         image = self.model.images.get(iid)
         if image is None:
             return

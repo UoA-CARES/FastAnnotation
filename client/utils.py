@@ -1,18 +1,18 @@
 """
 A utility file containing common methods
 """
-import requests
 import base64
 import io
 import json
 import os
 
-from PIL import Image
 import cv2
 import numpy as np
+import requests
+from PIL import Image
+from kivy.app import App
 from kivy.graphics.texture import Texture
 from kivy.uix.image import CoreImage
-from kivy.clock import mainthread
 
 from client.client_config import ClientConfig
 
@@ -24,6 +24,15 @@ class ApiException(Exception):
 
     def __str__(self):
         return "ApiException, %s" % self.message
+
+
+def background(f):
+    def aux(*xs, **kws):
+        app = App.get_running_app()
+        future = app.thread_pool.submit(f, *xs, **kws)
+        future.add_done_callback(app.alert_user)
+        return future
+    return aux
 
 
 def get_project_by_id(id):

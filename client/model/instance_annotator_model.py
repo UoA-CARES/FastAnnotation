@@ -1,8 +1,8 @@
 import uuid
-import numpy as np
-
-from threading import Lock
 from copy import deepcopy
+from threading import Lock
+
+import numpy as np
 
 
 class BlockingList:

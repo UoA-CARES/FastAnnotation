@@ -1,6 +1,8 @@
-import os
 import math
+import os
+
 import numpy as np
+from kivy.graphics import Color
 from kivy.graphics import Rectangle, Fbo
 from kivy.lang import Builder
 from kivy.properties import ObjectProperty, StringProperty, NumericProperty
@@ -13,7 +15,6 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.popup import Popup
 from kivy.uix.stacklayout import StackLayout
 from kivy.uix.widget import Widget
-from kivy.graphics import Color
 
 from client.client_config import ClientConfig
 

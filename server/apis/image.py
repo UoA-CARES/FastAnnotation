@@ -1,12 +1,11 @@
 import base64
-import cv2
 import os
 
-import server.utils as utils
 from flask import request
 from flask_restplus import Namespace, Resource, fields, marshal
 from mysql.connector.errors import DatabaseError
 
+import server.utils as utils
 from server.core.common_dtos import common_store
 from server.server_config import DatabaseInstance
 from server.server_config import ServerConfig

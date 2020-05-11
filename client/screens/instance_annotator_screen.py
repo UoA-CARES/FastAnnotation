@@ -6,7 +6,7 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.clock import mainthread
 from kivy.core.window import Window
-from kivy.graphics import Color, Ellipse, InstructionGroup, Line
+from kivy.graphics import Ellipse, InstructionGroup, Line
 from kivy.properties import BooleanProperty
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.screenmanager import Screen
@@ -16,24 +16,13 @@ import client.utils as utils
 from client.controller.instance_annotator_controller import InstanceAnnotatorController
 from client.model.instance_annotator_model import InstanceAnnotatorModel
 from client.screens.common import *
-
-
-import random
+from client.utils import background
 
 # Load corresponding kivy file
 Builder.load_file(
     os.path.join(
         ClientConfig.SCREEN_DIR,
         'instance_annotator_screen.kv'))
-
-
-def background(f):
-    def aux(*xs, **kws):
-        app = App.get_running_app()
-        future = app.thread_pool.submit(f, *xs, **kws)
-        future.add_done_callback(app.alert_user)
-        return future
-    return aux
 
 
 class InstanceAnnotatorScreen(Screen):
@@ -193,14 +182,16 @@ class InstanceAnnotatorScreen(Screen):
                 "ascending": True
             }
         }
-        self.controller.fetch_image_metas(self.app.current_project_id, filter_details)
+        self.controller.fetch_image_metas(
+            self.app.current_project_id, filter_details)
         self.queue_update()
 
     @background
     def fetch_class_labels(self):
         self.controller.fetch_class_labels(self.app.current_project_id)
         if self.model.tool.get_current_label_name() is "":
-            self.controller.update_tool_state(current_label=self.model.labels.keys()[0])
+            self.controller.update_tool_state(
+                current_label=self.model.labels.keys()[0])
         self.queue_update()
 
 
@@ -254,7 +245,8 @@ class ClassPicker(GridLayout):
             current_label=class_name)
 
         if class_name not in ("", "eraser"):
-            self.app.root.current_screen.controller.update_annotation(label_name=class_name)
+            self.app.root.current_screen.controller.update_annotation(
+                label_name=class_name)
         self.app.root.current_screen.queue_update()
 
     def clear(self):
@@ -373,7 +365,8 @@ class LayerView(GridLayout):
             self.current_selection = None
         self.layer_item_layout.remove_widget(instance)
         iid = self.app.root.current_screen.model.tool.get_current_image_id()
-        self.app.root.current_screen.controller.delete_layer(iid, instance.layer_name)
+        self.app.root.current_screen.controller.delete_layer(
+            iid, instance.layer_name)
         self.app.root.current_screen.queue_update()
 
 
@@ -404,13 +397,15 @@ class LayerViewItem(RelativeLayout):
     def on_mask_enabled(self, instance, value):
         self.btn_mask.background_color = self.button_down_color if value else self.button_up_color
         self.btn_mask.state = 'down' if value else 'normal'
-        self.app.root.current_screen.controller.update_annotation(layer_name=self.layer_name, mask_enabled=value)
+        self.app.root.current_screen.controller.update_annotation(
+            layer_name=self.layer_name, mask_enabled=value)
         self.app.root.current_screen.queue_update()
 
     def on_bbox_enabled(self, instance, value):
         self.btn_bbox.background_color = self.button_down_color if value else self.button_up_color
         self.btn_bbox.state = 'down' if value else 'normal'
-        self.app.root.current_screen.controller.update_annotation(layer_name=self.layer_name, bbox_enabled=value)
+        self.app.root.current_screen.controller.update_annotation(
+            layer_name=self.layer_name, bbox_enabled=value)
         self.app.root.current_screen.queue_update()
 
     def select(self):
@@ -469,7 +464,8 @@ class DrawTool(MouseDrawnTool):
     def bind_shortcuts(self):
         self.keyboard_shortcuts[("lctrl", "z")] = self.undo
         self.keyboard_shortcuts[("lctrl", "y")] = self.redo
-        self.keyboard_shortcuts[("spacebar",)] = self.app.root.current_screen.add_layer
+        self.keyboard_shortcuts[("spacebar",
+                                 )] = self.app.root.current_screen.add_layer
 
     def bind_keyboard(self):
         print("Binding keyboard")
@@ -777,7 +773,7 @@ class DrawableLayer(FloatLayout):
         if label is None:
             return
         self.class_name = label.name
-        new_color = label.color[:3] + [self.get_mask_color()[3],]
+        new_color = label.color[:3] + [self.get_mask_color()[3], ]
         self.set_mask_color(new_color)
 
     def update_bbox(self, bbox):
@@ -785,9 +781,11 @@ class DrawableLayer(FloatLayout):
 
     def set_bbox_highlight(self, active=True):
         if active:
-            self.bbox_color = kivy.utils.get_color_from_hex(ClientConfig.BBOX_SELECT)
+            self.bbox_color = kivy.utils.get_color_from_hex(
+                ClientConfig.BBOX_SELECT)
         else:
-            self.bbox_color = kivy.utils.get_color_from_hex(ClientConfig.BBOX_UNSELECT)
+            self.bbox_color = kivy.utils.get_color_from_hex(
+                ClientConfig.BBOX_UNSELECT)
 
     def get_fbo(self):
         return self.paint_window.fbo
@@ -839,7 +837,8 @@ class ImageCanvasTabPanel(TabbedPanel):
         header.image_canvas.resize()
 
         screen = self.app.root.current_screen
-        screen.controller.update_tool_state(current_iid=header.image_canvas.image_id)
+        screen.controller.update_tool_state(
+            current_iid=header.image_canvas.image_id)
         screen.queue_update()
         return super(ImageCanvasTabPanel, self).switch_to(header, do_scroll)
 
@@ -925,7 +924,8 @@ class ImageCanvas(BoxLayout):
             self.layer_stack.clear()
         for annotation in annotations.values():
             layer = self.layer_stack.get_layer(annotation.annotation_name)
-            label = self.app.root.current_screen.model.labels.get(annotation.class_name)
+            label = self.app.root.current_screen.model.labels.get(
+                annotation.class_name)
             if overwrite or layer is None:
                 layer = DrawableLayer(
                     layer_name=annotation.annotation_name,
