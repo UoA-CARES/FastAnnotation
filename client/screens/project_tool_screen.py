@@ -13,7 +13,7 @@ from definitions import ROOT_DIR
 # Load corresponding kivy file
 Builder.load_file(
     os.path.join(
-        ClientConfig.SCREEN_DIR,
+        ClientConfig.DATA_DIR,
         'project_tool_screen.kv'))
 
 

@@ -1,20 +1,22 @@
+import os
+import sys
 import traceback
-import requests
 from concurrent.futures import ThreadPoolExecutor
+
 from kivy.app import App
 from kivy.config import Config
 from kivy.properties import StringProperty, NumericProperty
+from kivy.resources import resource_add_path
 from kivy.uix.screenmanager import ScreenManager
 
+import client.utils as utils
 from client.client_config import ClientConfig
+from client.screens.common import Alert
 from client.screens.image_view_screen import ImageViewScreen
 from client.screens.instance_annotator_screen import InstanceAnnotatorScreen
 from client.screens.project_select_screen import ProjectSelectScreen
 from client.screens.project_tool_screen import ProjectToolScreen
-
-import client.utils as utils
 from client.utils import ApiException
-from client.screens.common import Alert
 
 Config.set('input', 'mouse', 'mouse,disable_multitouch')
 
@@ -42,7 +44,8 @@ class AnnotationClientApp(App):
     current_project_id = NumericProperty(0)
     sm = None
     open_images = []
-    thread_pool = ThreadPoolExecutor(max_workers=ClientConfig.CLIENT_POOL_LIMIT)
+    thread_pool = ThreadPoolExecutor(
+        max_workers=ClientConfig.CLIENT_POOL_LIMIT)
 
     def register_image(self, image_id):
         self.open_images.append(image_id)
@@ -89,7 +92,16 @@ class AnnotationClientApp(App):
         pop_up.open()
 
 
+def resourcePath():
+    """Returns path containing content - either locally or in pyinstaller tmp file"""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS)
+
+    return os.path.join(os.path.abspath("."))
+
+
 if __name__ == "__main__":
+    resource_add_path(resourcePath())  # add this line
     app = AnnotationClientApp()
     try:
         app.run()
