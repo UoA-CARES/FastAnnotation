@@ -240,8 +240,9 @@ def texture2bytes(texture):
 
 
 def mat2texture(mat):
-    mat = cv2.flip(mat, 0)
-    mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGBA)
+    if mat.shape[-1] is not 4:
+        mat = cv2.flip(mat, 0)
+        mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGBA)
     buf = mat.tostring()
     tex = Texture.create(size=(mat.shape[1], mat.shape[0]), colorfmt='rgba')
     tex.blit_buffer(buf, colorfmt='rgba', bufferfmt='ubyte')

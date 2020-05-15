@@ -528,6 +528,7 @@ class DrawTool(MouseDrawnTool):
         self.layer.set_bbox_highlight(active=True)
 
     def on_touch_down_hook(self, touch):
+        print("DrawTool Touch Down")
         if not self.layer:
             return
         if 'lctrl' in self.keycode_buffer:
@@ -538,8 +539,10 @@ class DrawTool(MouseDrawnTool):
                 return
             item = select_items[self._consecutive_selects % len(select_items)]
 
-            self.app.root.current_screen.controller.update_tool_state(
+            screen = self.app.root.current_screen
+            screen.controller.update_tool_state(
                 current_layer=item.annotation_name)
+            screen.queue_update()
             self._consecutive_selects += 1
             return
 
@@ -560,6 +563,9 @@ class DrawTool(MouseDrawnTool):
 
     def on_touch_move_hook(self, touch):
         if not self.layer:
+            return
+        
+        if not self.mask_stack:
             return
 
         pos = np.round(touch.pos).astype(int)
@@ -630,7 +636,7 @@ class DrawTool(MouseDrawnTool):
         if fbo is None:
             return
 
-        if np.sum(fbo.get_pixel_color(*pos)) > 0:
+        if np.sum(fbo.get_pixel_color(*pos)[:3]) > 0:
             return
 
         bounds = self.layer.bbox_bounds
@@ -652,9 +658,10 @@ class DrawTool(MouseDrawnTool):
         cv2.floodFill(mat_copy, mask, tuple(cv2_pos), (255, 255, 255))
 
         mat = np.clip(mat_copy - mat, 0, 255)
-        mat = cv2.flip(mat, 0)
-
-        # Convert to instruction
+        mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGBA)
+        mask = cv2.inRange(mat, (0, 0, 0, 255), (0, 0, 0, 255))
+        mat[mask == 255] = 0
+        # TODO: Allow eraser fill
         g = InstructionGroup()
         g.add(Color(1, 1, 1, 1))
         g.add(Rectangle(size=(width, height),
@@ -947,6 +954,7 @@ class ImageCanvas(BoxLayout):
             layer.set_bbox_visible(annotation.bbox_enabled)
 
     def on_touch_down(self, touch):
+        print("Image Canvas Touch Down")
         if 'lctrl' in self.draw_tool.keycode_buffer and touch.is_mouse_scrolling:
             if touch.button == 'scrolldown':
                 self.zoom(1.0 + self.step_scale)
