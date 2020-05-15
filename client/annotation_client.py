@@ -43,15 +43,8 @@ class AnnotationClientApp(App):
     current_project_name = StringProperty("")
     current_project_id = NumericProperty(0)
     sm = None
-    open_images = []
     thread_pool = ThreadPoolExecutor(
         max_workers=ClientConfig.CLIENT_POOL_LIMIT)
-
-    def register_image(self, image_id):
-        self.open_images.append(image_id)
-
-    def deregister_image(self, image_id):
-        self.open_images.remove(image_id)
 
     def build(self):
         print("Building")
@@ -111,8 +104,9 @@ if __name__ == "__main__":
         print(tb)
     finally:
         app.thread_pool.shutdown(wait=True)
-        print(app.open_images)
-        for iid in app.open_images:
+        open_images = app.sm.get_screen("InstanceAnnotator").model.active.copy()
+        print(open_images)
+        for iid in open_images:
             response = utils.update_image_meta_by_id(iid, lock=False)
             if response.status_code == 200:
                 print("Unlocked %d" % iid)
