@@ -19,7 +19,7 @@ from kivy.uix.widget import Widget
 from client.client_config import ClientConfig
 
 # Load corresponding kivy file
-Builder.load_file(os.path.join(ClientConfig.SCREEN_DIR, 'common.kv'))
+Builder.load_file(os.path.join(ClientConfig.DATA_DIR, 'common.kv'))
 
 
 class Alert(Popup):

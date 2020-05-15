@@ -7,6 +7,8 @@ class ClientConfig:
     """ A collection of constants utilized by the client """
 
     SERVER_URL = "http://localhost:5000/"
+    # Switch to production URL before building executable
+    # SERVER_URL = "http://130.216.239.117:5000/"
 
     SECONDS_PER_MINUTE = 60
     SECONDS_PER_HOUR = 3600
@@ -20,6 +22,6 @@ class ClientConfig:
     BBOX_SELECT = "#ff0000"
     BBOX_UNSELECT = "#ebcf1a"
 
-    SCREEN_DIR = os.path.join(ROOT_DIR, 'client', 'screens')
+    DATA_DIR = os.path.join(ROOT_DIR, 'client', 'data')
 
     CLIENT_POOL_LIMIT = 50

@@ -13,7 +13,7 @@ from client.utils import background
 # Load corresponding kivy file
 Builder.load_file(
     os.path.join(
-        ClientConfig.SCREEN_DIR,
+        ClientConfig.DATA_DIR,
         'project_select_screen.kv'))
 
 
