@@ -232,7 +232,8 @@ class InstanceAnnotatorController:
             img = self.model.images.get(iid)
             if img is not None:
                 annotation = img.annotations.get(current_layer, None)
-                self.model.tool.set_current_label_name(annotation.class_name)
+                if annotation is not None:
+                    self.model.tool.set_current_label_name(annotation.class_name)
         if current_label is not None:
             self.model.tool.set_current_label_name(current_label)
 

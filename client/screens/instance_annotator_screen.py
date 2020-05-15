@@ -920,8 +920,17 @@ class ImageCanvas(BoxLayout):
 
     def load_annotations(self, annotations, overwrite=False):
         print("Loading Annotations")
+
         if overwrite:
             self.layer_stack.clear()
+
+        active_layers = [x.layer_name for x in self.layer_stack.get_all_layers()]
+        active_annotations = [x.annotation_name for x in annotations.values()]
+
+        for layer_name in active_layers:
+            if layer_name not in active_annotations:
+                self.layer_stack.remove_layer(self.layer_stack.get_layer(layer_name))
+
         for annotation in annotations.values():
             layer = self.layer_stack.get_layer(annotation.annotation_name)
             label = self.app.root.current_screen.model.labels.get(
