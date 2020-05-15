@@ -528,7 +528,6 @@ class DrawTool(MouseDrawnTool):
         self.layer.set_bbox_highlight(active=True)
 
     def on_touch_down_hook(self, touch):
-        print("DrawTool Touch Down")
         if not self.layer:
             return
         if 'lctrl' in self.keycode_buffer:
@@ -928,6 +927,9 @@ class ImageCanvas(BoxLayout):
     def load_annotations(self, annotations, overwrite=False):
         print("Loading Annotations")
 
+        if annotations is None:
+            return
+
         if overwrite:
             self.layer_stack.clear()
 
@@ -954,7 +956,6 @@ class ImageCanvas(BoxLayout):
             layer.set_bbox_visible(annotation.bbox_enabled)
 
     def on_touch_down(self, touch):
-        print("Image Canvas Touch Down")
         if 'lctrl' in self.draw_tool.keycode_buffer and touch.is_mouse_scrolling:
             if touch.button == 'scrolldown':
                 self.zoom(1.0 + self.step_scale)
