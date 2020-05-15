@@ -253,7 +253,7 @@ class InstanceAnnotatorController:
             layer_name = self.model.tool.get_current_layer_name()
 
         image = self.model.images.get(iid)
-        if image is None:
+        if image is None or image.annotations is None:
             return
 
         annotation = image.annotations.get(layer_name, None)
