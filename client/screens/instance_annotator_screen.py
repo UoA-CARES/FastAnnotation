@@ -494,6 +494,8 @@ class DrawTool(MouseDrawnTool):
         if not self.mask_stack:
             return
         action = self.mask_stack.pop()
+        if action.layer.parent is None:
+            self.undo()
         self.delete_stack.append(action)
         action.layer.remove_instruction(action.group)
         self.fit_bbox(layer=action.layer)
@@ -508,6 +510,8 @@ class DrawTool(MouseDrawnTool):
         if not self.delete_stack:
             return
         action = self.delete_stack.pop()
+        if action.layer.parent is None:
+            self.redo()
         self.mask_stack.append(action)
         action.layer.add_instruction(action.group)
         self.fit_bbox(layer=action.layer)
