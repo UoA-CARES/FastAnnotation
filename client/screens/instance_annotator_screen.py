@@ -125,13 +125,6 @@ class InstanceAnnotatorScreen(Screen):
     def on_enter(self, *args):
         self.fetch_image_metas()
         self.fetch_class_labels()
-        Window.bind(on_resize=self.auto_resize)
-
-    def auto_resize(self, *args):
-        image_canvas = self.get_current_image_canvas()
-        if image_canvas is None:
-            return
-        image_canvas.resize()
 
     @background
     def load_next(self):
@@ -499,6 +492,7 @@ class DrawTool(MouseDrawnTool):
         self.delete_stack.append(mask)
         self.layer.remove_instruction(mask)
         self.fit_bbox()
+        self.app.root.current_screen.controller.update_annotation()
 
     def redo(self):
         if not self.delete_stack:
@@ -840,7 +834,6 @@ class ImageCanvasTabPanel(TabbedPanel):
             self.current_tab.image_canvas.draw_tool.unbind_keyboard()
 
         header.image_canvas.draw_tool.bind_keyboard()
-        header.image_canvas.resize()
 
         screen = self.app.root.current_screen
         screen.controller.update_tool_state(
@@ -877,12 +870,6 @@ class ImageCanvas(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.app = App.get_running_app()
-
-    @mainthread
-    def resize(self):
-        model = self.app.root.current_screen.model
-        image = model.images.get(model.tool.get_current_image_id())
-        self.load_image(image)
 
     def prepare_to_save(self):
         # Note: This method must be run on the main thread

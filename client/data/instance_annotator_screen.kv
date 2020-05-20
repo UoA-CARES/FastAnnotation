@@ -227,19 +227,22 @@
             id: scroll_view
             width: root.width / root.scatter.scale
             height: root.height / root.scatter.scale
-            Image:
-                id: image
-                keep_ratio: True
-                pos: root.pos
+            on_size: print("ScrollView Size: %s" % str(self.size))
+            on_pos: print("ScrollView Pos: %s" % str(self.pos))
+            RelativeLayout:
+                pos: (0,0)
+                size: root.image.size
                 size_hint:(None, None)
-                FloatLayout:
-                    size: self.parent.size
-                    DrawTool:
-                        id: draw_tool
-                        size: self.parent.size
-                    LayerStack:
-                        id: layer_stack
-                        size: self.parent.size
+                Image:
+                    id: image
+                    keep_ratio: True
+                    pos: (0,0)
+                DrawTool:
+                    id: draw_tool
+                    pos: (0,0)
+                LayerStack:
+                    id: layer_stack
+                    pos: (0,0)
 
 
 <LayerStack>:
