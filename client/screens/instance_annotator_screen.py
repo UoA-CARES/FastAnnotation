@@ -441,6 +441,11 @@ class DrawTool(MouseDrawnTool):
 
     erase = BooleanProperty(False)
 
+    class Action:
+        def __init__(self, layer, group):
+            self.layer = layer
+            self.group = group
+
     def __init__(self, **kwargs):
         self.app = App.get_running_app()
         self.keyboard_shortcuts = {}
@@ -488,23 +493,34 @@ class DrawTool(MouseDrawnTool):
     def undo(self):
         if not self.mask_stack:
             return
-        mask = self.mask_stack.pop()
-        self.delete_stack.append(mask)
-        self.layer.remove_instruction(mask)
-        self.fit_bbox()
-        self.app.root.current_screen.controller.update_annotation()
+        action = self.mask_stack.pop()
+        self.delete_stack.append(action)
+        action.layer.remove_instruction(action.group)
+        self.fit_bbox(layer=action.layer)
+
+        screen = self.app.root.current_screen
+        iid = screen.model.tool.get_current_image_id()
+        screen.controller.update_annotation(iid,
+                                            layer_name=action.layer.layer_name,
+                                            bbox=action.layer.bbox_bounds)
 
     def redo(self):
         if not self.delete_stack:
             return
-        mask = self.delete_stack.pop()
-        self.mask_stack.append(mask)
-        self.layer.add_instruction(mask)
-        self.fit_bbox()
+        action = self.delete_stack.pop()
+        self.mask_stack.append(action)
+        action.layer.add_instruction(action.group)
+        self.fit_bbox(layer=action.layer)
+
+        screen = self.app.root.current_screen
+        iid = screen.model.tool.get_current_image_id()
+        screen.controller.update_annotation(iid,
+                                            layer_name=action.layer.layer_name,
+                                            bbox=action.layer.bbox_bounds)
 
     def add_action(self, instruction_group):
         self.layer.add_instruction(instruction_group)
-        self.mask_stack.append(instruction_group)
+        self.mask_stack.append(DrawTool.Action(self.layer, instruction_group))
         self.delete_stack.clear()
 
         screen = self.app.root.current_screen
@@ -563,8 +579,8 @@ class DrawTool(MouseDrawnTool):
 
         pos = np.round(touch.pos).astype(int)
 
-        mask = self.mask_stack[-1]
-        mask.line.points += list(pos)
+        action = self.mask_stack[-1]
+        action.group.line.points += list(pos)
 
     def on_touch_up_hook(self, touch):
         if not self.layer:
