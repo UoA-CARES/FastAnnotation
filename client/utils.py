@@ -118,29 +118,24 @@ def update_image_meta_by_id(image_id, name=None, lock=None, labeled=None):
     return requests.put(url, headers=headers, data=payload)
 
 
-def get_image_by_id(image_id):
+def get_image_by_id(image_id, max_dim=None):
     url = ClientConfig.SERVER_URL + "images/" + str(image_id)
+    if isinstance(max_dim, int):
+        url += "?max-dim=%d" % max_dim
     headers = {"Accept": "application/json"}
 
     return requests.get(url, headers=headers)
 
 
-def get_images_by_ids(image_ids):
+def get_images_by_ids(image_ids, image_data=False, max_dim=None):
     url = ClientConfig.SERVER_URL + "images"
+    url += "?image-data=%s" % str(image_data)
+    if isinstance(max_dim, int):
+        url += "&max-dim=%d" % max_dim
     headers = {"Accept": "application/json",
                "Content-Type": "application/json"}
     body = {"ids": image_ids}
 
-    payload = json.dumps(body)
-
-    return requests.get(url, headers=headers, data=payload)
-
-
-def get_image_metas_by_ids(image_ids):
-    url = ClientConfig.SERVER_URL + "images?image-data=False"
-    headers = {"Accept": "application/json",
-               "Content-Type": "application/json"}
-    body = {"ids": image_ids}
     payload = json.dumps(body)
 
     return requests.get(url, headers=headers, data=payload)
@@ -170,8 +165,10 @@ def delete_image_annotation(image_id, on_success=None, on_fail=None):
     return requests.delete(url)
 
 
-def get_image_annotation(image_id, on_success=None, on_fail=None):
+def get_image_annotation(image_id, max_dim=None, on_success=None, on_fail=None):
     url = ClientConfig.SERVER_URL + "images/" + str(image_id) + "/annotation"
+    if isinstance(max_dim, int):
+        url += "?max-dim=%d" % max_dim
     headers = {"Accept": "application/json"}
     return requests.get(url, headers=headers)
 

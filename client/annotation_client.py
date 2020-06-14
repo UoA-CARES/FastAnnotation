@@ -16,6 +16,7 @@ from client.screens.image_view_screen import ImageViewScreen
 from client.screens.instance_annotator_screen import InstanceAnnotatorScreen
 from client.screens.project_select_screen import ProjectSelectScreen
 from client.screens.project_tool_screen import ProjectToolScreen
+
 from client.utils import ApiException
 
 Config.set('input', 'mouse', 'mouse,disable_multitouch')

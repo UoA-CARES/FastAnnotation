@@ -15,23 +15,8 @@ class ServerConfig:
     DATA_ROOT_DIR = os.path.join(ROOT_DIR, "database", "DATA")
     XML_TEMPLATE_PATH = os.path.join(ROOT_DIR, "server", "template.xml")
     DEFAULT_IMAGE_EXT = ".jpg"
-
-    # Used to white list filter combinations for Project Images
-    IMAGE_FILTER_MAP = {
-        "locked": {
-            True: "is_locked = 1",
-            False: "is_locked = 0"
-        },
-        "labelled": {
-            True: "is_labeled = 1",
-            False: "is_labeled = 0"
-        }
-    }
-
-    IMAGE_ORDER_BY_MAP = {
-        "name": "image_name",
-        "id": "image_id"
-    }
+    DEFAULT_MASK_EXT = ".png"
+    DEFAULT_INFO_EXT = ".xml"
 
 
 class DatabaseInstance:

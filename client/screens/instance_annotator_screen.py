@@ -1,6 +1,7 @@
 from threading import Lock
 
 import cv2
+import time
 import kivy.utils
 from kivy.app import App
 from kivy.clock import Clock
@@ -55,6 +56,8 @@ class InstanceAnnotatorScreen(Screen):
         # TODO: Implement a diff system which only updates changed sections of
         # the model
 
+        t0 = time.time()
+
         current_iid = self.model.tool.get_current_image_id()
         current_label_name = self.model.tool.get_current_label_name()
         current_label = self.model.labels.get(current_label_name)
@@ -62,23 +65,19 @@ class InstanceAnnotatorScreen(Screen):
         image = self.model.images.get(current_iid)
 
         # Update ToolSelect
-        print("Updating Tool Select")
         self.left_control.tool_select.alpha.value = self.model.tool.get_alpha()
         self.left_control.tool_select.pen_size.value = self.model.tool.get_pen_size()
 
         # Update Class Picker
-        print("Updating Class Picker")
         label_names = self.model.labels.keys()
         self.left_control.class_picker.clear()
         for name in label_names:
             label = self.model.labels.get(name)
             self.left_control.class_picker.add_label(label.name, label.color)
 
-        print("\tSelecting Label: %s" % current_label_name)
         self.left_control.class_picker.select(current_label_name)
 
         # Update Layer View
-        print("Updating Layer View")
         if image is not None and image.annotations is not None:
             self.left_control.layer_view.clear()
             for annotation in image.annotations.values():
@@ -88,7 +87,6 @@ class InstanceAnnotatorScreen(Screen):
             self.model.tool.get_current_layer_name())
 
         # Update ImageCanvas
-        print("Updating Image Canvas")
         if current_iid > 0 and not self.tab_panel.has_tab(current_iid):
             self.tab_panel.add_tab(current_iid)
             tab = self.tab_panel.get_tab(current_iid)
@@ -109,18 +107,18 @@ class InstanceAnnotatorScreen(Screen):
                 self.tab_panel.current_tab.unsaved = image.unsaved
 
         # Update ImageQueue
-        print("Updating Image Queue")
         self.right_control.load_image_queue()
+
+        if image is not None and image.unsaved:
+            self.right_control.image_queue_control.btn_save.disabled = False
+        else:
+            self.right_control.image_queue_control.btn_save.disabled = True
 
         # Reset update flag
         with self._update_lock:
             self._update_flag = False
 
-        print("Update Save Button")
-        if image is not None and image.unsaved:
-            self.right_control.image_queue_control.btn_save.disabled = False
-        else:
-            self.right_control.image_queue_control.btn_save.disabled = True
+        print("Update Complete: %d" % (time.time() - t0))
 
     def on_enter(self, *args):
         self.fetch_image_metas()
@@ -584,7 +582,10 @@ class DrawTool(MouseDrawnTool):
         pos = np.round(touch.pos).astype(int)
 
         action = self.mask_stack[-1]
-        action.group.line.points += list(pos)
+        try:
+            action.group.line.points += list(pos)
+        except AttributeError:
+            return
 
     def on_touch_up_hook(self, touch):
         if not self.layer:

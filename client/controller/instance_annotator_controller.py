@@ -2,7 +2,7 @@ import numpy as np
 
 import client.utils as utils
 from client.model.instance_annotator_model import ImageState, AnnotationState, LabelState
-from client.utils import ApiException
+from client.utils import ApiException, ClientConfig
 
 
 class InstanceAnnotatorController:
@@ -25,7 +25,7 @@ class InstanceAnnotatorController:
 
         result = resp.json()
 
-        resp = utils.get_image_metas_by_ids(result["ids"])
+        resp = utils.get_images_by_ids(result["ids"], image_data=False)
         if resp.status_code != 200:
             raise ApiException(
                 "Failed to retrieve image meta information.",
@@ -59,7 +59,7 @@ class InstanceAnnotatorController:
                 "Failed to lock image with id %d" %
                 image_id, resp.status_code)
 
-        resp = utils.get_image_by_id(image_id)
+        resp = utils.get_image_by_id(image_id, max_dim=ClientConfig.EDITOR_MAX_DIM)
         if resp.status_code == 404:
             raise ApiException(
                 "Image does not exist with id %d." %
@@ -77,7 +77,7 @@ class InstanceAnnotatorController:
         image_model.image = utils.bytes2mat(img_bytes)
         image_model.shape = image_model.image.shape
 
-        resp = utils.get_image_annotation(image_id)
+        resp = utils.get_image_annotation(image_id, max_dim=ClientConfig.EDITOR_MAX_DIM)
         if resp.status_code != 200:
             raise ApiException(
                 "Failed to retrieve annotations for the image with id %d." %
