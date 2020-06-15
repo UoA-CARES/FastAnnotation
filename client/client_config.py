@@ -26,5 +26,5 @@ class ClientConfig:
 
     CLIENT_POOL_LIMIT = 50
 
-    EDITOR_MAX_DIM = 1000
+    EDITOR_MAX_DIM = 5000
     TILE_MAX_DIM = 150

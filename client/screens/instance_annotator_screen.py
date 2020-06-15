@@ -60,9 +60,7 @@ class InstanceAnnotatorScreen(Screen):
 
         current_iid = self.model.tool.get_current_image_id()
         current_label_name = self.model.tool.get_current_label_name()
-        current_label = self.model.labels.get(current_label_name)
         current_layer = self.model.tool.get_current_layer_name()
-        image = self.model.images.get(current_iid)
 
         # Update ToolSelect
         self.left_control.tool_select.alpha.value = self.model.tool.get_alpha()
@@ -72,47 +70,52 @@ class InstanceAnnotatorScreen(Screen):
         label_names = self.model.labels.keys()
         self.left_control.class_picker.clear()
         for name in label_names:
-            label = self.model.labels.get(name)
-            self.left_control.class_picker.add_label(label.name, label.color)
+            with self.model.labels.get(name) as label:
+                self.left_control.class_picker.add_label(label.name, label.color)
 
-        self.left_control.class_picker.select(current_label_name)
+        self.left_control.class_picker.select(current_label_name) #MEM 10.7 -> 11.9 (+1.2GB)
 
         # Update Layer View
-        if image is not None and image.annotations is not None:
-            self.left_control.layer_view.clear()
-            for annotation in image.annotations.values():
-                self.left_control.layer_view.add_layer_item(annotation)
+        with self.model.images.get(current_iid) as image:
+            if image is not None and image.annotations is not None:
+                self.left_control.layer_view.clear()
+                for annotation in image.annotations.values():
+                    self.left_control.layer_view.add_layer_item(annotation)
 
         self.left_control.layer_view.select(
             self.model.tool.get_current_layer_name())
 
         # Update ImageCanvas
+
         if current_iid > 0 and not self.tab_panel.has_tab(current_iid):
-            self.tab_panel.add_tab(current_iid)
+            self.tab_panel.add_tab(current_iid) #MEM 11.9 -> 18.2 (+5.1GB)
             tab = self.tab_panel.get_tab(current_iid)
             self.tab_panel.switch_to(tab, do_scroll=True)
-            image_canvas = self.get_current_image_canvas()
-            print(image_canvas.image.size)
 
         image_canvas = self.get_current_image_canvas()
-        if image_canvas is not None:
-            image_canvas.load_pen_size(self.model.tool.get_pen_size())
-            image_canvas.load_global_alpha(self.model.tool.get_alpha())
-            image_canvas.load_eraser_state(self.model.tool.get_eraser())
-            image_canvas.load_current_label(current_label)
-            image_canvas.load_annotations(image.annotations)
-            image_canvas.load_current_layer(current_layer)
+        with self.model.labels.get(current_label_name) as current_label:
+            if image_canvas is not None:
+                print(image_canvas.image.size)
+                image_canvas.load_pen_size(self.model.tool.get_pen_size())
+                image_canvas.load_global_alpha(self.model.tool.get_alpha())
+                image_canvas.load_eraser_state(self.model.tool.get_eraser())
+                image_canvas.load_current_label(current_label)
+                image_canvas.load_annotations(image.annotations)
+                image_canvas.load_current_layer(current_layer)
 
-            if image is not None:
-                self.tab_panel.current_tab.unsaved = image.unsaved
+
 
         # Update ImageQueue
         self.right_control.load_image_queue()
 
-        if image is not None and image.unsaved:
-            self.right_control.image_queue_control.btn_save.disabled = False
-        else:
-            self.right_control.image_queue_control.btn_save.disabled = True
+        with self.model.images.get(current_iid) as image:
+            if image is not None:
+                self.tab_panel.current_tab.unsaved = image.unsaved
+
+            if image is not None and image.unsaved:
+                self.right_control.image_queue_control.btn_save.disabled = False
+            else:
+                self.right_control.image_queue_control.btn_save.disabled = True
 
         # Reset update flag
         with self._update_lock:
@@ -133,8 +136,12 @@ class InstanceAnnotatorScreen(Screen):
             idx = image_ids.index(current_id)
             idx += 1
 
-        while self.model.images.get(image_ids[idx]).is_locked:
-            idx += 1
+        while True:
+            with self.model.images.get(image_ids[idx]) as image:
+                if not image.is_locked:
+                    break
+                else:
+                    idx += 1
         next_id = image_ids[idx]
         self.controller.open_image(next_id)
         self.queue_update()
@@ -527,10 +534,10 @@ class DrawTool(MouseDrawnTool):
 
         screen = self.app.root.current_screen
         iid = screen.model.tool.get_current_image_id()
-        image = screen.model.images.get(iid)
-        if not image.unsaved:
-            screen.controller.update_image_meta(iid, unsaved=True)
-            screen.queue_update()
+        with screen.model.images.get(iid) as image:
+            if not image.unsaved:
+                screen.controller.update_image_meta(iid, unsaved=True)
+                screen.queue_update()
 
     def set_layer(self, layer):
         print("Setting DrawTool Layer: %s" % layer.layer_name)
@@ -544,8 +551,10 @@ class DrawTool(MouseDrawnTool):
             return
         if 'lctrl' in self.keycode_buffer:
             image_id = self.app.root.current_screen.model.tool.get_current_image_id()
-            image = self.app.root.current_screen.model.images.get(image_id)
-            select_items = image.detect_collisions(touch.pos)
+
+            with self.app.root.current_screen.model.images.get(image_id) as image:
+                select_items = image.detect_collisions(touch.pos)
+
             if not select_items:
                 return
             item = select_items[self._consecutive_selects % len(select_items)]
@@ -700,13 +709,11 @@ class LayerStack(FloatLayout):
             return
         self.alpha = alpha
         for layer in self.layer_dict.values():
-            print("Layer Color: %s" % str(layer.mask_color))
             new_color = layer.get_mask_color()
             new_color[3] = float(alpha)
             layer.set_mask_color(new_color)
 
     def add_layer(self, layer):
-        print("Adding Layer to Stack")
         new_color = layer.get_mask_color()
         new_color[3] = float(self.alpha)
         layer.set_mask_color(new_color)
@@ -756,8 +763,7 @@ class DrawableLayer(FloatLayout):
                  **kwargs):
         super().__init__(**kwargs)
         self.layer_name = layer_name
-        self.texture = texture
-        self.size = self.texture.size
+        self.size = texture.size
         self.class_name = class_name
         self._mask_color = list(mask_color)
         self.mask = None
@@ -765,15 +771,15 @@ class DrawableLayer(FloatLayout):
         if bbox is not None:
             self.bbox_bounds = bbox
 
-        Clock.schedule_once(lambda dt: self.late_init())
+        Clock.schedule_once(lambda dt: self.late_init(texture))
 
-    def late_init(self):
+    def late_init(self, texture):
         self.paint_window.refresh()
-        self.load_texture(self.texture)
+        self.load_texture(texture)
         self.set_mask_color(self._mask_color)
 
     def load_texture(self, texture):
-        if self.texture:
+        if texture:
             g = InstructionGroup()
             g.add(Color(1, 1, 1, 1))
             g.add(Rectangle(size=self.get_fbo().size, texture=texture))
@@ -783,7 +789,6 @@ class DrawableLayer(FloatLayout):
         self.mask = utils.mat2mask(utils.texture2mat(self.get_fbo().texture))
 
     def set_mask_color(self, color):
-        print("New Mask Color: %s" % color)
         self._mask_color = color
         self.paint_window.update_color(color)
 
@@ -841,12 +846,12 @@ class ImageCanvasTabPanel(TabbedPanel):
         return self.get_tab(iid) is not None
 
     def add_tab(self, iid):
-        image = self.app.root.current_screen.model.images.get(iid)
-        # Add Tab + Load everything
-        tab = ImageCanvasTab(image.name)
-        tab.image_canvas.load_image(image)
-        tab.image_canvas.load_annotations(image.annotations, overwrite=True)
-        self.add_widget(tab)
+        with self.app.root.current_screen.model.images.get(iid) as image: #MEM 11.9 -> 13.1 (+1.2GB)
+            # Add Tab + Load everything
+            tab = ImageCanvasTab(image.name)
+            tab.image_canvas.load_image(image)
+            tab.image_canvas.load_annotations(image.annotations, overwrite=True) #13.1 -> 18.2 (+5.1GB)
+            self.add_widget(tab)
 
     def switch_to(self, header, do_scroll=False):
         if not isinstance(header, ImageCanvasTab):
@@ -950,15 +955,14 @@ class ImageCanvas(BoxLayout):
 
         for annotation in annotations.values():
             layer = self.layer_stack.get_layer(annotation.annotation_name)
-            label = self.app.root.current_screen.model.labels.get(
-                annotation.class_name)
             if overwrite or layer is None:
                 layer = DrawableLayer(
                     layer_name=annotation.annotation_name,
                     size=annotation.mat.shape[1::-1],
                     texture=utils.mat2texture(annotation.mat))
                 self.layer_stack.add_layer(layer)
-            layer.update_label(label)
+            with self.app.root.current_screen.model.labels.get(annotation.class_name) as label:
+                layer.update_label(label)
             layer.update_bbox(annotation.bbox)
             layer.set_mask_visible(annotation.mask_enabled)
             layer.set_bbox_visible(annotation.bbox_enabled)
@@ -992,11 +996,11 @@ class RightControlColumn(BoxLayout):
         self.image_queue.clear()
         image_ids = self.app.root.current_screen.model.images.keys()
         for iid in image_ids:
-            image = self.app.root.current_screen.model.images.get(iid)
-            self.image_queue.add_item(image.name,
-                                      iid,
-                                      locked=image.is_locked,
-                                      opened=image.is_open)
+            with self.app.root.current_screen.model.images.get(iid) as image:
+                self.image_queue.add_item(image.name,
+                                          iid,
+                                          locked=image.is_locked,
+                                          opened=image.is_open)
 
 
 class ImageQueueControl(GridLayout):

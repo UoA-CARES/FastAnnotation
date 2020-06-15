@@ -5,6 +5,18 @@ from threading import Lock
 import numpy as np
 
 
+class BlockItem:
+    def __init__(self, item):
+        self.item = item
+
+    def __enter__(self):
+        self.item_copy = deepcopy(self.item)
+        return self.item_copy
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        del self.item_copy
+
+
 class BlockingList:
     _lock = Lock()
 
@@ -56,7 +68,7 @@ class BlockingCache:
 
     def get(self, key):
         with self._lock:
-            return deepcopy(self._cache.get(key, None))
+            return BlockItem(self._cache.get(key, None))
 
     def delete(self, key):
         with self._lock:
