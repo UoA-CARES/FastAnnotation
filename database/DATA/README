@@ -1,3 +1,0 @@
-This is a placeholder folder used by the server to store files, which are referenced by the SQL Database.
-
-Do not delete files from this folder without updating the appropriate database tables as it could result in a corrupt state.
