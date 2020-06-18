@@ -770,7 +770,6 @@ class DrawableLayer(FloatLayout):
 
         if bbox is not None:
             self.bbox_bounds = bbox
-
         Clock.schedule_once(lambda dt: self.late_init(texture))
 
     def late_init(self, texture):
@@ -959,11 +958,11 @@ class ImageCanvas(BoxLayout):
                 layer = DrawableLayer(
                     layer_name=annotation.annotation_name,
                     size=annotation.mat.shape[1::-1],
-                    texture=utils.mat2texture(annotation.mat))
+                    texture=utils.mat2texture(annotation.mat),
+                    bbox=annotation.bbox)
                 self.layer_stack.add_layer(layer)
             with self.app.root.current_screen.model.labels.get(annotation.class_name) as label:
                 layer.update_label(label)
-            layer.update_bbox(annotation.bbox)
             layer.set_mask_visible(annotation.mask_enabled)
             layer.set_bbox_visible(annotation.bbox_enabled)
 
