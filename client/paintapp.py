@@ -4,23 +4,24 @@ import numpy as np
 from kivy.app import App
 from kivy.properties import ObjectProperty
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.widget import Widget
 from numba import jit
 
 from client.screens.common import MouseDrawnTool
+from kivy.graphics.texture import Texture
 
 
 class PaintApp(App):
     def build(self):
-        box = BoxLayout()
-        image = np.zeros(shape=(3000,2000), dtype=np.uint8)
-        image[:] = (0, 0, 255)
+        box = FloatLayout()
+        image = np.zeros(shape=(3000,2000,3), dtype=np.uint8)
+        image[:] = (255, 0, 0)
         pw = PaintWindow(image)
         box.add_widget(pw)
-        pw.add_layer('test', (255,0,255))
+        pw.add_layer('test', (0,0,255))
         drawtool = DrawTool(pw)
         box.add_widget(drawtool)
-
         return box
 
 
@@ -28,15 +29,17 @@ class DrawTool(MouseDrawnTool):
     def __init__(self, paint_window, **kwargs):
         super().__init__(**kwargs)
         self.paint_window = paint_window
+        self.size = self.paint_window.size
 
     def on_touch_down_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
-        self.draw_line(pos, 10)
+        print(pos)
+        self.paint_window.draw_line(pos, 10)
         self.paint_window.refresh()
 
     def on_touch_move_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
-        self.draw_line(pos, 10)
+        self.paint_window.draw_line(pos, 10)
         self.paint_window.refresh()
 
     def on_touch_up_hook(self, touch):
@@ -51,6 +54,11 @@ class PaintWindow(Widget):
         self._layer_manager = LayerManager(image)
         self._action_manager = ActionManager(self._layer_manager)
         self._box_manager = BoxManager()
+        size = image.shape[:2]
+        self.image.texture = Texture.create(size=size, colorfmt='bgr', bufferfmt='ubyte')
+        self.size_hint = (None, None)
+        self.size = size
+        self.refresh()
 
     def draw_line(self, point, pen_size):
         self._action_manager.draw_line(point, pen_size)
@@ -63,7 +71,7 @@ class PaintWindow(Widget):
 
     def refresh(self):
         buffer = self._layer_manager.collapse_all()
-        self.image.texture.blit_buffer(buffer, colorfmt='rgb', bufferfmt='ubyte')
+        self.image.texture.blit_buffer(buffer, colorfmt='bgr', bufferfmt='ubyte')
         self.image.canvas.ask_update()
 
     def add_layer(self, name, color):
@@ -94,7 +102,7 @@ class ActionManager:
         if layer is None:
             return
 
-        cv2.line(layer.mat, self._current_line[-1], point, layer.color, pen_size)
+        cv2.line(layer.mat, tuple(self._current_line[-1]), tuple(point), layer.color, pen_size)
         self._current_line.append(point)
 
     def fill(self, point):
@@ -121,20 +129,21 @@ class LayerManager:
     def __init__(self, image):
         self._layer_stack = []
         self._layer_dict = {}
-        self._base_image = image
+        self._base_image = image.swapaxes(0, 1)
         self._selected_layer = None
-        self._collapse_all_cache = None
         self._collapse_unselected_cache = None
 
+    def get_base_image(self):
+        return self._base_image
+
     def add_layer(self, name, color):
-        mat = np.empty_like(self._base_image)
+        mat = np.zeros(shape=self.get_base_image().shape, dtype=np.uint8)
         layer = Layer(name, mat, color)
         self._layer_stack.append(layer)
         self._layer_dict[layer.name] = layer
 
     def select_layer(self, name):
         self._selected_layer = self._layer_dict[name]
-        self._collapse_all_cache = None
         self._collapse_unselected_cache = None
 
     def get_selected_layer(self):
@@ -144,26 +153,25 @@ class LayerManager:
         self._selected_layer.visible = visible
 
     def collapse_all(self):
-        if self._collapse_all_cache is None:
-            unselected = self.collapse_unselected()
-            if not self._selected_layer.visible:
-                self._collapse_all_cache = unselected
-            else:
-                buf = np.vstack((self._selected_layer.mat.ravel(), unselected))
-                buf = np.transpose(buf)
-                self._collapse_all_cache = self._collapse_operation(buf)
-        return self._collapse_all_cache
+        unselected = self.collapse_unselected()
+        if not self._selected_layer or not self._selected_layer.visible:
+            return unselected
+        else:
+            buf = np.vstack((self._selected_layer.mat.ravel(), unselected))
+            buf = np.transpose(buf)
+            return LayerManager._collapse_operation(buf)
 
     def collapse_unselected(self):
         if self._collapse_unselected_cache is None:
             visible = [x.mat.ravel() for x in reversed(self._layer_stack) if x.visible and x is not self._selected_layer]
             buf = np.vstack(tuple(visible) + (self._base_image.ravel(),))
             buf = np.transpose(buf)
-            self._collapse_unselected_cache = self._collapse_operation(buf)
+            self._collapse_unselected_cache = LayerManager._collapse_operation(buf)
         return self._collapse_unselected_cache
 
+    @staticmethod
     @jit(nopython=True, parallel=True)
-    def _collapse_operation(self, stack):
+    def _collapse_operation(stack):
         out = np.zeros(stack.shape[0], dtype=np.uint8)
         for i in numba.prange(stack.shape[0]):
             for j in range(stack.shape[1]):
