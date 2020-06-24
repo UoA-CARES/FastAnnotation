@@ -1,3 +1,6 @@
+import random
+import string
+
 import cv2
 import numba
 import numpy as np
@@ -7,6 +10,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.widget import Widget
 from numba import jit
+from kivy.core.window import Window
 
 from client.screens.common import MouseDrawnTool
 from kivy.graphics.texture import Texture
@@ -15,14 +19,51 @@ from kivy.graphics.texture import Texture
 class PaintApp(App):
     def build(self):
         box = FloatLayout()
-        image = np.zeros(shape=(3000,2000,3), dtype=np.uint8)
+        image = np.zeros(shape=(3000, 2000, 3), dtype=np.uint8)
         image[:] = (255, 0, 0)
         pw = PaintWindow(image)
         box.add_widget(pw)
-        pw.add_layer('test', (0,0,255))
+        pw.add_layer('test', (0, 0, 255))
         drawtool = DrawTool(pw)
         box.add_widget(drawtool)
         return box
+
+
+class KeyboardManager:
+    def __init__(self, keyboard):
+        self._keyboard_shortcuts = {}
+        self.keycode_buffer = {}
+        self._keyboard = keyboard
+
+    def activate(self):
+        print("Binding keyboard")
+        self._keyboard.bind(on_key_down=self.on_key_down)
+        self._keyboard.bind(on_key_up=self.on_key_up)
+
+    def deactivate(self):
+        self._keyboard.unbind(on_key_down=self.on_key_down)
+        self._keyboard.unbind(on_key_up=self.on_key_up)
+
+    def create_shortcut(self, shortcut, func):
+        if not isinstance(shortcut, tuple):
+            shortcut = tuple(shortcut)
+        self._keyboard_shortcuts[shortcut] = func
+
+    def on_key_down(self, keyboard, keycode, text, modifiers):
+        if keycode[1] in self.keycode_buffer:
+            return
+        print("DOWN: %s" % (str(keycode[1])))
+        self.keycode_buffer[keycode[1]] = keycode[0]
+
+    def on_key_up(self, keyboard, keycode):
+        print("UP: %s" % (str(keycode[1])))
+
+        for shortcut in self._keyboard_shortcuts.keys():
+            if keycode[1] in shortcut and set(
+                    shortcut).issubset(self.keycode_buffer):
+                self._keyboard_shortcuts[shortcut]()
+
+        self.keycode_buffer.pop(keycode[1])
 
 
 class DrawTool(MouseDrawnTool):
@@ -30,6 +71,21 @@ class DrawTool(MouseDrawnTool):
         super().__init__(**kwargs)
         self.paint_window = paint_window
         self.size = self.paint_window.size
+        self.keyboard = KeyboardManager(Window.request_keyboard(lambda: None, self))
+        self.keyboard.create_shortcut(("lctrl", "z"), self.paint_window.undo)
+        self.keyboard.create_shortcut(("lctrl", "y"), self.paint_window.redo)
+        self.keyboard.activate()
+
+        def random_name(N):
+            return ''.join(random.choices(string.ascii_uppercase + string.digits, k=N))
+
+        def random_color():
+            return list(np.random.choice(range(256), size=3))
+
+        def add_random_layer():
+            self.paint_window.add_layer(random_name(10), random_color)
+
+        self.keyboard.create_shortcut("spacebar", add_random_layer)
 
     def on_touch_down_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
@@ -60,6 +116,14 @@ class PaintWindow(Widget):
         self.size = size
         self.refresh()
 
+    def undo(self):
+        self._action_manager.undo()
+        self.refresh()
+
+    def redo(self):
+        self._action_manager.redo()
+        self.refresh()
+
     def draw_line(self, point, pen_size):
         self._action_manager.draw_line(point, pen_size)
 
@@ -77,22 +141,44 @@ class PaintWindow(Widget):
     def add_layer(self, name, color):
         self._layer_manager.add_layer(name, color)
         self._layer_manager.select_layer(name)
+        self.checkpoint()
 
 
 class ActionManager:
     def __init__(self, layer_manager):
         self._layer_manager = layer_manager
         self._current_line = []
+        self._layer_history = []
+        self._history_index = -1
 
     def undo(self):
-        pass
+        if not self._layer_history or self._history_index <= 0:
+            return
+
+        layer = self._layer_manager.get_selected_layer()
+        self._history_index -= 1
+        try:
+            layer.mat = self._layer_history[self._history_index].copy()
+        except IndexError:
+            layer.mat[:] = 0
 
     def redo(self):
-        pass
+        if not self._layer_history or self._history_index >= len(self._layer_history) - 1:
+            return
+
+        layer = self._layer_manager.get_selected_layer()
+        self._history_index += 1
+        try:
+            layer.mat = self._layer_history[self._history_index].copy()
+        except IndexError:
+            print("ERROR with redo")
 
     def checkpoint(self):
-        # TODO: A checkpoint for mask history
+        layer = self._layer_manager.get_selected_layer()
         self._current_line = []
+        self._history_index += 1
+        self._layer_history = self._layer_history[:self._history_index]
+        self._layer_history.append(layer.mat.copy())
 
     def draw_line(self, point, pen_size):
         if not self._current_line:
@@ -163,7 +249,8 @@ class LayerManager:
 
     def collapse_unselected(self):
         if self._collapse_unselected_cache is None:
-            visible = [x.mat.ravel() for x in reversed(self._layer_stack) if x.visible and x is not self._selected_layer]
+            visible = [x.mat.ravel() for x in reversed(self._layer_stack) if
+                       x.visible and x is not self._selected_layer]
             buf = np.vstack(tuple(visible) + (self._base_image.ravel(),))
             buf = np.transpose(buf)
             self._collapse_unselected_cache = LayerManager._collapse_operation(buf)

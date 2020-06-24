@@ -446,6 +446,42 @@ class DrawTool(MouseDrawnTool):
 
     erase = BooleanProperty(False)
 
+    class KeyboardManager:
+        def __init__(self):
+            self._keyboard_shortcuts = {}
+            self.keycode_buffer = {}
+            self._keyboard = Window.request_keyboard(lambda: None, self)
+
+        def activate(self):
+            print("Binding keyboard")
+            self._keyboard.bind(on_key_down=self.on_key_down)
+            self._keyboard.bind(on_key_up=self.on_key_up)
+
+        def deactivate(self):
+            self._keyboard.unbind(on_key_down=self.on_key_down)
+            self._keyboard.unbind(on_key_up=self.on_key_up)
+
+        def create_shortcut(self, shortcut, func):
+            if not isinstance(shortcut, tuple):
+                shortcut = tuple(shortcut)
+            self._keyboard_shortcuts[shortcut] = func
+
+        def on_key_down(self, keyboard, keycode, text, modifiers):
+            if keycode[1] in self.keycode_buffer:
+                return
+            print("DOWN: %s" % (str(keycode[1])))
+            self.keycode_buffer[keycode[1]] = keycode[0]
+
+        def on_key_up(self, keyboard, keycode):
+            print("UP: %s" % (str(keycode[1])))
+
+            for shortcut in self.keyboard_shortcuts.keys():
+                if keycode[1] in shortcut and set(
+                        shortcut).issubset(self.keycode_buffer):
+                    self.keyboard_shortcuts[shortcut]()
+
+            self.keycode_buffer.pop(keycode[1])
+
     class Action:
         def __init__(self, layer, group):
             self.layer = layer
