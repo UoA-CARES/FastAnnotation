@@ -7,12 +7,14 @@ import json
 import os
 
 import cv2
+import numba
 import numpy as np
 import requests
 from PIL import Image
 from kivy.app import App
 from kivy.graphics.texture import Texture
 from kivy.uix.image import CoreImage
+from numba import jit
 
 from client.client_config import ClientConfig
 
