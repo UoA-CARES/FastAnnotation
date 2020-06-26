@@ -45,12 +45,13 @@ class MyApp(App):
         self.image[:] = (0, 0, 255)
         self.stackmat = np.empty(shape=(np.product(shape), self.stack_capacity), dtype=np.uint8)
         self.stackmat_col = 0
+        self.test = np.empty(shape=((self.stack_capacity,) + shape), dtype=np.uint8)
+        self.test_bounds = np.empty(shape=(self.stack_capacity, 4), dtype=int)
         self.add_layer(self.image)
 
     def build(self):
         box = BoxLayout()
         self.img = Image(texture=mat2texture(self.image))
-
         box.add_widget(self.img)
         Clock.schedule_interval(lambda dt: self.add_random(), 0.01)
 
@@ -62,18 +63,25 @@ class MyApp(App):
         t0 = time.time()
 
         mat = np.zeros(shape=self.shape, dtype=np.uint8)
-        center = (random.randint(0, 2000), random.randint(0, 1500))
+        center = (random.randint(0, 1500 - 1), random.randint(0, 2000 - 1))
         radius = random.randint(5, 50)
         color = tuple(np.random.choice(range(1,256), size=4).tolist())
         cv2.circle(mat, center=center, radius=radius, color=color, thickness=-1)
 
         self.add_layer(mat)
+        self.add_bbox(self.stackmat_col - 1, center, radius)
 
         self.display()
 
         self.i += 1
         t1 = time.time()
-        print("TEST %d - %f" % (self.i, t1 - t0))
+        print("FPS %d: - %f" % (self.i, 1/(t1 - t0)))
+
+    def add_bbox(self, idx, c, r):
+        box = self.test_bounds[idx]
+        c = np.array(c)
+        box[:2] = np.min((box[:2], c-r), axis=0)
+        box[2:] = np.max((box[2:], c+r), axis=0)
 
 
 
@@ -87,6 +95,9 @@ class MyApp(App):
             self.stack_capacity = new_capacity
 
         self.stackmat[:, self.stackmat_col] = mat.flatten()
+
+        self.test[self.stackmat_col] = mat
+        self.test_bounds[self.stackmat_col] = [self.shape[0], self.shape[1], 0, 0]
         self.stackmat_col += 1
 
 
@@ -113,17 +124,11 @@ class MyApp(App):
         buf = np.transpose(buf)
         return buffer_calc_p(buf)
 
-    # 19 on laptop
-    def calc_buffer4(self):
-        layers = (self.image.ravel(order='C'),) + tuple(self.stack)
-        return buffer_calc_list(layers)
 
-    def calc_buffer5(self):
-        layers = (self.image.ravel(order='C'),) + tuple(self.stack)
-        return buffer_calc_p_list(layers)
-
+    # CONTENDERS
 
     # Ran out of RAM at 160 layers (0.62s max)
+    # FPS after 50 ~ 3.2
     def calc_buffer6(self):
         # c2 = np.concatenate(self.stack, axis=0)
         c2 = self.stackmat[:, :self.stackmat_col]
@@ -131,6 +136,8 @@ class MyApp(App):
 
     hist = None
     # 0.6s ,max at 200
+    # FPS after 50 ~ 4.4
+    # Hist boosted p2
     def calc_buffer7(self):
         if self.hist is None:
             self.hist = np.zeros(self.stackmat.shape[0], dtype=np.int)
@@ -138,8 +145,22 @@ class MyApp(App):
         buf = buffer_calc_2stage(c2, self.hist)
         return buf
 
+    # FPS after 50 ~ 2.3
+    def calc_bufferp3(self):
+        c2 = self.stackmat[:, :self.stackmat_col]
+        return buffer_calc_p3(c2)
+
+    # FPS after 50 ~ 5.5
+    # Box boosted p2
+    def calc_calc8(self):
+        c2 = self.test[:self.stackmat_col]
+        b2 = self.test_bounds[:self.stackmat_col]
+        return buffer_calc_bb(c2, b2).ravel()
+
+    # TODO: Box + hist boosted?
+
     def display(self):
-        buf = self.calc_buffer6()
+        buf = self.calc_calc8()
 
         self.img.texture.blit_buffer(buf, colorfmt='rgb', bufferfmt='ubyte')
         self.img.canvas.ask_update()
@@ -185,6 +206,19 @@ def buffer_calc_p2(stack):
     return out
 
 @jit(nopython=True, parallel=True)
+def buffer_calc_p3(stack):
+    width = stack.shape[1]
+    height = stack.shape[0]
+    out = stack[:, 0].copy()
+    for i in numba.prange(height):
+        for j in numba.prange(width - 1):
+            reverse_j = width - 1 - j
+            if out[i] == stack[i,0] and stack[i, reverse_j] > 0:
+                out[i] = stack[i, reverse_j]
+    return out
+
+
+@jit(nopython=True, parallel=True)
 def buffer_calc_2stage(stack, hist):
     width = stack.shape[1]
     height = stack.shape[0]
@@ -221,46 +255,43 @@ def buffer_calc_arrays(stack):
                 break
     return out
 
+def calc_bbox(img):
+    rows = np.any(img, axis=1)
+    cols = np.any(img, axis=0)
+    rmin, rmax = np.where(rows)[0][[0, -1]]
+    cmin, cmax = np.where(cols)[0][[0, -1]]
+
+    return cmin, rmin, cmax, rmax
 
 @jit(nopython=True, parallel=True)
-def buffer_calc_p3(*stacks):
-    n_stacks = len(stacks)
-    width = stacks[0].shape[1]
-    height = stacks[0].shape[0]
-    out = np.zeros(height, dtype=np.uint8)
-    for k in numba.prange(n_stacks):
-        for i in numba.prange(height):
-            for j in range(width):
-                reverse_j = width - 1 - j
-                if stacks[k][i, reverse_j] > 0:
-                    out[i] = stacks[k][i, reverse_j]
-                    break
+def buffer_calc_bb(stack, bounds):
+    n_stack = stack.shape[0]
+    out = stack[0].copy()
+    for n in numba.prange(n_stack):
+        reverse_n = n_stack - 1 - n
+        img = stack[reverse_n]
+        box = bounds[reverse_n]
+        for i in range(box[0], box[2]):
+            for j in range(box[1], box[3]):
+                if np.all(out[j,i] == stack[0,i,j]) and np.any(img[j,i] > 0):
+                    out[j,i] = img[j,i]
     return out
 
 @jit(nopython=True, parallel=True)
-def buffer_calc_list(layers):
-    width = len(layers[0])
-    height = len(layers)
-    out = [0] * height
-    for j in numba.prange(height):
-        for i in range(width):
-            reverse_i = width - 1 - i
-            if layers[j][reverse_i] > 0:
-                out[j] = layers[j][reverse_i]
-                break
+def buffer_calc_p22(stack, bounds):
+    width = stack.shape[1]
+    height = stack.shape[0]
+    out = stack[:, 0].copy()
+    for j in range(width - 1):
+        reverse_j = width - 1 - j
+        box = bounds[j]
+        np.arange(box[0], box[2]), np.arange(box[1], box[3])
+        for i in range(box[0], box[2]):
+            for j in range(box[1], box[3]):
+                np.ravel_multi_index((i,j))
+
+        if stack[i, reverse_j] > 0:
+            out[i] = stack[i, reverse_j]
+            break
     return out
-
-@jit(nopython=True, parallel=True)
-def buffer_calc_p_list(layers):
-    width = len(layers)
-    height = layers[0].shape[0]
-    out = np.zeros(height, dtype=np.uint8)
-
-    for j in numba.prange(height):
-        for i in range(width):
-            reverse_i = width - 1 - i
-            if layers[reverse_i][j] > 0:
-                out[j] = layers[reverse_i][j]
-    return out
-
 MyApp((2000,1500,3)).run()
