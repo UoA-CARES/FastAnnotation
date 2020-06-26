@@ -54,7 +54,7 @@ class KeyboardManager:
 
     def create_shortcut(self, shortcut, func):
         if not isinstance(shortcut, tuple):
-            shortcut = tuple(shortcut)
+            shortcut = (shortcut,)
         self._keyboard_shortcuts[shortcut] = func
 
     def on_key_down(self, keyboard, keycode, text, modifiers):
@@ -93,7 +93,7 @@ class DrawTool(MouseDrawnTool):
             return list(np.random.choice(range(256), size=3))
 
         def add_random_layer():
-            self.paint_window.add_layer(random_name(10), random_color)
+            self.paint_window.add_layer(random_name(10), random_color())
 
         self.keyboard.create_shortcut("spacebar", add_random_layer)
 
@@ -159,11 +159,7 @@ class PaintWindow(Widget):
         buffer = collapse_layers(stack, self._layer_manager._layer_visibility)
         t2 = time.time()
         image = buffer.reshape(self._layer_manager.get_base_image().shape, order='C')
-        image[disk((10,10), 10)] = (0,0,0)
-        image[disk((10,self._layer_manager.get_base_image().shape[1] - 10), 10)] = (80,80,80)
         self._box_manager.draw_boxes(image)
-        # cv2.imshow('test', image)
-        # cv2.waitKey(0)
         t3 = time.time()
         self.image.texture.blit_buffer(buffer, colorfmt='bgr', bufferfmt='ubyte')
         self.image.canvas.ask_update()
@@ -172,6 +168,7 @@ class PaintWindow(Widget):
         print("[FPS: %.2f] | Stack: %f\tCollapse: %f\tBox: %f\tCanvas: %f" % (1/(t4-t0),t1-t0, t2-t1, t3-t2, t4-t3))
 
     def add_layer(self, name, color):
+        print("Adding Layer: %s" % name)
         self._layer_manager.add_layer(name, color)
         self.select_layer(name)
         self.checkpoint()
@@ -263,6 +260,7 @@ class ActionManager:
                 c = np.round(p0 + i * d)
                 mat[disk(c, thickness, shape=mat.shape)] = color
 
+
 class Layer:
     def __init__(self, name, mat, color, idx):
         self.name = name
@@ -283,6 +281,7 @@ class LayerManager:
         self._layer_capacity = self.initial_stack_capacity
         self._layer_stack = np.empty(shape=(np.product(image.shape), self._layer_capacity), dtype=np.uint8)
         self._layer_visibility = np.zeros(shape=(self._layer_capacity,), dtype=bool)
+        self._layer_hist = np.zeros(shape=(self._layer_capacity,), dtype=int)
         self._layer_index = -1
 
         self._add_layer(self._base_image)
@@ -314,12 +313,16 @@ class LayerManager:
 
         new_stack = np.empty(shape=(np.product(self.get_base_image().shape), self._layer_capacity), dtype=np.uint8)
         new_stack[:, :self._layer_index] = self._layer_stack
+        self._layer_stack = new_stack
+
         new_visibility = np.zeros(shape=(self._layer_capacity,), dtype=bool)
         new_visibility[:self._layer_index] = self._layer_visibility
-
-        self._layer_stack = new_stack
         self._layer_visibility = new_visibility
 
+        new_hist = np. zeros(shape=(self._layer_capacity,), dtype=int)
+        new_hist[:self._layer_index] = self._layer_hist
+        self._layer_hist = new_hist
+        
     def select_layer(self, name):
         self._selected_layer = self._layer_dict[name]
 
@@ -370,7 +373,7 @@ class BoxManager:
         for box in self._box_dict.values():
             if box.bounds[2:] == [0, 0]:
                 continue
-            print("Drawing: %s | %s" % (str(box.bounds), str(box.color)))
+            # print("Drawing: %s | %s" % (str(box.bounds), str(box.color)))
             BoxManager._draw_box(image, box.bounds[:2], box.bounds[2:], box.color, self.box_thickness)
 
     @staticmethod
@@ -387,41 +390,14 @@ class BoxManager:
 
     @staticmethod
     def _fit_box(img):
-        #TODO: Optimize with numpy and numba
-        mat_gray = np.sum(img, axis=2)
-        col_sum = np.sum(mat_gray, axis=0)
-        x1 = 0
-        x2 = len(col_sum)
-        for x in col_sum:
-            if x > 0:
-                break
-            x1 += 1
+        if not np.any(img):
+            return 0, img.shape[1], img.shape[0], 0
 
-        for x in reversed(col_sum):
-            if x > 0:
-                break
-            x2 -= 1
-
-        row_sum = np.sum(mat_gray, axis=1)
-        y1 = 0
-        y2 = len(row_sum)
-        for x in reversed(row_sum):
-            if x > 0:
-                break
-            y1 += 1
-
-        for x in row_sum:
-            if x > 0:
-                break
-            y2 -= 1
-
-        # Flipping y coordinates to account for numpy origin vs kivy origin
-        y1 = mat_gray.shape[0] - y1
-        y2 = mat_gray.shape[0] - y2
-
-        bounds = invert_coords((x1, y1)) + invert_coords((x2, y2))
-        return bounds
-
+        rows = np.any(img, axis=1)
+        cols = np.any(img, axis=0)
+        rmin, rmax = np.where(rows)[0][[0, -1]]
+        cmin, cmax = np.where(cols)[0][[0, -1]]
+        return rmax, cmin, rmin, cmax
 
 def invert_coords(coords):
     return coords[::-1]

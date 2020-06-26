@@ -145,7 +145,7 @@ class MyApp(App):
         buf = buffer_calc_2stage(c2, self.hist)
         return buf
 
-    # FPS after 50 ~ 2.3
+    # FPS after 50 ~ 2.8
     def calc_bufferp3(self):
         c2 = self.stackmat[:, :self.stackmat_col]
         return buffer_calc_p3(c2)
@@ -160,7 +160,7 @@ class MyApp(App):
     # TODO: Box + hist boosted?
 
     def display(self):
-        buf = self.calc_calc8()
+        buf = self.calc_bufferp3()
 
         self.img.texture.blit_buffer(buf, colorfmt='rgb', bufferfmt='ubyte')
         self.img.canvas.ask_update()
@@ -209,11 +209,11 @@ def buffer_calc_p2(stack):
 def buffer_calc_p3(stack):
     width = stack.shape[1]
     height = stack.shape[0]
-    out = stack[:, 0].copy()
+    out = np.zeros(height, dtype=np.uint8)
     for i in numba.prange(height):
-        for j in numba.prange(width - 1):
+        for j in range(width):
             reverse_j = width - 1 - j
-            if out[i] == stack[i,0] and stack[i, reverse_j] > 0:
+            if out[i] == 0 and stack[i, reverse_j] > 0:
                 out[i] = stack[i, reverse_j]
     return out
 
