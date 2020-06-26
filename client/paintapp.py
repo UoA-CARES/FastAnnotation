@@ -2,8 +2,8 @@ import random
 import string
 
 import cv2
-from skimage.draw import line, circle
-from skimage.segmentation import flood_fill
+from skimage.draw import line, disk, rectangle_perimeter
+from skimage.segmentation import flood
 import numba
 import numpy as np
 from kivy.app import App
@@ -13,6 +13,8 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.widget import Widget
 from numba import jit
 from kivy.core.window import Window
+
+from skimage.color import rgb2grey
 
 from client.screens.common import MouseDrawnTool
 from kivy.graphics.texture import Texture
@@ -46,6 +48,9 @@ class KeyboardManager:
     def deactivate(self):
         self._keyboard.unbind(on_key_down=self.on_key_down)
         self._keyboard.unbind(on_key_up=self.on_key_up)
+
+    def is_key_down(self, keycode):
+        return keycode in self.keycode_buffer
 
     def create_shortcut(self, shortcut, func):
         if not isinstance(shortcut, tuple):
@@ -92,7 +97,11 @@ class DrawTool(MouseDrawnTool):
 
     def on_touch_down_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
-        self.paint_window.draw_line(pos, 10)
+        print(pos)
+        if self.keyboard.is_key_down("shift"):
+            self.paint_window.fill(pos)
+        else:
+            self.paint_window.draw_line(pos, 10)
         self.paint_window.refresh()
 
     def on_touch_move_hook(self, touch):
@@ -102,6 +111,7 @@ class DrawTool(MouseDrawnTool):
 
     def on_touch_up_hook(self, touch):
         self.paint_window.checkpoint()
+        self.paint_window.refresh()
 
 
 class PaintWindow(Widget):
@@ -111,13 +121,15 @@ class PaintWindow(Widget):
 
     def __init__(self, image, **kwargs):
         super().__init__(**kwargs)
-        self._layer_manager = LayerManager(image)
-        self._action_manager = ActionManager(self._layer_manager)
-        self._box_manager = BoxManager(image.shape, self.box_color, self.box_highlight)
-        size = image.shape[:2]
+        self.image_shape = image.shape
+        size = self.image_shape[:2]
         self.image.texture = Texture.create(size=size, colorfmt='bgr', bufferfmt='ubyte')
         self.size_hint = (None, None)
         self.size = size
+
+        self._layer_manager = LayerManager(image)
+        self._action_manager = ActionManager(self._layer_manager)
+        self._box_manager = BoxManager(image.shape, self.box_color, self.box_highlight)
         self.refresh()
 
     def undo(self):
@@ -136,25 +148,42 @@ class PaintWindow(Widget):
 
     def checkpoint(self):
         self._action_manager.checkpoint()
+        self._box_manager.update_box(self._layer_manager.get_selected_layer())
 
     def refresh(self):
         t0 = time.time()
-        box_layer = self._box_manager.get_box_layer()
-        t1 = time.time()
         stack = self._layer_manager.get_stack()
-        t2 = time.time()
+        t1 = time.time()
         buffer = collapse_layers(stack)
+        t2 = time.time()
+        image = buffer.reshape(self._layer_manager.get_base_image().shape, order='C')
+        image[disk((10,10), 10)] = (0,0,0)
+        image[disk((10,self._layer_manager.get_base_image().shape[1] - 10), 10)] = (80,80,80)
+        self._box_manager.draw_boxes(image)
+        # cv2.imshow('test', image)
+        # cv2.waitKey(0)
         t3 = time.time()
         self.image.texture.blit_buffer(buffer, colorfmt='bgr', bufferfmt='ubyte')
         self.image.canvas.ask_update()
         t4 = time.time()
 
-        print("[FPS: %.2f] | Box: %f\tStack: %f\tCollapse: %f\tCanvas: %f" % (1/(t4-t0),t1-t0, t2-t1, t3-t2, t4-t3))
+        print("[FPS: %.2f] | Stack: %f\tCollapse: %f\tBox: %f\tCanvas: %f" % (1/(t4-t0),t1-t0, t2-t1, t3-t2, t4-t3))
 
     def add_layer(self, name, color):
         self._layer_manager.add_layer(name, color)
-        self._layer_manager.select_layer(name)
+        self.select_layer(name)
         self.checkpoint()
+
+    def select_layer(self, name):
+        current_layer = self._layer_manager.get_selected_layer()
+        if current_layer is not None:
+            self._box_manager.set_highlight(current_layer.name, False)
+
+        self._layer_manager.select_layer(name)
+
+        new_layer = self._layer_manager.get_selected_layer()
+        self._box_manager.update_box(new_layer)
+        self._box_manager.set_highlight(new_layer.name, True)
 
 
 class ActionManager:
@@ -194,6 +223,7 @@ class ActionManager:
         self._layer_history.append(layer.mat.copy())
 
     def draw_line(self, point, pen_size):
+        point = invert_coords(point)
         if self._current_line is None:
             self._current_line = tuple(point)
 
@@ -205,33 +235,27 @@ class ActionManager:
         self._current_line = tuple(point)
 
     def fill(self, point):
+        point = invert_coords(point)
         layer = self._layer_manager.get_selected_layer()
         if layer is None:
             return
 
-        if np.sum(layer.mat[point]) > 0:
-            return
-
-        mask = np.zeros((layer.mat.shape[1] + 2, layer.mat.shape[0] + 2), dtype=np.uint8)
-        cv2.floodFill(layer.mat, mask, point, layer.color)
+        mat_grey = rgb2grey(layer.mat)
+        layer.mat[flood(mat_grey, tuple(point), connectivity=1)] = layer.color
 
     def _draw_line_thick(self, mat, p0, p1, color, thickness):
         thickness = np.floor(thickness / 2).astype(int)
-        mat = mat.swapaxes(0, 1)
-        mat[circle(p0[0], p0[1], thickness)] = color
-        mat[circle(p1[0], p1[1], thickness)] = color
+        mat[disk(p0, thickness, shape=mat.shape)] = color
+        mat[disk(p1, thickness, shape=mat.shape)] = color
 
         d = np.array((p1[0] - p0[0], p1[1] - p0[1]))
         if np.all(np.abs(d) <= 5):
             return
         else:
-            mag = np.sqrt(np.dot(d, d))
-            step_size = thickness / mag
+            step_size = thickness / np.sqrt(np.dot(d, d))
             for i in np.arange(0.0, 1.0, step_size):
                 c = np.round(p0 + i * d)
-                mat[circle(c[0], c[1], thickness)] = color
-
-
+                mat[disk(c, thickness, shape=mat.shape)] = color
 
 class Layer:
     def __init__(self, name, mat, color, idx):
@@ -318,37 +342,43 @@ class BoxManager:
         self.image_shape = image_shape
 
         self._box_dict = {}
-        self._box_layer_cache = None
 
     def update_box(self, layer):
         bounds = BoxManager._fit_box(layer.mat)
-        self._box_dict[layer.name] = Box(bounds, self.box_color)
-        self._box_layer_cache = None
+        if layer.name in self._box_dict:
+            self._box_dict[layer.name].bounds = bounds
+        else:
+            self._box_dict[layer.name] = Box(bounds, self.box_color)
 
     def set_visible(self, name, visible):
         self._box_dict[name].visible = visible
-        self._box_layer_cache = None
 
     def set_highlight(self, name, highlight):
         self._box_dict[name].color = self.box_select_color if highlight else self.box_color
-        self._box_layer_cache = None
 
-    def get_box_layer(self):
-        if self._box_layer_cache is not None:
-            return self._box_layer_cache
-
-        box_layer = np.zeros(shape=self.image_shape, dtype=np.uint8)
-
+    def draw_boxes(self, image):
         for box in self._box_dict.values():
-            cv2.rectangle(box_layer, box.bounds[:2], box.bounds[2:], box.color, self.box_thickness)
+            if box.bounds[2:] == [0, 0]:
+                continue
+            print("Drawing: %s | %s" % (str(box.bounds), str(box.color)))
+            BoxManager._draw_box(image, box.bounds[:2], box.bounds[2:], box.color, self.box_thickness)
 
-        self._box_layer_cache = box_layer
-        return self._box_layer_cache
+    @staticmethod
+    def _draw_box(mat, p0, p1, color, thickness):
+        p0 = np.array(p0)
+        p1 = np.array(p1)
+        d = p1 - p0
+        d = np.clip(d, -1, 1)
+        for i in range(thickness):
+            c0 = p0 + i*d
+            c1 = p1 - i*d
+            rr, cc = rectangle_perimeter(start=tuple(c0), end=tuple(c1), shape=mat.shape, clip=True)
+            mat[rr, cc] = color
 
     @staticmethod
     def _fit_box(img):
+        #TODO: Optimize with numpy and numba
         mat_gray = np.sum(img, axis=2)
-
         col_sum = np.sum(mat_gray, axis=0)
         x1 = 0
         x2 = len(col_sum)
@@ -375,8 +405,16 @@ class BoxManager:
                 break
             y2 -= 1
 
-        bounds = [x1, y1, x2, y2]
+        # Flipping y coordinates to account for numpy origin vs kivy origin
+        y1 = mat_gray.shape[0] - y1
+        y2 = mat_gray.shape[0] - y2
+
+        bounds = invert_coords((x1, y1)) + invert_coords((x2, y2))
         return bounds
+
+
+def invert_coords(coords):
+    return coords[::-1]
 
 
 @jit(nopython=True, parallel=True)
