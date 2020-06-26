@@ -82,6 +82,8 @@ class DrawTool(MouseDrawnTool):
         self.keyboard = KeyboardManager(Window.request_keyboard(lambda: None, self))
         self.keyboard.create_shortcut(("lctrl", "z"), self.paint_window.undo)
         self.keyboard.create_shortcut(("lctrl", "y"), self.paint_window.redo)
+        self.keyboard.create_shortcut("q", lambda: self.paint_window.set_visible(True))
+        self.keyboard.create_shortcut("w", lambda: self.paint_window.set_visible(False))
         self.keyboard.activate()
 
         def random_name(N):
@@ -154,7 +156,7 @@ class PaintWindow(Widget):
         t0 = time.time()
         stack = self._layer_manager.get_stack()
         t1 = time.time()
-        buffer = collapse_layers(stack)
+        buffer = collapse_layers(stack, self._layer_manager._layer_visibility)
         t2 = time.time()
         image = buffer.reshape(self._layer_manager.get_base_image().shape, order='C')
         image[disk((10,10), 10)] = (0,0,0)
@@ -184,6 +186,10 @@ class PaintWindow(Widget):
         new_layer = self._layer_manager.get_selected_layer()
         self._box_manager.update_box(new_layer)
         self._box_manager.set_highlight(new_layer.name, True)
+
+    def set_visible(self, visible):
+        self._layer_manager.set_visible(visible=visible)
+
 
 
 class ActionManager:
@@ -300,7 +306,8 @@ class LayerManager:
             self._layer_stack[:, self._layer_index] = 0
         else:
             self._layer_stack[:, self._layer_index] = mat.ravel()
-        self._layer_visibility[self._layer_index] = True
+
+        self.set_visible(self._layer_index, True)
 
     def _resize(self):
         self._layer_capacity = self._layer_capacity * self.stack_growth_factor
@@ -319,11 +326,14 @@ class LayerManager:
     def get_selected_layer(self):
         return self._selected_layer
 
-    def set_visible(self, visible=True):
-        self._layer_visibility[self.get_selected_layer().idx] = visible
+    def set_visible(self, idx=None, visible=True):
+        if idx is None:
+            idx = self.get_selected_layer().idx
+        self._layer_visibility[idx] = visible
 
     def get_stack(self):
         return self._layer_stack[:, :self._layer_index + 1]
+
 
 class Box:
     def __init__(self, bounds, color, visible=True):
@@ -418,16 +428,17 @@ def invert_coords(coords):
 
 
 @jit(nopython=True, parallel=True)
-def collapse_layers(stack):
+def collapse_layers(stack, visible):
     width = stack.shape[1]
     height = stack.shape[0]
     out = np.zeros(height, dtype=np.uint8)
     for i in numba.prange(height):
         for j in range(width):
             reverse_j = width - 1 - j
-            if stack[i, reverse_j] > 0:
-                out[i] = stack[i, reverse_j]
-                break
+            if visible[reverse_j]:
+                if stack[i, reverse_j] > 0:
+                    out[i] = stack[i, reverse_j]
+                    break
     return out
 
 
