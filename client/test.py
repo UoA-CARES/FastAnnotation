@@ -22,7 +22,7 @@ import time
 import numpy as np
 import cython
 from numba.typed import List
-
+from numba import vectorize
 
 def mat2texture(mat):
     if mat.shape[-1] is not 4:
@@ -60,7 +60,7 @@ class MyApp(App):
     def add_random(self):
 
 
-        t0 = time.time()
+
 
         mat = np.zeros(shape=self.shape, dtype=np.uint8)
         center = (random.randint(0, 1500 - 1), random.randint(0, 2000 - 1))
@@ -71,11 +71,10 @@ class MyApp(App):
         self.add_layer(mat)
         self.add_bbox(self.stackmat_col - 1, center, radius)
 
+
         self.display()
 
-        self.i += 1
-        t1 = time.time()
-        print("FPS %d: - %f" % (self.i, 1/(t1 - t0)))
+
 
     def add_bbox(self, idx, c, r):
         box = self.test_bounds[idx]
@@ -145,6 +144,13 @@ class MyApp(App):
         buf = buffer_calc_2stage(c2, self.hist)
         return buf
 
+    def calc_buffer7a(self):
+        if self.hist is None:
+            self.hist = np.zeros(self.stackmat.shape[0], dtype=np.int)
+        c2 = self.stackmat[:, :self.stackmat_col]
+        buf = buffer_calc_2stage2(c2, self.hist)
+        return buf
+
     # FPS after 50 ~ 2.8
     def calc_bufferp3(self):
         c2 = self.stackmat[:, :self.stackmat_col]
@@ -157,10 +163,21 @@ class MyApp(App):
         b2 = self.test_bounds[:self.stackmat_col]
         return buffer_calc_bb(c2, b2).ravel()
 
+    def calc_calc9(self):
+        c2 = self.test[:self.stackmat_col]
+        b2 = self.test_bounds[:self.stackmat_col]
+        return buffer_calc_bb2(c2, b2).ravel()
+
     # TODO: Box + hist boosted?
 
     def display(self):
-        buf = self.calc_bufferp3()
+
+        t0 = time.time()
+        buf = self.calc_calc9()
+        self.i += 1
+        t1 = time.time()
+        print("FPS %d: - %f" % (self.i, (t1 - t0)))
+
 
         self.img.texture.blit_buffer(buf, colorfmt='rgb', bufferfmt='ubyte')
         self.img.canvas.ask_update()
@@ -241,6 +258,19 @@ def buffer_calc_2stage(stack, hist):
                     break
     return out
 
+@jit(nopython=True, parallel=True)
+def buffer_calc_2stage2(stack, hist):
+    width = stack.shape[1]
+    height = stack.shape[0]
+    out = np.zeros(height, dtype=np.uint8)
+    for j in numba.prange(width):
+        reverse_j = width - 1 - j
+        for i in numba.prange(height):
+            if stack[i, reverse_j] > 0 and out[i] == 0:
+                hist[i] = reverse_j
+                out[i] = stack[i, reverse_j]
+    return out
+
 
 @jit(nopython=True, parallel=True)
 def buffer_calc_arrays(stack):
@@ -273,25 +303,30 @@ def buffer_calc_bb(stack, bounds):
         box = bounds[reverse_n]
         for i in range(box[0], box[2]):
             for j in range(box[1], box[3]):
-                if np.all(out[j,i] == stack[0,i,j]) and np.any(img[j,i] > 0):
+                if np.all(out[j, i] == stack[0, i, j]) and np.any(img[j, i] > 0):
                     out[j,i] = img[j,i]
     return out
 
-@jit(nopython=True, parallel=True)
-def buffer_calc_p22(stack, bounds):
-    width = stack.shape[1]
-    height = stack.shape[0]
-    out = stack[:, 0].copy()
-    for j in range(width - 1):
-        reverse_j = width - 1 - j
-        box = bounds[j]
-        np.arange(box[0], box[2]), np.arange(box[1], box[3])
-        for i in range(box[0], box[2]):
-            for j in range(box[1], box[3]):
-                np.ravel_multi_index((i,j))
-
-        if stack[i, reverse_j] > 0:
-            out[i] = stack[i, reverse_j]
-            break
+from numba import int32
+@jit(locals=dict(bounds=int32[:,:]), nopython=True, parallel=True)
+def buffer_calc_bb2(stack, bounds):
+    n_stack = stack.shape[0]
+    out = stack[0].copy()
+    for n in numba.prange(n_stack - 1):
+        reverse_n = n_stack - 1 - n
+        img = stack[reverse_n]
+        box = bounds[reverse_n]
+        rr = slice(box[0], box[2])
+        cc = slice(box[1], box[3])
+        out[cc,rr] = image_add(img[cc,rr], out[cc,rr], out[cc,rr] != stack[0,cc,rr])
     return out
-MyApp((2000,1500,3)).run()
+
+from numba import uint8, boolean
+
+@vectorize([uint8(uint8, uint8, boolean)])
+def image_add(top, bot, force_bot):
+    return bot if force_bot or top == 0 else top
+
+
+MyApp((3000,2000,3)).run()
+
