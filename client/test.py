@@ -168,16 +168,24 @@ class MyApp(App):
         b2 = self.test_bounds[:self.stackmat_col]
         return buffer_calc_bb2(c2, b2).ravel()
 
+    def calc_calc10(self):
+        c2 = self.test[:self.stackmat_col]
+        b2 = self.test_bounds[:self.stackmat_col]
+        return quick_stack(c2, b2, self.stackmat_col - 1).ravel()
+
+
     # TODO: Box + hist boosted?
 
     def display(self):
 
         t0 = time.time()
-        buf = self.calc_calc9()
+        buf = self.calc_calc10()
         self.i += 1
         t1 = time.time()
-        print("FPS %d: - %f" % (self.i, (t1 - t0)))
-
+        try:
+            print("FPS %d: - %f(%f)" % (self.i, 1/(t1-t0),(t1 - t0)))
+        except ZeroDivisionError:
+            print("FPS %d: - MAX" % self.i)
 
         self.img.texture.blit_buffer(buf, colorfmt='rgb', bufferfmt='ubyte')
         self.img.canvas.ask_update()
@@ -307,7 +315,21 @@ def buffer_calc_bb(stack, bounds):
                     out[j,i] = img[j,i]
     return out
 
+
 from numba import int32
+
+
+@jit(locals=dict(bounds=int32[:,:]), nopython=True, parallel=True)
+def quick_stack(stack, bounds, idx):
+    out = stack[0]
+    img = stack[idx]
+    box = bounds[idx]
+    rr = slice(box[0], box[2])
+    cc = slice(box[1], box[3])
+    out[cc,rr] = image_add(img[cc,rr], out[cc,rr], False)
+    return out
+
+
 @jit(locals=dict(bounds=int32[:,:]), nopython=True, parallel=True)
 def buffer_calc_bb2(stack, bounds):
     n_stack = stack.shape[0]
@@ -319,6 +341,7 @@ def buffer_calc_bb2(stack, bounds):
         rr = slice(box[0], box[2])
         cc = slice(box[1], box[3])
         out[cc,rr] = image_add(img[cc,rr], out[cc,rr], out[cc,rr] != stack[0,cc,rr])
+    stack[0] = out
     return out
 
 from numba import uint8, boolean

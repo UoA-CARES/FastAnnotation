@@ -60,12 +60,9 @@ class KeyboardManager:
     def on_key_down(self, keyboard, keycode, text, modifiers):
         if keycode[1] in self.keycode_buffer:
             return
-        print("DOWN: %s" % (str(keycode[1])))
         self.keycode_buffer[keycode[1]] = keycode[0]
 
     def on_key_up(self, keyboard, keycode):
-        print("UP: %s" % (str(keycode[1])))
-
         for shortcut in self._keyboard_shortcuts.keys():
             if keycode[1] in shortcut and set(
                     shortcut).issubset(self.keycode_buffer):
@@ -99,7 +96,6 @@ class DrawTool(MouseDrawnTool):
 
     def on_touch_down_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
-        print(pos)
         if self.keyboard.is_key_down("shift"):
             self.paint_window.fill(pos)
         else:
@@ -159,10 +155,9 @@ class PaintWindow(Widget):
         t1 = time.time()
         # Collapse Operation
         bounds = self._box_manager.get_bounds()
-        buffer = collapse_layers2(stack, bounds, self._layer_manager._layer_visibility)
+        buffer = _collapse_select(stack, bounds, self._layer_manager._layer_visibility, self._layer_manager.get_selected_layer())
         t2 = time.time()
         # Box Operation
-        # image = buffer.reshape(self._layer_manager.get_base_image().shape, order='C')
         self._box_manager.draw_boxes(buffer)
         t3 = time.time()
         # Canvas Operation
@@ -174,8 +169,9 @@ class PaintWindow(Widget):
               (1 / (t4 - t0), stack.shape[0], t1 - t0, t2 - t1, t3 - t2, (t3 - t2)/stack.shape[0],t4 - t3))
 
     def add_layer(self, name, color):
-        print("Adding Layer: %s" % name)
+        print("Adding Layer[%d]: %s" % (self._layer_manager._layer_index, name))
         self._layer_manager.add_layer(name, color)
+        self._action_manager.clear_history()
         self._box_manager.add_box(self._layer_manager.get_layer(name))
         self.select_layer(name)
         self.checkpoint()
@@ -195,41 +191,45 @@ class PaintWindow(Widget):
 
 class ActionManager:
     line_granularity = 0.3
+    initial_capacity = 4
+    growth_factor = 2
 
     def __init__(self, layer_manager):
         self._layer_manager = layer_manager
-        self._current_line = []
-        self._layer_history = []
-        self._history_index = -1
+        self._current_line = None
+        self._layer_history = np.empty(shape=(self.initial_capacity,) + self._layer_manager.get_base_image().shape, dtype=np.uint8)
+        self._history_idx = -1
+        self._history_max = 0
 
     def undo(self):
-        if not self._layer_history or self._history_index <= 0:
-            return
-
-        layer = self._layer_manager.get_selected_layer()
-        self._history_index -= 1
         try:
-            layer.mat = self._layer_history[self._history_index].copy()
+            mat = self._layer_manager.get_selected_layer().get_mat()
+            self._history_idx -= 1
+            mat[:] = self._layer_history[self._history_idx].copy()
         except IndexError:
-            layer.mat[:] = 0
+            return
 
     def redo(self):
-        if not self._layer_history or self._history_index >= len(self._layer_history) - 1:
+        try:
+            mat = self._layer_manager.get_selected_layer().get_mat()
+            self._history_idx += 1
+            mat[:] = self._layer_history[self._history_idx].copy()
+        except IndexError:
             return
 
-        layer = self._layer_manager.get_selected_layer()
-        self._history_index += 1
-        try:
-            layer.mat = self._layer_history[self._history_index].copy()
-        except IndexError:
-            print("ERROR with redo")
+    def clear_history(self):
+        self._history_idx = -1
+        self._history_max = 0
 
     def checkpoint(self):
         layer = self._layer_manager.get_selected_layer()
         self._current_line = None
-        self._history_index += 1
-        self._layer_history = self._layer_history[:self._history_index]
-        self._layer_history.append(layer.mat.copy())
+        self._history_idx += 1
+        self._history_max = self._history_idx + 1
+        if self._history_idx >= self._layer_history.shape[0]:
+            self._layer_history.resize((self._layer_history.shape[0] * self.growth_factor,) + self._layer_history.shape[1:])
+            print("LayerHistory: %s %s" % (str(self._layer_history.shape), str(self._layer_history.dtype)))
+        self._layer_history[self._history_idx] = layer.get_mat().copy()
 
     def draw_line(self, point, pen_size):
         point = invert_coords(point)
@@ -240,7 +240,7 @@ class ActionManager:
         if layer is None:
             return
 
-        self._draw_line_thick(layer.mat, self._current_line, tuple(point), layer.color, pen_size)
+        self._draw_line_thick(layer.get_mat(), self._current_line, tuple(point), layer.color, pen_size)
         self._current_line = tuple(point)
 
     def fill(self, point):
@@ -249,8 +249,9 @@ class ActionManager:
         if layer is None:
             return
 
-        mat_grey = rgb2gray(layer.mat)
-        layer.mat[flood(mat_grey, tuple(point), connectivity=1)] = layer.color
+        mat = layer.get_mat()
+        mat_grey = rgb2gray(mat)
+        mat[flood(mat_grey, tuple(point), connectivity=1)] = layer.color
 
     def _draw_line_thick(self, mat, p0, p1, color, thickness):
         mat[disk(p0, thickness, shape=mat.shape)] = color
@@ -266,28 +267,28 @@ class ActionManager:
                 mat[disk(c, thickness, shape=mat.shape)] = color
 
 
-class Layer:
-    def __init__(self, name, mat, color, idx):
-        self.name = name
-        self.mat = mat
-        self.color = color
-        self.idx = idx
-
-
 class LayerManager:
-    initial_stack_capacity = 100
-    stack_growth_factor = 4
+    initial_capacity = 4
+    growth_factor = 2
+
+    class Layer:
+        def __init__(self, name, color, idx, manager):
+            self.name = name
+            self.color = color
+            self.idx = idx
+            self._manager = manager
+
+        def get_mat(self):
+            return self._manager.get_layer_mat(self.name)
 
     def __init__(self, image):
         self._base_image = image.swapaxes(0, 1)
         self._selected_layer = None
 
         self._layer_dict = {}
-        self._layer_capacity = self.initial_stack_capacity
-        self._layer_stack = np.empty(shape=(np.product(image.shape), self._layer_capacity), dtype=np.uint8)
-        self._layer_stackstack = np.empty(shape=(self._layer_capacity,) + self._base_image.shape, dtype=np.uint8)
+        self._layer_capacity = self.initial_capacity
+        self._layer_stack = np.empty(shape=(self._layer_capacity,) + self._base_image.shape, dtype=np.uint8)
         self._layer_visibility = np.zeros(shape=(self._layer_capacity,), dtype=bool)
-        self._layer_hist = np.zeros(shape=(self._layer_capacity,), dtype=int)
         self._layer_index = -1
 
         self._add_layer(self._base_image)
@@ -300,48 +301,26 @@ class LayerManager:
         if layer is None:
             return
 
-        self._layer_stackstack[layer.idx] = 0
+        self._layer_stack[layer.idx] = 0
         self._layer_visibility[layer.idx] = False
 
     def add_layer(self, name, color):
-        # Resize arraylists
-        if self._layer_index == self._layer_capacity:
-            self._resize()
-
         self._add_layer()
-        mat_view = self._layer_stackstack[self._layer_index]
-        layer = Layer(name, mat_view, color, self._layer_index)
+        layer = LayerManager.Layer(name, color, self._layer_index, self)
         self._layer_dict[layer.name] = layer
-
-    def _add_layer(self, mat=None):
-        self._layer_index += 1
-        if mat is None:
-            self._layer_stackstack[self._layer_index] = 0
-        else:
-            self._layer_stackstack[self._layer_index] = mat
-
-        self.set_visible(self._layer_index, True)
-
-    def _resize(self):
-        self._layer_capacity = self._layer_capacity * self.stack_growth_factor
-
-        new_stack = np.empty(shape=(np.product(self.get_base_image().shape), self._layer_capacity), dtype=np.uint8)
-        new_stack[:, :self._layer_index] = self._layer_stack
-        self._layer_stack = new_stack
-
-        new_visibility = np.zeros(shape=(self._layer_capacity,), dtype=bool)
-        new_visibility[:self._layer_index] = self._layer_visibility
-        self._layer_visibility = new_visibility
-
-        new_hist = np.zeros(shape=(self._layer_capacity,), dtype=int)
-        new_hist[:self._layer_index] = self._layer_hist
-        self._layer_hist = new_hist
 
     def select_layer(self, name):
         self._selected_layer = self._layer_dict[name]
 
     def get_layer(self, name):
         return self._layer_dict.get(name, None)
+
+    def get_layer_mat(self, name):
+        try:
+            layer = self._layer_dict[name]
+            return self._layer_stack[layer.idx]
+        except KeyError:
+            return None
 
     def get_selected_layer(self):
         return self._selected_layer
@@ -355,19 +334,36 @@ class LayerManager:
         self._layer_visibility[idx] = visible
 
     def get_stack(self):
-        return self._layer_stackstack[:self._layer_index + 1]
+        return self._layer_stack[:self._layer_index + 1]
 
+    def _add_layer(self, mat=None):
+        self._layer_index += 1
 
-class Box:
-    def __init__(self, idx, visible=True):
-        self.idx = idx
-        self.visible = visible
+        # Resize arraylists
+        if self._layer_index == self._layer_capacity:
+            self._resize()
+
+        if mat is None:
+            self._layer_stack[self._layer_index] = 0
+        else:
+            self._layer_stack[self._layer_index] = mat.copy()
+
+        self.set_visible(self._layer_index, True)
+
+    def _resize(self):
+        self._layer_capacity = self._layer_capacity * self.growth_factor
+        self._layer_stack.resize((self._layer_capacity,) + self._base_image.shape)
+        self._layer_visibility.resize(self._layer_capacity)
+
+        print("LayerStack: %s %s" % (str(self._layer_stack.shape), str(self._layer_stack.dtype)))
+        print("LayerVisibility: %s %s" % (str(self._layer_visibility.shape), str(self._layer_visibility.dtype)))
+
 
 
 class BoxManager:
-    box_thickness = 5
-    initial_capacity = 2
-    growth_factor = 4
+    box_thickness = 2
+    initial_capacity = 4
+    growth_factor = 2
 
     def __init__(self, image_shape, box_color, box_select_color):
         self.box_color = np.array(box_color)
@@ -382,7 +378,7 @@ class BoxManager:
         self._next_idx = 0
 
     def add_box(self, layer):
-        bounds = BoxManager._fit_box(layer.mat)
+        bounds = BoxManager._fit_box(layer.get_mat())
         try:
             idx = self._box_dict[layer.name]
             self._bounds[idx] = bounds
@@ -393,7 +389,11 @@ class BoxManager:
             self._next_idx += 1
             if self._next_idx == self._bounds.shape[0]:
                 self._bounds.resize((self._bounds.shape[0] * self.growth_factor, 4), refcheck=False)
-                self._visibility.resize((self._bounds.shape[0] * self.growth_factor,), refcheck=False)
+                self._visibility.resize((self._visibility.shape[0] * self.growth_factor,), refcheck=False)
+                print("Bounds: %s %s" % (str(self._bounds.shape), str(self._bounds.dtype)))
+                print("BoundsVisibility: %s %s" % (str(self._visibility.shape), str(self._visibility.dtype)))
+
+
 
     def update_box(self, name, point, radius):
         point = invert_coords(point)
@@ -401,8 +401,8 @@ class BoxManager:
         try:
             idx = self._box_dict[name]
             bounds = self._bounds[idx]
-            bounds[:2] = np.min((bounds[:2], point - radius), axis=0)
-            bounds[2:] = np.max((bounds[2:], point + radius), axis=0)
+            bounds[:2] = np.max((np.min((bounds[:2], point - radius), axis=0), np.zeros(2)), axis=0)
+            bounds[2:] = np.min((np.max((bounds[2:], point + radius, np.zeros(2)), axis=0), invert_coords(self.image_shape[:2])), axis=0)
         except KeyError:
             return
 
@@ -440,7 +440,7 @@ def invert_coords(coords):
     return coords[::-1]
 
 
-@jit(locals=dict(bounds=int32[:,:]), nopython=True, parallel=True)
+@jit(locals=dict(bounds=int32[:, :]), nopython=True, parallel=True)
 def _draw_boxes(mat, bounds, color, thick):
     n_box = bounds.shape[0]
     for i in numba.prange(n_box):
@@ -461,30 +461,34 @@ def _draw_boxes(mat, bounds, color, thick):
         mat[ox0:ix0, oy0:oy1] = color
         mat[ix1:ox1, oy0:oy1] = color
 
+def _collapse_select(stack, bounds, visible, layer):
+    if layer is None or layer.idx == 0:
+        return stack[0]
+    else:
+        return _collapse_idx(stack, bounds, visible, layer.idx).copy()
 
 @jit(nopython=True, parallel=True)
-def collapse_layers(stack, visible):
-    width = stack.shape[1]
-    height = stack.shape[0]
-    out = np.zeros(height, dtype=np.uint8)
-    for i in numba.prange(height):
-        for j in range(width):
-            reverse_j = width - 1 - j
-            if stack[i, reverse_j] > 0 and visible[reverse_j]:
-                out[i] = stack[i, reverse_j]
-                break
+def _collapse_idx(stack, bounds, visible, idx):
+    out = stack[0]
+    if not visible[idx]:
+        return out
+    img = stack[idx]
+    box = bounds[idx - 1]
+    rr = slice(box[0], box[2])
+    cc = slice(box[1], box[3])
+    out[rr, cc] = image_add(img[rr, cc], out[rr, cc])
     return out
 
 
-def collapse_layers2(stack, bounds, visible):
+def collapse_layers(stack, bounds, visible):
     if bounds.shape[0] == 0:
         return stack[0].copy()
     else:
-        return _collapse_layers(stack, bounds, visible)
+        return _collapse_all_layers(stack, bounds, visible)
 
 
-@jit(locals=dict(bounds=int32[:,:]),nopython=True)
-def _collapse_layers(stack, bounds, visible):
+@jit(locals=dict(bounds=int32[:, :]), nopython=True)
+def _collapse_all_layers(stack, bounds, visible):
     n_stack = stack.shape[0]
     out = stack[0].copy()
     for n in range(n_stack - 1):
@@ -495,12 +499,19 @@ def _collapse_layers(stack, bounds, visible):
         box = bounds[reverse_n - 1]
         rr = slice(box[0], box[2])
         cc = slice(box[1], box[3])
-        out[rr,cc] = image_add(img[rr,cc], out[rr,cc], out[rr,cc] != stack[0, rr,cc])
+        out[rr, cc] = image_add_visible(img[rr, cc], out[rr, cc], out[rr, cc] != stack[0, rr, cc])
+    stack[0] = out
     return out
 
+
 @vectorize([uint8(uint8, uint8, boolean)])
-def image_add(top, bot, force_bot):
+def image_add_visible(top, bot, force_bot=False):
     return bot if force_bot or top == 0 else top
+
+
+@vectorize([uint8(uint8, uint8)])
+def image_add(top, bot):
+    return bot if top == 0 else top
 
 
 if __name__ == '__main__':
