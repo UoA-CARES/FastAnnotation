@@ -44,5 +44,17 @@ Note: For the following Installation steps please ensure pip is run with adminis
             ```
         1. Create a connection to the database and run the `database/create_database.sql` script
         1. (Optional) run the 'database/create_test_data.sql' script to populate tables with test data
-    
-             
+    3. Alternatively, Docker can be used to run a MySQL database for development. 
+        1. Download and install Docker and Docker Compose
+        2. Start the container with
+        ```
+       >> docker-compose up
+       ```
+       3. Stop the container with
+       ```
+       >> docker-compose down
+       ```
+       4. To stop the container and delete the volume (deleting all data in the DB)
+       ```
+       >> docker-compose down -v
+       ```
