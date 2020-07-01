@@ -5,6 +5,7 @@ import numpy as np
 from kivy.app import App
 from kivy.core.window import Window
 from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.relativelayout import RelativeLayout
 
 from client.screens.common import MouseDrawnTool
 from client.screens.paint_window import PaintWindow
@@ -12,15 +13,19 @@ from client.screens.paint_window import PaintWindow
 
 class PaintApp(App):
     def build(self):
-        box = FloatLayout()
+        return Test()
+
+
+class Test(RelativeLayout):
+    def __init__(self, **kw):
+        super().__init__(**kw)
         image = np.zeros(shape=(3000, 2000, 3), dtype=np.uint8)
         image[:] = (255, 255, 0)
         pw = PaintWindow(image)
-        box.add_widget(pw)
-        pw.add_layer('test', [1,1,255])
+        self.add_widget(pw)
+        pw.add_layer('test', [1, 1, 255])
         drawtool = DrawTool(pw)
-        box.add_widget(drawtool)
-        return box
+        self.add_widget(drawtool)
 
 
 class DrawTool(MouseDrawnTool):

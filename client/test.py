@@ -1,28 +1,16 @@
 
-import cv2
-import numpy as np
-import kivy
-from kivy.app import App
-from kivy.uix.image import Image
-from kivy.lang import Builder
-from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.effectwidget import EffectWidget, InvertEffect
-from glob import glob
-from kivy.uix.widget import Widget
-from kivy.graphics.texture import Texture
-from client.screens.common import TransparentBlackEffect
-from time import sleep
-from kivy.graphics import Rectangle, Fbo, Color
-from kivy.clock import Clock
 import random
 import time
 
+import cv2
 import numpy as np
-import cython
-from numba.typed import List
+from kivy.app import App
+from kivy.clock import Clock
+from kivy.graphics.texture import Texture
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.image import Image
 from numba import vectorize
+
 
 def mat2texture(mat):
     if mat.shape[-1] is not 4:
@@ -179,7 +167,7 @@ class MyApp(App):
     def display(self):
 
         t0 = time.time()
-        buf = self.calc_calc10()
+        buf = self.calc_calc9()
         self.i += 1
         t1 = time.time()
         try:
@@ -319,7 +307,7 @@ def buffer_calc_bb(stack, bounds):
 from numba import int32
 
 
-@jit(locals=dict(bounds=int32[:,:]), nopython=True, parallel=True)
+@jit(nopython=True, parallel=True)
 def quick_stack(stack, bounds, idx):
     out = stack[0]
     img = stack[idx]
@@ -330,7 +318,7 @@ def quick_stack(stack, bounds, idx):
     return out
 
 
-@jit(locals=dict(bounds=int32[:,:]), nopython=True, parallel=True)
+@jit(nopython=True, parallel=True)
 def buffer_calc_bb2(stack, bounds):
     n_stack = stack.shape[0]
     out = stack[0].copy()

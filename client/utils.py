@@ -263,7 +263,7 @@ def invert_coords(coords):
     return coords[::-1]
 
 
-@njit(locals=dict(bounds=int32[:, :]), parallel=True)
+@njit(parallel=True)
 def draw_boxes(mat, bounds, color, thick):
     n_box = bounds.shape[0]
     for i in prange(n_box):
@@ -317,7 +317,7 @@ def collapse_layers(stack, bounds, visible):
         return _collapse_all_layers(stack, bounds, visible)
 
 
-@njit(locals=dict(bounds=int32[:, :]), parallel=True)
+@njit(parallel=True)
 def _collapse_all_layers(stack, bounds, visible):
     n_stack = stack.shape[0]
     out = stack[0].copy()

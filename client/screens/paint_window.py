@@ -1,6 +1,8 @@
 import time
+import os
 
 import numpy as np
+from kivy.lang import Builder
 from kivy.graphics.texture import Texture
 from kivy.properties import ObjectProperty, NumericProperty
 from kivy.uix.widget import Widget
@@ -11,6 +13,12 @@ from skimage.segmentation import flood
 
 from client.utils import collapse_layers, collapse_select, draw_boxes, invert_coords
 from client.client_config import ClientConfig
+
+# Load corresponding kivy file
+Builder.load_file(
+    os.path.join(
+        ClientConfig.DATA_DIR,
+        'paint_window.kv'))
 
 
 class PaintWindow(Widget):
@@ -53,10 +61,14 @@ class PaintWindow(Widget):
         self.refresh()
 
     def draw_line(self, point, pen_size):
+        if self._layer_manager.get_selected_layer() is None:
+            return
         self._action_manager.draw_line(point, pen_size)
         self._box_manager.update_box(self._layer_manager.get_selected_layer().name, point, pen_size)
 
     def fill(self, point):
+        if self._layer_manager.get_selected_layer() is None:
+            return
         self._action_manager.fill(point)
 
     def checkpoint(self):
