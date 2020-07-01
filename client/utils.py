@@ -7,7 +7,7 @@ import json
 import os
 
 import cv2
-import numba
+from numba import njit, vectorize, uint8, int32, boolean, prange
 import numpy as np
 import requests
 from PIL import Image
@@ -257,3 +257,84 @@ def texture2mat(texture):
     mat = np.array(pil_image)
     mat = cv2.flip(mat, 0)
     return cv2.cvtColor(mat, cv2.COLOR_RGBA2BGR)
+
+
+def invert_coords(coords):
+    return coords[::-1]
+
+
+@njit(locals=dict(bounds=int32[:, :]), parallel=True)
+def draw_boxes(mat, bounds, color, thick):
+    n_box = bounds.shape[0]
+    for i in prange(n_box):
+        if np.all(bounds[i, 2:] == 0):
+            continue
+
+        # Inner coordinates
+        ix0, iy0, ix1, iy1 = bounds[i]
+
+        ox0 = max(ix0 - thick, 0)
+        oy0 = max(iy0 - thick, 0)
+        ox1 = min(ix1 + thick + 1, mat.shape[0])
+        oy1 = min(iy1 + thick + 1, mat.shape[1])
+
+        mat[ox0:ox1, oy0:iy0] = color
+        mat[ox0:ox1, iy1:oy1] = color
+
+        mat[ox0:ix0, oy0:oy1] = color
+        mat[ix1:ox1, oy0:oy1] = color
+
+
+def collapse_select(stack, bounds, visible, layer):
+    if layer is None or layer.idx == 0:
+        return stack[0]
+    else:
+        return _collapse_idx(stack, bounds, visible, layer.idx).copy()
+
+
+@njit(parallel=True)
+def _collapse_idx(stack, bounds, visible, idx):
+    out = stack[0]
+    if not visible[idx]:
+        return out
+    img = stack[idx]
+    box = bounds[idx - 1]
+    rr = slice(box[0], box[2])
+    cc = slice(box[1], box[3])
+    out[rr, cc] = _image_add(img[rr, cc], out[rr, cc])
+    return out
+
+
+@vectorize([uint8(uint8, uint8)])
+def _image_add(top, bot):
+    return bot if top == 0 else top
+
+
+def collapse_layers(stack, bounds, visible):
+    if bounds.shape[0] == 0:
+        return stack[0].copy()
+    else:
+        return _collapse_all_layers(stack, bounds, visible)
+
+
+@njit(locals=dict(bounds=int32[:, :]), parallel=True)
+def _collapse_all_layers(stack, bounds, visible):
+    n_stack = stack.shape[0]
+    out = stack[0].copy()
+    for n in range(n_stack - 1):
+        reverse_n = n_stack - 1 - n
+        if not visible[reverse_n]:
+            continue
+        img = stack[reverse_n]
+        box = bounds[reverse_n - 1]
+        rr = slice(box[0], box[2])
+        cc = slice(box[1], box[3])
+        out[rr, cc] = _image_add_visible(img[rr, cc], out[rr, cc], out[rr, cc] != stack[0, rr, cc])
+    stack[0] = out
+    return out
+
+
+@vectorize([uint8(uint8, uint8, boolean)])
+def _image_add_visible(top, bot, force_bot=False):
+    return bot if force_bot or top == 0 else top
+
