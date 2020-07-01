@@ -2,6 +2,7 @@ import math
 import os
 
 import numpy as np
+from kivy.core.window import Window
 from kivy.graphics import Color
 from kivy.graphics import Rectangle, Fbo
 from kivy.lang import Builder
@@ -40,6 +41,10 @@ class TileView(GridLayout):
 
 
 class MouseDrawnTool(FloatLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.keyboard = KeyboardManager(Window.request_keyboard(lambda: None, self))
+
     # Override these in child classes
     def on_touch_down_hook(self, touch):
         pass
@@ -62,6 +67,42 @@ class MouseDrawnTool(FloatLayout):
     def on_touch_up(self, touch):
         self.on_touch_up_hook(touch)
         return super(MouseDrawnTool, self).on_touch_up(touch)
+
+
+class KeyboardManager:
+    def __init__(self, keyboard):
+        self._keyboard_shortcuts = {}
+        self.keycode_buffer = {}
+        self._keyboard = keyboard
+
+    def activate(self):
+        self._keyboard.bind(on_key_down=self.on_key_down)
+        self._keyboard.bind(on_key_up=self.on_key_up)
+
+    def deactivate(self):
+        self._keyboard.unbind(on_key_down=self.on_key_down)
+        self._keyboard.unbind(on_key_up=self.on_key_up)
+
+    def is_key_down(self, keycode):
+        return keycode in self.keycode_buffer
+
+    def create_shortcut(self, shortcut, func):
+        if not isinstance(shortcut, tuple):
+            shortcut = (shortcut,)
+        self._keyboard_shortcuts[shortcut] = func
+
+    def on_key_down(self, keyboard, keycode, text, modifiers):
+        if keycode[1] in self.keycode_buffer:
+            return
+        self.keycode_buffer[keycode[1]] = keycode[0]
+
+    def on_key_up(self, keyboard, keycode):
+        for shortcut in self._keyboard_shortcuts.keys():
+            if keycode[1] in shortcut and set(
+                    shortcut).issubset(self.keycode_buffer):
+                self._keyboard_shortcuts[shortcut]()
+
+        self.keycode_buffer.pop(keycode[1])
 
 
 class NumericInput(StackLayout):
