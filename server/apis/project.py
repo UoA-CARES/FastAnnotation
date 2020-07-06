@@ -267,6 +267,7 @@ class ProjectImageList(Resource):
                     row["image_data"]),
                 np.uint8)
             img = cv2.imdecode(array, cv2.IMREAD_COLOR)
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             img_dir = os.path.join(
                 ServerConfig.DATA_ROOT_DIR,
                 "images",

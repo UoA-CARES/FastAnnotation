@@ -205,7 +205,7 @@ def decode_mask(b64_str, shape):
 
 def mask2mat(mask):
     mat = mask.astype(np.uint8) * 255
-    return cv2.cvtColor(mat, cv2.COLOR_GRAY2BGR)
+    return cv2.cvtColor(mat, cv2.COLOR_GRAY2RGB)
 
 
 def mat2mask(mat):
@@ -256,7 +256,7 @@ def texture2mat(texture):
 
     mat = np.array(pil_image)
     mat = cv2.flip(mat, 0)
-    return cv2.cvtColor(mat, cv2.COLOR_RGBA2BGR)
+    return cv2.cvtColor(mat, cv2.COLOR_RGBA2RGB)
 
 
 def invert_coords(coords):

@@ -35,7 +35,7 @@ def downscale_mat(mat, max_dim):
 
 def mask2mat(mask):
     mat = mask.astype(np.uint8) * 255
-    return cv2.cvtColor(mat, cv2.COLOR_GRAY2BGR)
+    return cv2.cvtColor(mat, cv2.COLOR_GRAY2RGB)
 
 
 def mat2mask(mat):

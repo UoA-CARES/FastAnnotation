@@ -809,7 +809,7 @@ class DrawableLayer(FloatLayout):
         Clock.schedule_once(lambda dt: self.late_init(texture))
 
     def late_init(self, texture):
-        self.paint_window.refresh()
+        self.paint_window.queue_refresh()
         self.load_texture(texture)
         self.set_mask_color(self._mask_color)
 

@@ -154,14 +154,13 @@ class ImageList(Resource):
                 if not image_data_flag:
                     pass
                 elif row["image_ext"].lower() in (".jpg", ".jpeg", ".png"):
-                    with open(row["image_path"], "rb") as img_file:
-                        if max_dim is not None:
-                            resized_img = utils.downscale_mat(cv2.imread(img_file.name), max_dim)
-                            img_bytes = utils.mat2bytes(resized_img, row["image_ext"])
-                        else:
-                            img_bytes = img_file.read()
-                        encoded_image = base64.b64encode(img_bytes)
-                        row["image_data"] = encoded_image.decode('utf-8')
+                    img = cv2.imread(row["image_path"])
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    if max_dim is not None:
+                        img = utils.downscale_mat(img, max_dim)
+                    img_bytes = utils.mat2bytes(img, row["image_ext"])
+                    encoded_image = base64.b64encode(img_bytes)
+                    row["image_data"] = encoded_image.decode('utf-8')
                 images.append(row)
             response = {"images": images}
             code = 200
@@ -227,14 +226,13 @@ class Image(Resource):
             code = 500
         else:
             if response["image_ext"] == ".jpg":
-                with open(response["image_path"], "rb") as img_file:
-                    if max_dim is not None:
-                        resized_img = utils.downscale_mat(cv2.imread(img_file.name), max_dim)
-                        img_bytes = utils.mat2bytes(resized_img, response["image_ext"])
-                    else:
-                        img_bytes = img_file.read()
-                    encoded_image = base64.b64encode(img_bytes)
-                    response["image_data"] = encoded_image.decode('utf-8')
+                img = cv2.imread(response["image_path"])
+                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                if max_dim is not None:
+                    img = utils.downscale_mat(img, max_dim)
+                img_bytes = utils.mat2bytes(img, response["image_ext"])
+                encoded_image = base64.b64encode(img_bytes)
+                response["image_data"] = encoded_image.decode('utf-8')
             code = 200
 
         if code == 200:
@@ -400,6 +398,7 @@ class ImageAnnotationList(Resource):
             for row in result:
                 info = utils.load_info(row["info_path"])
                 mat = cv2.imread(row["mask_path"])
+                mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
                 if max_dim is not None:
                     mat = utils.downscale_mat(mat, max_dim)
                     info = utils.resize_info(info, mat.shape)

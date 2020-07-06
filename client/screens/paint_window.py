@@ -2,10 +2,12 @@ import time
 import os
 
 import numpy as np
+from threading import Lock
 from kivy.lang import Builder
 from kivy.graphics.texture import Texture
 from kivy.properties import ObjectProperty, NumericProperty
 from kivy.uix.widget import Widget
+from kivy.clock import mainthread
 from kivy.utils import get_color_from_hex
 from skimage.color import rgb2gray
 from skimage.draw import disk
@@ -27,11 +29,16 @@ class PaintWindow(Widget):
     box_highlight = ObjectProperty(None)
     box_thickness = NumericProperty(2)
 
+    _checkpoint_lock = Lock()
+    _checkpoint_flag = False
+    _refresh_lock = Lock()
+    _refresh_flag = False
+
     def __init__(self, image, **kwargs):
         super().__init__(**kwargs)
         self.image_shape = image.shape
         size = self.image_shape[:2]
-        self.image.texture = Texture.create(size=size, colorfmt='bgr', bufferfmt='ubyte')
+        self.image.texture = Texture.create(size=size, colorfmt='rgb', bufferfmt='ubyte')
         self.size_hint = (None, None)
         self.size = size
 
@@ -41,7 +48,7 @@ class PaintWindow(Widget):
 
         self.box_color = (np.array(get_color_from_hex(ClientConfig.BBOX_UNSELECT)) * 255).astype(np.uint8)[:3]
         self.box_highlight = (np.array(get_color_from_hex(ClientConfig.BBOX_SELECT)) * 255).astype(np.uint8)[:3]
-        self.refresh()
+        self.queue_refresh()
 
     def on_box_color(self, instance, value):
         self._box_manager.box_color = value
@@ -54,27 +61,43 @@ class PaintWindow(Widget):
 
     def undo(self):
         self._action_manager.undo()
-        self.refresh()
+        self.queue_refresh()
 
     def redo(self):
         self._action_manager.redo()
-        self.refresh()
+        self.queue_refresh()
 
-    def draw_line(self, point, pen_size):
+    def draw_line(self, point, pen_size, color=None):
         if self._layer_manager.get_selected_layer() is None:
             return
-        self._action_manager.draw_line(point, pen_size)
+        self._action_manager.draw_line(point, pen_size, color)
         self._box_manager.update_box(self._layer_manager.get_selected_layer().name, point, pen_size)
 
-    def fill(self, point):
+    def fill(self, point, color=None):
         if self._layer_manager.get_selected_layer() is None:
             return
-        self._action_manager.fill(point)
+        self._action_manager.fill(point, color)
 
-    def checkpoint(self):
+    def queue_checkpoint(self):
+        with self._checkpoint_lock:
+            if not self._checkpoint_flag:
+                self._checkpoint_flag = True
+                self._checkpoint()
+
+    @mainthread
+    def _checkpoint(self):
         self._action_manager.checkpoint()
+        with self._checkpoint_lock:
+            self._checkpoint_flag = False
 
-    def refresh(self):
+    def queue_refresh(self):
+        with self._refresh_lock:
+            if not self._refresh_flag:
+                self._refresh_flag = True
+                self._refresh()
+
+    @mainthread
+    def _refresh(self):
         t0 = time.time()
         # Stack Operation
         stack = self._layer_manager.get_stack()
@@ -88,29 +111,49 @@ class PaintWindow(Widget):
         self._box_manager.draw_boxes(buffer)
         t3 = time.time()
         # Canvas Operation
-        self.image.texture.blit_buffer(buffer.ravel(), colorfmt='bgr', bufferfmt='ubyte')
+        self.image.texture.blit_buffer(buffer.ravel(), colorfmt='rgb', bufferfmt='ubyte')
         self.image.canvas.ask_update()
         t4 = time.time()
 
         print("[FPS: %.2f #%d] | Stack: %f\tCollapse: %f\tBox: %f (%f)\tCanvas: %f" %
               (1 / (t4 - t0), stack.shape[0], t1 - t0, t2 - t1, t3 - t2, (t3 - t2)/stack.shape[0],t4 - t3))
 
-    def add_layer(self, name, color):
+        with self._refresh_lock:
+            self._refresh_flag = False
+
+    def load_layers(self, names, colors, masks, boxes):
+        removed_layers = [x for x in self._layer_manager.get_all_layer_names() if x not in names]
+        for name in removed_layers:
+            self.delete_layer(name)
+
+        for i in range(len(names)):
+            name = names[i]
+            if name in self._layer_manager.get_all_layer_names():
+                continue
+            color = colors[i]
+            mask = masks[i]
+            box = boxes[i]
+            self.add_layer(name, color, mask)
+            self._box_manager.load_box(name, box)
+
+    def add_layer(self, name, color, mask=None):
         print("Adding Layer[%d]: %s" % (self._layer_manager._layer_index, name))
         color = np.array(color)
         if np.any(color):
             print("Incrementing zero values in label color")
             color[color == 0] = 1
-        self._layer_manager.add_layer(name, color.tolist())
+        if mask is not None:
+            mask = mask.swapaxes(0, 1)
+        self._layer_manager.add_layer(name, color.tolist(), mask)
         self._action_manager.clear_history()
         self._box_manager.add_box(self._layer_manager.get_layer(name))
         self.select_layer(name)
-        self.checkpoint()
+        self.queue_checkpoint()
 
     def delete_layer(self, name):
         self._layer_manager.delete_layer(name)
         self._box_manager.delete_box(name)
-        self.checkpoint()
+        self.queue_checkpoint()
 
     def select_layer(self, name):
         self._layer_manager.select_layer(name)
@@ -118,6 +161,17 @@ class PaintWindow(Widget):
 
     def set_visible(self, visible):
         self._layer_manager.set_visible(visible=visible)
+
+    def set_color(self, color, name=None):
+        if name is None:
+            layer = self._layer_manager.get_selected_layer()
+        else:
+            layer = self._layer_manager.get_layer(name)
+
+        mat = layer.get_mat()
+        color = np.clip(np.array(color) * 255, 0, 255).astype(np.uint8)
+        mat[np.all(mat != (0,0,0), axis=-1)] = color
+        layer.color = color
 
 
 class ActionManager:
@@ -154,6 +208,8 @@ class ActionManager:
 
     def checkpoint(self):
         layer = self._layer_manager.get_selected_layer()
+        if layer is None:
+            return
         self._current_line = None
         self._history_idx += 1
         self._history_max = self._history_idx + 1
@@ -162,7 +218,7 @@ class ActionManager:
             print("LayerHistory: %s %s" % (str(self._layer_history.shape), str(self._layer_history.dtype)))
         self._layer_history[self._history_idx] = layer.get_mat().copy()
 
-    def draw_line(self, point, pen_size):
+    def draw_line(self, point, pen_size, color=None):
         point = invert_coords(point)
         if self._current_line is None:
             self._current_line = tuple(point)
@@ -171,19 +227,25 @@ class ActionManager:
         if layer is None:
             return
 
-        self._draw_line_thick(layer.get_mat(), self._current_line, tuple(point), layer.color, pen_size)
+        if color is None:
+            color = layer.color
+
+        self._draw_line_thick(layer.get_mat(), self._current_line, tuple(point), color, pen_size)
         print(layer.color)
         self._current_line = tuple(point)
 
-    def fill(self, point):
+    def fill(self, point, color=None):
         point = invert_coords(point)
         layer = self._layer_manager.get_selected_layer()
         if layer is None:
             return
 
+        if color is None:
+            color = layer.color
+
         mat = layer.get_mat()
         mat_grey = rgb2gray(mat)
-        mat[flood(mat_grey, tuple(point), connectivity=1)] = layer.color
+        mat[flood(mat_grey, tuple(point), connectivity=1)] = color
 
     def _draw_line_thick(self, mat, p0, p1, color, thickness):
         mat[disk(p0, thickness, shape=mat.shape)] = color
@@ -236,8 +298,8 @@ class LayerManager:
         self._layer_stack[layer.idx] = 0
         self._layer_visibility[layer.idx] = False
 
-    def add_layer(self, name, color):
-        self._add_layer()
+    def add_layer(self, name, color, mat=None):
+        self._add_layer(mat)
         layer = LayerManager.Layer(name, color, self._layer_index, self)
         self._layer_dict[layer.name] = layer
 
@@ -334,6 +396,10 @@ class BoxManager:
             bounds[2:] = np.min((np.max((bounds[2:], point + radius, np.zeros(2)), axis=0), invert_coords(self.image_shape[:2])), axis=0)
         except KeyError:
             return
+
+    def load_box(self, name, box):
+        idx = self._box_dict[name]
+        self._bounds[idx] = box
 
     def delete_box(self, name):
         self._box_dict.pop(name, None)

@@ -118,12 +118,12 @@ class InstanceAnnotatorController:
         # TODO: These arent stored in the database yet
 
         data = [
-            LabelState("Trunk", [120, 80, 0, 255]),
-            LabelState("Cane", [150, 250, 0, 255]),
-            LabelState("Shoot", [0, 130, 200, 255]),
+            LabelState("Trunk", [120, 80, 1, 255]),
+            LabelState("Cane", [150, 250, 1, 255]),
+            LabelState("Shoot", [1, 130, 200, 255]),
             LabelState("Node", [255, 100, 190, 255]),
-            LabelState("Wire", [255, 128, 0, 255]),
-            LabelState("Post", [128, 128, 0, 255])
+            LabelState("Wire", [255, 128, 1, 255]),
+            LabelState("Post", [128, 128, 1, 255])
         ]
 
         for label in data:

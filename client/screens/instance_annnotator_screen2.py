@@ -418,22 +418,29 @@ class Painter(RelativeLayout):
         super().__init__(**kw)
         self.paint_window = None
         self.draw_tool = None
+        self.size = (1000,1000)
+        self.size_hint = (None, None)
 
     def bind_image(self, image):
         self.clear_widgets()
         self.paint_window = PaintWindow(image)
-        self.paint_window.add_layer('test', [1, 1, 255])
+        self.paint_window.add_layer('test', [120, 80, 0])
         self.draw_tool = DrawTool(self.paint_window)
         self.add_widget(self.paint_window)
         self.add_widget(self.draw_tool)
 
 
 class DrawTool(MouseDrawnTool):
-    def __init__(self, paint_window, **kwargs):
+    ERASER_COLOR = [0, 0, 0]
+
+    def __init__(self, paint_window, pen_size=10, eraser=False, **kwargs):
         super().__init__(**kwargs)
         self.app = App.get_running_app()
         self.paint_window = paint_window
         self.size = self.paint_window.size
+        self.pen_size = pen_size
+        self.eraser = eraser
+
         self.keyboard.create_shortcut(("lctrl", "z"), self.paint_window.undo)
         self.keyboard.create_shortcut(("lctrl", "y"), self.paint_window.redo)
         # self.keyboard.create_shortcut("spacebar", self.app.root.current_screen.add_layer)
@@ -441,25 +448,24 @@ class DrawTool(MouseDrawnTool):
 
     def on_touch_down_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
+        color = self.ERASER_COLOR if self.eraser else None
         if self.keyboard.is_key_down("lctrl"):
             pass  # Select layer which was clicked (detect collision + consec clicks)
         elif self.keyboard.is_key_down("shift"):
-            self.paint_window.fill(pos)
+            self.paint_window.fill(pos, color)
         else:
-            self.paint_window.draw_line(pos, 10)
-        self.paint_window.refresh()
+            self.paint_window.draw_line(pos, self.pen_size, color)
+        self.paint_window.queue_refresh()
 
     def on_touch_move_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
-        self.paint_window.draw_line(pos, 10)
-        self.paint_window.refresh()
+        color = self.ERASER_COLOR if self.eraser else None
+        self.paint_window.draw_line(pos, self.pen_size, color)
+        self.paint_window.queue_refresh()
 
     def on_touch_up_hook(self, touch):
-        self.paint_window.checkpoint()
-        self.paint_window.refresh()
-
-
-
+        self.paint_window.queue_checkpoint()
+        self.paint_window.queue_refresh()
 
 
 class ImageCanvasTabPanel(TabbedPanel):
@@ -541,37 +547,29 @@ class ImageCanvas(BoxLayout):
         self.unsaved = unsaved
 
     def load_pen_size(self, size):
-        # self.draw_tool.pen_size = size
-        # TODO
-        pass
+        if self.painter.draw_tool is None:
+            return
+        self.painter.draw_tool.pen_size = size
 
     def load_global_alpha(self, alpha):
-        # self.layer_stack.set_alpha(alpha)
-        # TODO
-        pass
+        self.painter.opacity = alpha
 
     def load_eraser_state(self, eraser):
-        # self.draw_tool.erase = eraser
-        # TODO
-        pass
+        if self.painter.draw_tool is None:
+            return
+        self.painter.draw_tool.eraser = eraser
 
     def load_current_label(self, label):
-        # if label is None or self.draw_tool.layer is None:
-        #     return
-        # new_color = self.draw_tool.layer.get_mask_color()
-        # new_color[:3] = label.color[:3]
-        # self.draw_tool.layer.set_mask_color(new_color)
-        # TODO
-        pass
+        if self.painter.paint_window is None:
+            return
+        self.painter.paint_window.set_color(label.color[:3])
+        self.painter.paint_window.queue_refresh()
 
     def load_current_layer(self, layer_name):
-        # print("Loading Current Layer: %s" % layer_name)
-        # layer = self.layer_stack.get_layer(layer_name)
-        # if layer is None:
-        #     return
-        # self.draw_tool.set_layer(layer)
-        # TODO
-        pass
+        if self.painter.paint_window is None or not layer_name:
+            return
+        self.painter.paint_window.select_layer(layer_name)
+        self.painter.paint_window.queue_refresh()
 
     def load_image(self, image_state):
         # if image_state is None:
@@ -581,11 +579,23 @@ class ImageCanvas(BoxLayout):
         # texture = utils.mat2texture(image_state.image)
         # self.image.texture = texture
         # self.image.size = image_state.shape[1::-1]
-        # TODO
+        # TODO is this needed?
         pass
 
     def load_annotations(self, annotations, overwrite=False):
-        # print("Loading Annotations")
+        print("Loading Annotations")
+        names = list(annotations.keys())
+        colors = []
+        boxes = []
+        masks = []
+        for a in annotations.values():
+            with self.app.root.current_screen.model.labels.get(a.class_name) as label:
+                if label is not None:
+                    colors.append(label.color)
+            boxes.append(a.bbox)
+            masks.append(a.mat) #TODO does this need to be a copy?
+        self.painter.paint_window.load_layers(names, colors, masks, boxes)
+
         #
         # if annotations is None:
         #     return
@@ -617,11 +627,11 @@ class ImageCanvas(BoxLayout):
         pass
 
     def on_touch_down(self, touch):
-        # if 'lctrl' in self.draw_tool.keycode_buffer and touch.is_mouse_scrolling:
-        #     if touch.button == 'scrolldown':
-        #         self.zoom(1.0 + self.step_scale)
-        #     elif touch.button == 'scrollup':
-        #         self.zoom(1.0 - self.step_scale)
+        if self.painter.draw_tool.keyboard.is_key_down("lctrl") and touch.is_mouse_scrolling:
+            if touch.button == 'scrolldown':
+                self.zoom(1.0 + self.step_scale)
+            elif touch.button == 'scrollup':
+                self.zoom(1.0 - self.step_scale)
         super(ImageCanvas, self).on_touch_down(touch)
 
     def zoom(self, scale):

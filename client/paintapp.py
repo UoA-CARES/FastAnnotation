@@ -57,16 +57,16 @@ class DrawTool(MouseDrawnTool):
             self.paint_window.fill(pos)
         else:
             self.paint_window.draw_line(pos, 10)
-        self.paint_window.refresh()
+        self.paint_window.queue_refresh()
 
     def on_touch_move_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
         self.paint_window.draw_line(pos, 10)
-        self.paint_window.refresh()
+        self.paint_window.queue_refresh()
 
     def on_touch_up_hook(self, touch):
-        self.paint_window.checkpoint()
-        self.paint_window.refresh()
+        self.paint_window.queue_checkpoint()
+        self.paint_window.queue_refresh()
 
 
 if __name__ == '__main__':
