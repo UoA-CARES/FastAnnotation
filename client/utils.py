@@ -263,20 +263,27 @@ def invert_coords(coords):
     return coords[::-1]
 
 
-@njit(parallel=True)
+# @njit(parallel=True)
 def draw_boxes(mat, bounds, color, thick):
     n_box = bounds.shape[0]
+    height = mat.shape[0]
     for i in prange(n_box):
         if np.all(bounds[i, 2:] == 0):
             continue
 
         # Inner coordinates
-        ix0, iy0, ix1, iy1 = bounds[i]
+        x0, y0, x1, y1 = bounds[i]
+
+        # Flip coords to accomodate kivy
+        ix0 = height - x1
+        ix1 = height - x0
+        iy0 = y0
+        iy1 = y1
 
         ox0 = max(ix0 - thick, 0)
         oy0 = max(iy0 - thick, 0)
-        ox1 = min(ix1 + thick + 1, mat.shape[0])
-        oy1 = min(iy1 + thick + 1, mat.shape[1])
+        ox1 = min(ix1 + thick, mat.shape[0])
+        oy1 = min(iy1 + thick, mat.shape[1])
 
         mat[ox0:ox1, oy0:iy0] = color
         mat[ox0:ox1, iy1:oy1] = color

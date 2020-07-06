@@ -19,11 +19,15 @@ class PaintApp(App):
 class Test(RelativeLayout):
     def __init__(self, **kw):
         super().__init__(**kw)
-        image = np.zeros(shape=(3000, 2000, 3), dtype=np.uint8)
+        image = np.zeros(shape=(300, 200, 3), dtype=np.uint8)
         image[:] = (255, 255, 0)
+        image[0:10, 0:10, :] = 0
+        image[290:300, 0:10, :] = 80
+        image[0:10, 190:200, :] = 160
+        image[290:300, 190:200, :] = 240
         pw = PaintWindow(image)
         self.add_widget(pw)
-        pw.add_layer('test', [1, 1, 255])
+        pw.add_layer('test', [255, 255, 255])
         drawtool = DrawTool(pw)
         self.add_widget(drawtool)
 

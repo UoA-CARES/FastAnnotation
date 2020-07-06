@@ -1,5 +1,6 @@
 import time
 import os
+import cv2
 
 import numpy as np
 from threading import Lock
@@ -34,13 +35,24 @@ class PaintWindow(Widget):
     _refresh_lock = Lock()
     _refresh_flag = False
 
+    class Inverter:
+        def __init__(self, image):
+            self._height = image.shape[0]
+
+        def invert(self, point):
+            print(point)
+            inv = np.zeros(2, dtype=int)
+            inv[0] = self._height - point[1]
+            inv[1] = point[0]
+            return inv
+
     def __init__(self, image, **kwargs):
         super().__init__(**kwargs)
         self.image_shape = image.shape
-        size = self.image_shape[:2]
-        self.image.texture = Texture.create(size=size, colorfmt='rgb', bufferfmt='ubyte')
+        self.image.texture = Texture.create(size=(image.shape[1], image.shape[0]), colorfmt='rgb', bufferfmt='ubyte')
         self.size_hint = (None, None)
-        self.size = size
+        self.size = (image.shape[1], image.shape[0])
+        self.inverter = PaintWindow.Inverter(image)
 
         self._layer_manager = LayerManager(image)
         self._action_manager = ActionManager(self._layer_manager)
@@ -68,12 +80,15 @@ class PaintWindow(Widget):
         self.queue_refresh()
 
     def draw_line(self, point, pen_size, color=None):
+        point = self.inverter.invert(point)
+        print(point)
         if self._layer_manager.get_selected_layer() is None:
             return
         self._action_manager.draw_line(point, pen_size, color)
         self._box_manager.update_box(self._layer_manager.get_selected_layer().name, point, pen_size)
 
     def fill(self, point, color=None):
+        point = self.inverter.invert(point)
         if self._layer_manager.get_selected_layer() is None:
             return
         self._action_manager.fill(point, color)
@@ -104,7 +119,10 @@ class PaintWindow(Widget):
         t1 = time.time()
         # Collapse Operation
         bounds = self._box_manager.get_bounds()
-        buffer = collapse_select(stack, bounds, self._layer_manager._layer_visibility, self._layer_manager.get_selected_layer())
+        buffer = collapse_layers(stack, bounds, self._layer_manager._layer_visibility)
+        # buffer = collapse_select(stack, bounds, self._layer_manager._layer_visibility, self._layer_manager.get_selected_layer())
+
+        buffer = np.flip(buffer, 0)
         t2 = time.time()
         # Box Operation
 
@@ -142,8 +160,6 @@ class PaintWindow(Widget):
         if np.any(color):
             print("Incrementing zero values in label color")
             color[color == 0] = 1
-        if mask is not None:
-            mask = mask.swapaxes(0, 1)
         self._layer_manager.add_layer(name, color.tolist(), mask)
         self._action_manager.clear_history()
         self._box_manager.add_box(self._layer_manager.get_layer(name))
@@ -219,7 +235,6 @@ class ActionManager:
         self._layer_history[self._history_idx] = layer.get_mat().copy()
 
     def draw_line(self, point, pen_size, color=None):
-        point = invert_coords(point)
         if self._current_line is None:
             self._current_line = tuple(point)
 
@@ -235,7 +250,6 @@ class ActionManager:
         self._current_line = tuple(point)
 
     def fill(self, point, color=None):
-        point = invert_coords(point)
         layer = self._layer_manager.get_selected_layer()
         if layer is None:
             return
@@ -276,7 +290,7 @@ class LayerManager:
             return self._manager.get_layer_mat(self.name)
 
     def __init__(self, image):
-        self._base_image = image.swapaxes(0, 1)
+        self._base_image = image
         self._selected_layer = None
 
         self._layer_dict = {}
@@ -284,7 +298,6 @@ class LayerManager:
         self._layer_stack = np.empty(shape=(self._layer_capacity,) + self._base_image.shape, dtype=np.uint8)
         self._layer_visibility = np.zeros(shape=(self._layer_capacity,), dtype=bool)
         self._layer_index = -1
-
         self._add_layer(self._base_image)
 
     def get_base_image(self):
@@ -387,13 +400,16 @@ class BoxManager:
                 print("BoundsVisibility: %s %s" % (str(self._visibility.shape), str(self._visibility.dtype)))
 
     def update_box(self, name, point, radius):
-        point = invert_coords(point)
         point = np.array(point)
         try:
             idx = self._box_dict[name]
             bounds = self._bounds[idx]
-            bounds[:2] = np.max((np.min((bounds[:2], point - radius), axis=0), np.zeros(2)), axis=0)
-            bounds[2:] = np.min((np.max((bounds[2:], point + radius, np.zeros(2)), axis=0), invert_coords(self.image_shape[:2])), axis=0)
+            bounds[:2] = np.min((bounds[:2], point - radius), axis=0)
+            bounds[:2] = np.max((bounds[:2], np.zeros(2)), axis=0)
+            bounds[2:] = np.max((bounds[2:], point + radius, np.zeros(2)), axis=0)
+            bounds[2:] = np.min((bounds[2:], self.image_shape[:2]), axis=0)
+            # bounds[:2] = np.max((np.min((bounds[:2], point - radius), axis=0), np.zeros(2)), axis=0)
+            # bounds[2:] = np.min((np.max((bounds[2:], point + radius, np.zeros(2)), axis=0), invert_coords(self.image_shape[:2])), axis=0)
         except KeyError:
             return
 

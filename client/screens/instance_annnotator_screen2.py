@@ -418,7 +418,6 @@ class Painter(RelativeLayout):
         super().__init__(**kw)
         self.paint_window = None
         self.draw_tool = None
-        self.size = (1000,1000)
         self.size_hint = (None, None)
 
     def bind_image(self, image):
@@ -428,6 +427,11 @@ class Painter(RelativeLayout):
         self.draw_tool = DrawTool(self.paint_window)
         self.add_widget(self.paint_window)
         self.add_widget(self.draw_tool)
+        self.size = (image.shape[1], image.shape[0])
+
+    def on_pos(self, instance, value):
+        self.paint_window.pos = value
+        self.draw_tool.pos = value
 
 
 class DrawTool(MouseDrawnTool):
@@ -592,8 +596,11 @@ class ImageCanvas(BoxLayout):
             with self.app.root.current_screen.model.labels.get(a.class_name) as label:
                 if label is not None:
                     colors.append(label.color)
-            boxes.append(a.bbox)
-            masks.append(a.mat) #TODO does this need to be a copy?
+                else:
+                    colors.append([255,255,255,255])
+                names.append(a.annotation_name)
+                boxes.append(a.bbox)
+                masks.append(a.mat)
         self.painter.paint_window.load_layers(names, colors, masks, boxes)
 
         #
@@ -641,6 +648,13 @@ class ImageCanvas(BoxLayout):
                                      self.min_scale,
                                      self.max_scale)
         self.scatter.pos = self.pos
+        self.painter.pos = self.pos
+
+        print("PosList: \n\tScatter: %s\n\tPainter: %s\n\tPaintW: %s\n\tDrawTool: %s\n\t" %
+              (str(self.scatter.pos), str(self.painter.pos), str(self.painter.paint_window.pos), str(self.painter.draw_tool.pos)))
+        print("SizeList: \n\tScatter: %s\n\tPainter: %s\n\tPaintW: %s\n\tDrawTool: %s\n\t" %
+              (str(self.scatter.size), str(self.painter.size), str(self.painter.paint_window.size),
+               str(self.painter.draw_tool.size)))
 
 
 class RightControlColumn(BoxLayout):
