@@ -1,5 +1,21 @@
-CREATE DATABASE  IF NOT EXISTS `fadb` 
+CREATE DATABASE  IF NOT EXISTS `fadb`;
 USE `fadb`;
+
+--
+-- Table structure for table `project`
+--
+
+DROP TABLE IF EXISTS `project`;
+CREATE TABLE `project` (
+  `project_id` int NOT NULL AUTO_INCREMENT,
+  `project_name` varchar(80) NOT NULL,
+  `last_uploaded` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `unlabeled_count` int NOT NULL DEFAULT '0',
+  `labeled_count` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`project_id`),
+  UNIQUE KEY `project_id_UNIQUE` (`project_id`),
+  UNIQUE KEY `project_name_UNIQUE` (`project_name`)
+) ENGINE=InnoDB AUTO_INCREMENT=119 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Table structure for table `image`
@@ -40,19 +56,3 @@ CREATE TABLE `instance_seg_meta` (
   KEY `image_fid_idx` (`image_id`),
   CONSTRAINT `image_fid` FOREIGN KEY (`image_id`) REFERENCES `image` (`image_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=137 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
---
--- Table structure for table `project`
---
-
-DROP TABLE IF EXISTS `project`;
-CREATE TABLE `project` (
-  `project_id` int NOT NULL AUTO_INCREMENT,
-  `project_name` varchar(80) NOT NULL,
-  `last_uploaded` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `unlabeled_count` int NOT NULL DEFAULT '0',
-  `labeled_count` int NOT NULL DEFAULT '0',
-  PRIMARY KEY (`project_id`),
-  UNIQUE KEY `project_id_UNIQUE` (`project_id`),
-  UNIQUE KEY `project_name_UNIQUE` (`project_name`)
-) ENGINE=InnoDB AUTO_INCREMENT=119 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
