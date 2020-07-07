@@ -46,15 +46,7 @@ class AddProjectPopup(Popup):
 
         result = resp.json()
         pvw = App.get_running_app().root.current_screen.project_view_window
-        for row in result['projects']:
-            total = row['labeled_count'] + row['unlabeled_count']
-            pvw.add_card(
-                row['name'],
-                row['id'],
-                "IMAGE",
-                total,
-                row['labeled_count'],
-                row['last_uploaded'])
+        pvw.refresh_projects()
         self.dismiss()
 
 
