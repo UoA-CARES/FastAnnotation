@@ -32,6 +32,8 @@ class ProjectToolScreen(Screen):
                 # tkinter does not return windows style filepath
                 image_paths.append(root + '/' + f)
 
+        self._upload_images(self.app.current_project_id, image_paths)
+
     @background
     def _upload_images(self, pid, image_paths):
         resp = utils.add_project_images(pid, image_paths)
@@ -48,3 +50,8 @@ class ProjectToolScreen(Screen):
             raise ApiException(
                 "Failed to upload images to project.",
                 resp.status_code)
+        else:
+            pop_up = Alert()
+            pop_up.title = "Success!"
+            pop_up.alert_message = "Successfully added new images to the '%s' project" % self.app.current_project_name
+            pop_up.open()
