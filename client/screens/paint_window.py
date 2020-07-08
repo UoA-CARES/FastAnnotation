@@ -34,6 +34,7 @@ class PaintWindow2(Widget):
     _checkpoint_flag = False
     _refresh_lock = Lock()
     _refresh_flag = False
+    _refresh_all_flag = False
 
     class Inverter:
         def __init__(self, image):
@@ -105,8 +106,10 @@ class PaintWindow2(Widget):
         with self._checkpoint_lock:
             self._checkpoint_flag = False
 
-    def queue_refresh(self):
+    def queue_refresh(self, refresh_all=None):
         with self._refresh_lock:
+            if refresh_all:
+                self._refresh_all_flag = refresh_all
             if not self._refresh_flag:
                 self._refresh_flag = True
                 self._refresh()
@@ -119,8 +122,10 @@ class PaintWindow2(Widget):
         t1 = time.time()
         # Collapse Operation
         bounds = self._box_manager.get_bounds()
-        buffer = collapse_layers(stack, bounds, self._layer_manager._layer_visibility)
-        # buffer = collapse_select(stack, bounds, self._layer_manager._layer_visibility, self._layer_manager.get_selected_layer())
+        if self._refresh_all_flag:
+            buffer = collapse_layers(stack, bounds, self._layer_manager._layer_visibility)
+        else:
+            buffer = collapse_select(stack, bounds, self._layer_manager._layer_visibility, self._layer_manager.get_selected_layer())
 
         buffer = np.flip(buffer, 0)
         t2 = time.time()
@@ -138,6 +143,7 @@ class PaintWindow2(Widget):
 
         with self._refresh_lock:
             self._refresh_flag = False
+            self._refresh_all_flag = False
 
     def load_layers(self, names, colors, masks, boxes):
         removed_layers = [x for x in self._layer_manager.get_all_layer_names() if x not in names]
@@ -153,6 +159,7 @@ class PaintWindow2(Widget):
             box = boxes[i]
             self.add_layer(name, color, mask)
             self._box_manager.load_box(name, box)
+        self.queue_refresh(refresh_all=True)
 
     def add_layer(self, name, color, mask=None):
         print("Adding Layer[%d]: %s" % (self._layer_manager._layer_index, name))
