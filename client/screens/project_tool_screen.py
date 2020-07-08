@@ -27,11 +27,11 @@ class ProjectToolScreen(Screen):
         root.withdraw()
         filepath = filedialog.askdirectory(initialdir=ROOT_DIR)
         image_paths = []
-        for (root, _, filename) in os.walk(filepath):
-            for f in filename:
-                # tkinter does not return windows style filepath
-                image_paths.append(root + '/' + f)
-
+        if isinstance(filepath, str):
+            for (root, _, filename) in os.walk(filepath):
+                for f in filename:
+                    # tkinter does not return windows style filepath
+                    image_paths.append(root + '/' + f)
         self._upload_images(self.app.current_project_id, image_paths)
 
     @background
