@@ -261,3 +261,6 @@ class LabelState:
     def __init__(self, name, color):
         self.name = name
         self.color = (np.array(color) / 255).tolist()
+
+    def get_rgb(self):
+        return np.clip(np.array(self.color) * 255, 0, 255).astype(np.uint8)[:3]

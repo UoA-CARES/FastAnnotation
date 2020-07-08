@@ -345,3 +345,13 @@ def _collapse_all_layers(stack, bounds, visible):
 def _image_add_visible(top, bot, force_bot=False):
     return bot if force_bot or top == 0 else top
 
+
+def fit_box(img):
+    if not np.any(img):
+        return img.shape[0], img.shape[1], 0, 0
+
+    rows = np.any(img, axis=1)
+    cols = np.any(img, axis=0)
+    rmin, rmax = np.where(rows)[0][[0, -1]]
+    cmin, cmax = np.where(cols)[0][[0, -1]]
+    return rmin, cmin, rmax, cmax

@@ -14,7 +14,7 @@ from skimage.color import rgb2gray
 from skimage.draw import disk
 from skimage.segmentation import flood
 
-from client.utils import collapse_layers, collapse_select, draw_boxes, invert_coords
+from client.utils import collapse_layers, collapse_select, draw_boxes, invert_coords, fit_box
 from client.client_config import ClientConfig
 
 # Load corresponding kivy file
@@ -160,11 +160,6 @@ class PaintWindow2(Widget):
         if np.any(color):
             print("Incrementing zero values in label color")
             color[color == 0] = 1
-        if color.dtype == float:
-            print("Converting from float RGB to uint8 RGB")
-            color = color * 255
-            color = color.astype(np.uint8)
-            color = color[:3]
 
         self._layer_manager.add_layer(name, color.tolist(), mask)
         self._action_manager.clear_history()
@@ -191,7 +186,6 @@ class PaintWindow2(Widget):
             layer = self._layer_manager.get_layer(name)
 
         mat = layer.get_mat()
-        color = np.clip(np.array(color) * 255, 0, 255).astype(np.uint8)
         mat[np.all(mat != (0,0,0), axis=-1)] = color
         layer.color = color
 
@@ -390,7 +384,7 @@ class BoxManager:
         self._next_idx = 0
 
     def add_box(self, layer):
-        bounds = BoxManager._fit_box(layer.get_mat())
+        bounds = fit_box(layer.get_mat())
         try:
             idx = self._box_dict[layer.name]
             self._bounds[idx] = bounds
@@ -441,13 +435,3 @@ class BoxManager:
         draw_boxes(image, self._bounds[:self._next_idx], self.box_color, self.box_thickness)
         draw_boxes(image, self._bounds[self._selected_box:self._selected_box + 1], self.box_select_color, self.box_thickness)
 
-    @staticmethod
-    def _fit_box(img):
-        if not np.any(img):
-            return img.shape[0], img.shape[1], 0, 0
-
-        rows = np.any(img, axis=1)
-        cols = np.any(img, axis=0)
-        rmin, rmax = np.where(rows)[0][[0, -1]]
-        cmin, cmax = np.where(cols)[0][[0, -1]]
-        return rmin, cmin, rmax, cmax

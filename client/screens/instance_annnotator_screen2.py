@@ -99,9 +99,10 @@ class InstanceAnnotatorScreen(Screen):
                 image_canvas.load_pen_size(self.model.tool.get_pen_size())
                 image_canvas.load_global_alpha(self.model.tool.get_alpha())
                 image_canvas.load_eraser_state(self.model.tool.get_eraser())
+                image_canvas.load_current_layer(current_layer)
                 image_canvas.load_current_label(current_label)
                 # image_canvas.load_annotations(image.annotations)
-                image_canvas.load_current_layer(current_layer)
+
 
         # Update ImageQueue
         self.right_control.load_image_queue()
@@ -422,7 +423,6 @@ class Painter(RelativeLayout):
     def bind_image(self, image):
         self.clear_widgets()
         self.paint_window = PaintWindow2(image)
-        self.paint_window.add_layer('test', [120, 80, 0])
         self.draw_tool = DrawTool(self.paint_window)
         self.add_widget(self.paint_window)
         self.add_widget(self.draw_tool)
@@ -562,7 +562,7 @@ class ImageCanvas(BoxLayout):
     def load_current_label(self, label):
         if self.painter.paint_window is None:
             return
-        self.painter.paint_window.set_color(label.color[:3])
+        self.painter.paint_window.set_color(label.get_rgb())
         self.painter.paint_window.queue_refresh()
 
     def load_current_layer(self, layer_name):
@@ -572,14 +572,14 @@ class ImageCanvas(BoxLayout):
         self.painter.paint_window.queue_refresh()
 
     def load_image(self, image_state):
-        # if image_state is None:
-        #     return
+        if image_state is None:
+            return
         # print("Loading Image")
-        # self.image_id = image_state.id
+        self.image_id = image_state.id
         # texture = utils.mat2texture(image_state.image)
         # self.image.texture = texture
         # self.image.size = image_state.shape[1::-1]
-        # TODO is this needed?
+        # TODO is this needed? yes
         pass
 
     def load_annotations(self, annotations, overwrite=False):
@@ -591,12 +591,12 @@ class ImageCanvas(BoxLayout):
         for a in annotations.values():
             with self.app.root.current_screen.model.labels.get(a.class_name) as label:
                 if label is not None:
-                    colors.append(label.color)
+                    colors.append(label.get_rgb())
                 else:
-                    colors.append([255,255,255,255])
+                    colors.append([255, 255, 255])
                 names.append(a.annotation_name)
-                boxes.append(a.bbox)
                 masks.append(a.mat)
+                boxes.append(utils.fit_box(a.mat)) # Dont trust box data
         self.painter.paint_window.load_layers(names, colors, masks, boxes)
 
         #
