@@ -160,6 +160,12 @@ class PaintWindow2(Widget):
         if np.any(color):
             print("Incrementing zero values in label color")
             color[color == 0] = 1
+        if color.dtype == float:
+            print("Converting from float RGB to uint8 RGB")
+            color = color * 255
+            color = color.astype(np.uint8)
+            color = color[:3]
+
         self._layer_manager.add_layer(name, color.tolist(), mask)
         self._action_manager.clear_history()
         self._box_manager.add_box(self._layer_manager.get_layer(name))
