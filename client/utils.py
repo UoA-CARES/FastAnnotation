@@ -324,7 +324,7 @@ def collapse_layers(stack, bounds, visible):
         return _collapse_all_layers(stack, bounds, visible)
 
 
-@njit(parallel=True)
+@njit
 def _collapse_all_layers(stack, bounds, visible):
     n_stack = stack.shape[0]
     out = stack[0].copy()

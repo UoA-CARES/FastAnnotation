@@ -24,7 +24,7 @@ Builder.load_file(
         'paint_window.kv'))
 
 
-class PaintWindow(Widget):
+class PaintWindow2(Widget):
     image = ObjectProperty(None)
     box_color = ObjectProperty(None)
     box_highlight = ObjectProperty(None)
@@ -52,7 +52,7 @@ class PaintWindow(Widget):
         self.image.texture = Texture.create(size=(image.shape[1], image.shape[0]), colorfmt='rgb', bufferfmt='ubyte')
         self.size_hint = (None, None)
         self.size = (image.shape[1], image.shape[0])
-        self.inverter = PaintWindow.Inverter(image)
+        self.inverter = PaintWindow2.Inverter(image)
 
         self._layer_manager = LayerManager(image)
         self._action_manager = ActionManager(self._layer_manager)
@@ -230,7 +230,7 @@ class ActionManager:
         self._history_idx += 1
         self._history_max = self._history_idx + 1
         if self._history_idx >= self._layer_history.shape[0]:
-            self._layer_history.resize((self._layer_history.shape[0] * self.growth_factor,) + self._layer_history.shape[1:])
+            self._layer_history.resize((self._layer_history.shape[0] * self.growth_factor,) + self._layer_history.shape[1:], refcheck=False)
             print("LayerHistory: %s %s" % (str(self._layer_history.shape), str(self._layer_history.dtype)))
         self._layer_history[self._history_idx] = layer.get_mat().copy()
 
@@ -359,8 +359,8 @@ class LayerManager:
 
     def _resize(self):
         self._layer_capacity = self._layer_capacity * self.growth_factor
-        self._layer_stack.resize((self._layer_capacity,) + self._base_image.shape)
-        self._layer_visibility.resize(self._layer_capacity)
+        self._layer_stack.resize((self._layer_capacity,) + self._base_image.shape, refcheck=False)
+        self._layer_visibility.resize(self._layer_capacity, refcheck=False)
 
         print("LayerStack: %s %s" % (str(self._layer_stack.shape), str(self._layer_stack.dtype)))
         print("LayerVisibility: %s %s" % (str(self._layer_visibility.shape), str(self._layer_visibility.dtype)))

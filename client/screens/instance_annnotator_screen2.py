@@ -18,7 +18,7 @@ from client.controller.instance_annotator_controller import InstanceAnnotatorCon
 from client.model.instance_annotator_model import InstanceAnnotatorModel
 from client.screens.common import *
 from client.utils import background
-from client.screens.paint_window import PaintWindow
+from client.screens.paint_window import PaintWindow2
 
 # Load corresponding kivy file
 Builder.load_file(
@@ -418,20 +418,15 @@ class Painter(RelativeLayout):
         super().__init__(**kw)
         self.paint_window = None
         self.draw_tool = None
-        self.size_hint = (None, None)
 
     def bind_image(self, image):
         self.clear_widgets()
-        self.paint_window = PaintWindow(image)
+        self.paint_window = PaintWindow2(image)
         self.paint_window.add_layer('test', [120, 80, 0])
         self.draw_tool = DrawTool(self.paint_window)
         self.add_widget(self.paint_window)
         self.add_widget(self.draw_tool)
-        self.size = (image.shape[1], image.shape[0])
-
-    def on_pos(self, instance, value):
-        self.paint_window.pos = value
-        self.draw_tool.pos = value
+        self.size = self.paint_window.size
 
 
 class DrawTool(MouseDrawnTool):
@@ -441,7 +436,8 @@ class DrawTool(MouseDrawnTool):
         super().__init__(**kwargs)
         self.app = App.get_running_app()
         self.paint_window = paint_window
-        self.size = self.paint_window.size
+
+        self.size_hint = (None, None)
         self.pen_size = pen_size
         self.eraser = eraser
 
@@ -639,7 +635,10 @@ class ImageCanvas(BoxLayout):
                 self.zoom(1.0 + self.step_scale)
             elif touch.button == 'scrollup':
                 self.zoom(1.0 - self.step_scale)
-        super(ImageCanvas, self).on_touch_down(touch)
+
+        # A Hack to ensure scatter doesnt have any dead zones
+        self.scatter.size = self.scroll_view.size
+        return super(ImageCanvas, self).on_touch_down(touch)
 
     def zoom(self, scale):
         print("pos: %s size: %s" % (str(self.scatter.pos),
@@ -650,10 +649,10 @@ class ImageCanvas(BoxLayout):
         self.scatter.pos = self.pos
         self.painter.pos = self.pos
 
-        print("PosList: \n\tScatter: %s\n\tPainter: %s\n\tPaintW: %s\n\tDrawTool: %s\n\t" %
-              (str(self.scatter.pos), str(self.painter.pos), str(self.painter.paint_window.pos), str(self.painter.draw_tool.pos)))
-        print("SizeList: \n\tScatter: %s\n\tPainter: %s\n\tPaintW: %s\n\tDrawTool: %s\n\t" %
-              (str(self.scatter.size), str(self.painter.size), str(self.painter.paint_window.size),
+        print("PosList: \n\tScatter: %s\n\tScrollView: %s\n\tPainter: %s\n\tPaintW: %s\n\tDrawTool: %s\n\t" %
+              (str(self.scatter.pos), str(self.scroll_view.pos), str(self.painter.pos), str(self.painter.paint_window.pos), str(self.painter.draw_tool.pos)))
+        print("SizeList: \n\tScatter: %s\n\tScrollView: %s\n\tPainter: %s\n\tPaintW: %s\n\tDrawTool: %s\n\t" %
+              (str(self.scatter.size), str(self.scroll_view.size), str(self.painter.size), str(self.painter.paint_window.size),
                str(self.painter.draw_tool.size)))
 
 

@@ -6,7 +6,7 @@ from definitions import ROOT_DIR
 class ClientConfig:
     """ A collection of constants utilized by the client """
 
-    SERVER_URL = "http://localhost:5000/"
+    SERVER_URL = "http://localhost:5001/"
     # Switch to production URL before building executable
     #SERVER_URL = "http://130.216.239.117:5000/"
 
