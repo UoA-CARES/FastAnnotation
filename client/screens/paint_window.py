@@ -164,6 +164,7 @@ class PaintWindow2(Widget):
         self._layer_manager.add_layer(name, color.tolist(), mask)
         self._action_manager.clear_history()
         self._box_manager.add_box(self._layer_manager.get_layer(name))
+        self.set_color(color, name)
         self.select_layer(name)
         self.queue_checkpoint()
 
@@ -408,8 +409,6 @@ class BoxManager:
             bounds[:2] = np.max((bounds[:2], np.zeros(2)), axis=0)
             bounds[2:] = np.max((bounds[2:], point + radius, np.zeros(2)), axis=0)
             bounds[2:] = np.min((bounds[2:], self.image_shape[:2]), axis=0)
-            # bounds[:2] = np.max((np.min((bounds[:2], point - radius), axis=0), np.zeros(2)), axis=0)
-            # bounds[2:] = np.min((np.max((bounds[2:], point + radius, np.zeros(2)), axis=0), invert_coords(self.image_shape[:2])), axis=0)
         except KeyError:
             return
 
