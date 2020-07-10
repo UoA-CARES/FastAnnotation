@@ -7,4 +7,4 @@ app.config['RESTPLUS_VALIDATE'] = True
 app.config['RESTPLUS_MASK_SWAGGER'] = False
 
 api.init_app(app)
-app.run(debug=True)
+app.run(debug=True, port="5001")

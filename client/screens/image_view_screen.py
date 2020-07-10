@@ -5,6 +5,7 @@ import client.utils as utils
 from client.screens.common import *
 from client.utils import ApiException
 from client.utils import background
+from kivy.clock import mainthread
 
 # Load corresponding kivy file
 Builder.load_file(
@@ -45,10 +46,19 @@ class ImageViewScreen(Screen):
                 resp.status_code)
 
         result = resp.json()
+
+        resp = utils.get_images_by_ids(result["ids"])
+        if resp.status_code != 200:
+            raise ApiException(
+                "Failed to load project images from server.",
+                resp.status_code)
+        result = resp.json()
+
         for row in result["images"]:
             img = utils.decode_image(row["image_data"])
             self.add_thumbnail(img)
 
+    @mainthread
     def add_thumbnail(self, image):
         img = utils.bytes2texture(image, "jpg")
         thumbnail = Thumbnail()
