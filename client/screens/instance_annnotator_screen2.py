@@ -444,18 +444,25 @@ class DrawTool(MouseDrawnTool):
 
         self.keyboard.create_shortcut(("lctrl", "z"), self.paint_window.undo)
         self.keyboard.create_shortcut(("lctrl", "y"), self.paint_window.redo)
-        # self.keyboard.create_shortcut("spacebar", self.app.root.current_screen.add_layer)
+        self.keyboard.create_shortcut("spacebar", self.app.root.current_screen.add_layer)
         self.keyboard.activate()
+
+        self.consecutive_clicks = 0
 
     def on_touch_down_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
         color = self.ERASER_COLOR if self.eraser else None
         if self.keyboard.is_key_down("lctrl"):
-            pass  # Select layer which was clicked (detect collision + consec clicks)
-        elif self.keyboard.is_key_down("shift"):
-            self.paint_window.fill(pos, color)
+            selected = self.paint_window.detect_collision(touch.pos)
+            layer_name = selected[self.consecutive_clicks % len(selected)]
+            self.paint_window.select_layer(layer_name)
+            self.consecutive_clicks += 1
         else:
-            self.paint_window.draw_line(pos, self.pen_size, color)
+            self.consecutive_clicks = 0
+            if self.keyboard.is_key_down("shift"):
+                self.paint_window.fill(pos, color)
+            else:
+                self.paint_window.draw_line(pos, self.pen_size, color)
         self.paint_window.queue_refresh()
 
     def on_touch_move_hook(self, touch):

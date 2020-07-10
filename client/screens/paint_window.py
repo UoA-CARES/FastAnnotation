@@ -97,6 +97,13 @@ class PaintWindow2(Widget):
             return
         self._action_manager.fill(point, color)
 
+    def detect_collision(self, point):
+        point = self.inverter.invert(point)
+        mask = self._box_manager.detect_collision(point)
+        if not np.any(mask):
+            return None
+        return np.array(self._layer_manager.get_all_layer_names())[mask]
+
     def queue_checkpoint(self):
         with self._checkpoint_lock:
             if not self._checkpoint_flag:
@@ -219,7 +226,7 @@ class PaintWindow2(Widget):
 class ActionManager:
     line_granularity = 0.3
     initial_capacity = 4
-    growth_factor = 4
+    growth_factor = 2
 
     def __init__(self, layer_manager):
         self._layer_manager = layer_manager
@@ -302,7 +309,7 @@ class ActionManager:
 
 class LayerManager:
     initial_capacity = 4
-    growth_factor = 4
+    growth_factor = 2
 
     class Layer:
         def __init__(self, name, color, idx, manager):
@@ -393,7 +400,7 @@ class LayerManager:
 
 class BoxManager:
     initial_capacity = 4
-    growth_factor = 4
+    growth_factor = 2
 
     def __init__(self, image_shape, box_color, box_select_color, box_thickness):
         self.box_thickness = box_thickness
@@ -407,6 +414,11 @@ class BoxManager:
         self._visibility = np.empty(shape=(self.initial_capacity,), dtype=bool)
         self._selected_box = 0
         self._next_idx = 0
+
+    def detect_collision(self, pos):
+        bl = self.get_bounds()[:, :2]
+        tr = self.get_bounds()[:, 2:]
+        return np.all(np.logical_and(bl < pos, pos < tr), axis=1)
 
     def add_box(self, layer):
         bounds = fit_box(layer.get_mat())

@@ -52,6 +52,7 @@ class DrawTool(MouseDrawnTool):
 
         def add_random_layer():
             self.paint_window.add_layer(random_name(10), random_color())
+            self.paint_window.queue_refresh(True)
 
         self.keyboard.create_shortcut("spacebar", add_random_layer)
 
@@ -61,16 +62,16 @@ class DrawTool(MouseDrawnTool):
             self.paint_window.fill(pos)
         else:
             self.paint_window.draw_line(pos, 10)
-        self.paint_window.queue_refresh(True)
+        self.paint_window.queue_refresh()
 
     def on_touch_move_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
         self.paint_window.draw_line(pos, 10)
-        self.paint_window.queue_refresh(True)
+        self.paint_window.queue_refresh()
 
     def on_touch_up_hook(self, touch):
         self.paint_window.queue_checkpoint()
-        self.paint_window.queue_refresh(True)
+        self.paint_window.queue_refresh()
 
 
 if __name__ == '__main__':
