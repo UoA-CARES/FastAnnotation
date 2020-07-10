@@ -26,6 +26,7 @@ Builder.load_file(
 
 class PaintWindow2(Widget):
     image = ObjectProperty(None)
+    bg_image = ObjectProperty(None)
     box_color = ObjectProperty(None)
     box_highlight = ObjectProperty(None)
     box_thickness = NumericProperty(2)
@@ -51,6 +52,10 @@ class PaintWindow2(Widget):
         super().__init__(**kwargs)
         self.image_shape = image.shape
         self.image.texture = Texture.create(size=(image.shape[1], image.shape[0]), colorfmt='rgb', bufferfmt='ubyte')
+        self.bg_image.shape = image.shape
+        self.bg_image.texture = Texture.create(size=(image.shape[1], image.shape[0]), colorfmt='rgb', bufferfmt='ubyte')
+        self.bg_image.texture.blit_buffer(np.flip(image, 0).ravel(), colorfmt='rgb', bufferfmt='ubyte')
+        self.bg_image.canvas.ask_update()
         self.size_hint = (None, None)
         self.size = (image.shape[1], image.shape[0])
         self.inverter = PaintWindow2.Inverter(image)

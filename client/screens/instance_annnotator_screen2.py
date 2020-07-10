@@ -553,7 +553,7 @@ class ImageCanvas(BoxLayout):
         self.painter.draw_tool.pen_size = size
 
     def load_global_alpha(self, alpha):
-        self.painter.opacity = alpha
+        self.painter.paint_window.image.opacity = alpha
 
     def load_eraser_state(self, eraser):
         if self.painter.draw_tool is None:
