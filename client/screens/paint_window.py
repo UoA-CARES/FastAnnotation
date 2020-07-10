@@ -42,7 +42,6 @@ class PaintWindow2(Widget):
             self._height = image.shape[0]
 
         def invert(self, point):
-            print(point)
             inv = np.zeros(2, dtype=int)
             inv[0] = self._height - point[1]
             inv[1] = point[0]
@@ -87,7 +86,6 @@ class PaintWindow2(Widget):
 
     def draw_line(self, point, pen_size, color=None):
         point = self.inverter.invert(point)
-        print(point)
         if self._layer_manager.get_selected_layer() is None:
             return
         self._action_manager.draw_line(point, pen_size, color)
@@ -143,8 +141,13 @@ class PaintWindow2(Widget):
         self.image.canvas.ask_update()
         t4 = time.time()
 
-        print("[FPS: %.2f #%d] | Stack: %f\tCollapse: %f\tBox: %f (%f)\tCanvas: %f" %
-              (1 / (t4 - t0), stack.shape[0], t1 - t0, t2 - t1, t3 - t2, (t3 - t2)/stack.shape[0],t4 - t3))
+        try:
+            fps = "%.2f" % (1 / (t4 - t0))
+        except ZeroDivisionError:
+            fps = "MAX"
+
+        print("[FPS: %s #%d] | Stack: %f\tCollapse: %f\tBox: %f (%f)\tCanvas: %f" %
+              (fps, stack.shape[0], t1 - t0, t2 - t1, t3 - t2, (t3 - t2)/stack.shape[0],t4 - t3))
 
         with self._refresh_lock:
             self._refresh_flag = False
@@ -269,7 +272,6 @@ class ActionManager:
             color = layer.color
 
         self._draw_line_thick(layer.get_mat(), self._current_line, tuple(point), color, pen_size)
-        print(layer.color)
         self._current_line = tuple(point)
 
     def fill(self, point, color=None):

@@ -299,6 +299,24 @@ def collapse_select(stack, bounds, visible, layer):
         return _collapse_idx(stack, bounds, visible, layer.idx).copy()
 
 
+def collapse_layers(stack, bounds, visible):
+    if bounds.shape[0] == 0:
+        return stack[0].copy()
+    else:
+        return _collapse_all_layers(stack, bounds, visible)
+
+
+def fit_box(img):
+    if not np.any(img):
+        return img.shape[0], img.shape[1], 0, 0
+
+    rows = np.any(img, axis=1)
+    cols = np.any(img, axis=0)
+    rmin, rmax = np.where(rows)[0][[0, -1]]
+    cmin, cmax = np.where(cols)[0][[0, -1]]
+    return rmin, cmin, rmax, cmax
+
+
 @njit(parallel=True)
 def _collapse_idx(stack, bounds, visible, idx):
     out = stack[0]
@@ -311,17 +329,6 @@ def _collapse_idx(stack, bounds, visible, idx):
     out[rr, cc] = _image_add(img[rr, cc], out[rr, cc])
     return out
 
-
-@vectorize([uint8(uint8, uint8)])
-def _image_add(top, bot):
-    return bot if top == 0 else top
-
-
-def collapse_layers(stack, bounds, visible):
-    if bounds.shape[0] == 0:
-        return stack[0].copy()
-    else:
-        return _collapse_all_layers(stack, bounds, visible)
 
 @njit
 def _collapse_all_layers(stack, bounds, visible):
@@ -339,17 +346,6 @@ def _collapse_all_layers(stack, bounds, visible):
     return out
 
 
-@vectorize([uint8(uint8, uint8, boolean)])
-def _image_add_visible(top, bot, force_bot=False):
-    return bot if force_bot or top == 0 else top
-
-
-def fit_box(img):
-    if not np.any(img):
-        return img.shape[0], img.shape[1], 0, 0
-
-    rows = np.any(img, axis=1)
-    cols = np.any(img, axis=0)
-    rmin, rmax = np.where(rows)[0][[0, -1]]
-    cmin, cmax = np.where(cols)[0][[0, -1]]
-    return rmin, cmin, rmax, cmax
+@vectorize([uint8(uint8, uint8)])
+def _image_add(top, bot):
+    return bot if top == 0 else top

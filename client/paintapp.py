@@ -19,7 +19,7 @@ class PaintApp(App):
 class Test(RelativeLayout):
     def __init__(self, **kw):
         super().__init__(**kw)
-        image = np.zeros(shape=(300, 200, 3), dtype=np.uint8)
+        image = np.zeros(shape=(3000, 2000, 3), dtype=np.uint8)
         image[:] = (255, 0, 0)
         image[0:10, 0:10, :] = 0
         image[290:300, 0:10, :] = 80
@@ -61,16 +61,16 @@ class DrawTool(MouseDrawnTool):
             self.paint_window.fill(pos)
         else:
             self.paint_window.draw_line(pos, 10)
-        self.paint_window.queue_refresh()
+        self.paint_window.queue_refresh(True)
 
     def on_touch_move_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
         self.paint_window.draw_line(pos, 10)
-        self.paint_window.queue_refresh()
+        self.paint_window.queue_refresh(True)
 
     def on_touch_up_hook(self, touch):
         self.paint_window.queue_checkpoint()
-        self.paint_window.queue_refresh()
+        self.paint_window.queue_refresh(True)
 
 
 if __name__ == '__main__':
