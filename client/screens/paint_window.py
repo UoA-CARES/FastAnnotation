@@ -146,9 +146,14 @@ class PaintWindow2(Widget):
             self._refresh_all_flag = False
 
     def load_layers(self, names, colors, masks, boxes):
+        refresh_all_required = False
         removed_layers = [x for x in self._layer_manager.get_all_layer_names() if x not in names]
         for name in removed_layers:
             self.delete_layer(name)
+            refresh_all_required = True
+
+        selected = self._layer_manager.get_selected_layer()
+        selected_name = selected.name if selected else None
 
         for i in range(len(names)):
             name = names[i]
@@ -157,9 +162,11 @@ class PaintWindow2(Widget):
             color = colors[i]
             mask = masks[i]
             box = boxes[i]
+            if name is not selected_name:
+                refresh_all_required = True
             self.add_layer(name, color, mask)
             self._box_manager.load_box(name, box)
-        self.queue_refresh(refresh_all=True)
+        self.queue_refresh(refresh_all=refresh_all_required)
 
     def add_layer(self, name, color, mask=None):
         print("Adding Layer[%d]: %s" % (self._layer_manager._layer_index, name))
@@ -192,6 +199,9 @@ class PaintWindow2(Widget):
             layer = self._layer_manager.get_selected_layer()
         else:
             layer = self._layer_manager.get_layer(name)
+
+        if layer is None:
+            return
 
         mat = layer.get_mat()
         mat[np.all(mat != (0,0,0), axis=-1)] = color

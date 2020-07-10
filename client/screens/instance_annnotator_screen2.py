@@ -99,9 +99,10 @@ class InstanceAnnotatorScreen(Screen):
                 image_canvas.load_pen_size(self.model.tool.get_pen_size())
                 image_canvas.load_global_alpha(self.model.tool.get_alpha())
                 image_canvas.load_eraser_state(self.model.tool.get_eraser())
+                image_canvas.load_annotations(image.annotations)
                 image_canvas.load_current_layer(current_layer)
                 image_canvas.load_current_label(current_label)
-                # image_canvas.load_annotations(image.annotations)
+
 
 
         # Update ImageQueue
@@ -596,7 +597,7 @@ class ImageCanvas(BoxLayout):
                     colors.append([255, 255, 255])
                 names.append(a.annotation_name)
                 masks.append(a.mat)
-                boxes.append(utils.fit_box(a.mat)) # Dont trust box data
+                boxes.append(utils.fit_box(a.mat))
         self.painter.paint_window.load_layers(names, colors, masks, boxes)
 
         #
