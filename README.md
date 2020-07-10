@@ -18,12 +18,13 @@ Note: For the following Installation steps please ensure pip is run with adminis
         ```
     2. Ubuntu:
         ```
-        python -m pip install --upgrade pip wheel setuptools
-        python -m pip install kivy
+        python -m pip install -r requirements.txt
         ```
 
 ### Server
 1. Flask installation
+    
+    1.Windows installation 
     ```
     python -m pip install flask
     python -m pip install flask-restplus
@@ -31,6 +32,9 @@ Note: For the following Installation steps please ensure pip is run with adminis
     python -m pip install python-dateutil
     python -m pip install mysql-connector-python
     ```
+   2. Ubuntu
+   
+   Installed from the requirements.txt file
 
 2. MySql Installation
     1. Windows:
