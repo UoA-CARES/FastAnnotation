@@ -263,7 +263,7 @@ def invert_coords(coords):
     return coords[::-1]
 
 
-# @njit(parallel=True)
+@njit(parallel=True)
 def draw_boxes(mat, bounds, color, thick):
     n_box = bounds.shape[0]
     height = mat.shape[0]
@@ -323,20 +323,18 @@ def collapse_layers(stack, bounds, visible):
     else:
         return _collapse_all_layers(stack, bounds, visible)
 
-
 @njit
 def _collapse_all_layers(stack, bounds, visible):
     n_stack = stack.shape[0]
     out = stack[0].copy()
-    for n in range(n_stack - 1):
-        reverse_n = n_stack - 1 - n
-        if not visible[reverse_n]:
+    for n in range(1, n_stack):
+        if not visible[n]:
             continue
-        img = stack[reverse_n]
-        box = bounds[reverse_n - 1]
+        img = stack[n]
+        box = bounds[n - 1]
         rr = slice(box[0], box[2])
         cc = slice(box[1], box[3])
-        out[rr, cc] = _image_add_visible(img[rr, cc], out[rr, cc], out[rr, cc] != stack[0, rr, cc])
+        out[rr, cc] = _image_add(img[rr, cc], out[rr, cc])
     stack[0] = out
     return out
 
