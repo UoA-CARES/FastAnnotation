@@ -292,18 +292,20 @@ def draw_boxes(mat, bounds, color, thick):
         mat[ix1:ox1, oy0:oy1] = color
 
 
-def collapse_select(stack, bounds, visible, layer):
+def collapse_bg(stack, bounds, visible, layer):
     if layer is None or layer.idx == 0:
         return stack[0]
     else:
-        return _collapse_idx(stack, bounds, visible, layer.idx).copy()
+        return _collapse_bg(stack, bounds, visible, layer.idx).copy()
 
 
-def collapse_layers(stack, bounds, visible):
-    if bounds.shape[0] == 0:
-        return stack[0].copy()
+def collapse_top(stack, bounds, visible, layer, bg):
+    if layer is None or layer.idx == 0 or not visible[layer.idx]:
+        return stack[0]
     else:
-        return _collapse_all_layers(stack, bounds, visible)
+        top = stack[layer.idx]
+        top_bounds = bounds[layer.idx - 1]
+        return _collapse_top(bg, top, top_bounds)
 
 
 def fit_box(img):
@@ -318,31 +320,30 @@ def fit_box(img):
 
 
 @njit(parallel=True)
-def _collapse_idx(stack, bounds, visible, idx):
-    out = stack[0]
-    if not visible[idx]:
-        return out
-    img = stack[idx]
-    box = bounds[idx - 1]
-    rr = slice(box[0], box[2])
-    cc = slice(box[1], box[3])
-    out[rr, cc] = _image_add(img[rr, cc], out[rr, cc])
+def _collapse_top(bg, top, top_bounds):
+    out = bg.copy()
+    rr = slice(top_bounds[0], top_bounds[2])
+    cc = slice(top_bounds[1], top_bounds[3])
+    out[rr, cc] = _image_add(top[rr, cc], out[rr, cc])
     return out
 
 
 @njit
-def _collapse_all_layers(stack, bounds, visible):
+def _collapse_bg(stack, bounds, visible, idx):
     n_stack = stack.shape[0]
     out = stack[0].copy()
     for n in range(1, n_stack):
         if not visible[n]:
             continue
+
+        if n is idx:
+            continue
+
         img = stack[n]
         box = bounds[n - 1]
         rr = slice(box[0], box[2])
         cc = slice(box[1], box[3])
         out[rr, cc] = _image_add(img[rr, cc], out[rr, cc])
-    stack[0] = out
     return out
 
 

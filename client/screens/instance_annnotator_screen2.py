@@ -98,7 +98,6 @@ class InstanceAnnotatorScreen(Screen):
             if image_canvas is not None:
                 image_canvas.load_pen_size(self.model.tool.get_pen_size())
                 image_canvas.load_global_alpha(self.model.tool.get_alpha())
-                image_canvas.load_eraser_state(self.model.tool.get_eraser())
                 image_canvas.load_annotations(image.annotations)
                 image_canvas.load_current_layer(current_layer)
                 image_canvas.load_current_label(current_label)
@@ -220,7 +219,6 @@ class ToolSelect(GridLayout):
 
 
 class ClassPicker(GridLayout):
-    eraser_enabled = BooleanProperty(False)
     current_label = ObjectProperty(None, allownone=True)
     grid = ObjectProperty(None)
 
@@ -228,10 +226,6 @@ class ClassPicker(GridLayout):
         super().__init__(**kwargs)
         self.app = App.get_running_app()
         self.label_dict = {}
-
-    def on_eraser_enabled(self, instance, value):
-        print("Eraser: %s" % str(value))
-        self.app.root.current_screen.controller.update_tool_state(eraser=value)
 
     def on_current_label(self, instance, value):
         class_name = ""
@@ -242,7 +236,7 @@ class ClassPicker(GridLayout):
         self.app.root.current_screen.controller.update_tool_state(
             current_label=class_name)
 
-        if class_name not in ("", "eraser"):
+        if class_name is not "":
             self.app.root.current_screen.controller.update_annotation(
                 label_name=class_name)
         self.app.root.current_screen.queue_update()
@@ -250,29 +244,12 @@ class ClassPicker(GridLayout):
     def clear(self):
         self.grid.clear_widgets()
         self.label_dict.clear()
-        self.add_eraser()
 
     def select(self, name):
         label = self.label_dict.get(name, None)
         if label is None:
             return
         self._change_label(label)
-
-    def add_eraser(self):
-        def eraser_enable():
-            self.eraser_enabled = True
-            item.enable()
-
-        def eraser_disable():
-            self.eraser_enabled = False
-            item.disable()
-
-        name = "eraser"
-        item = self._make_label(name, [0.2, 0.2, 0.2, 1.0])
-        item.enable_cb = eraser_enable
-        item.disable_cb = eraser_disable
-        self.grid.add_widget(item)
-        self.label_dict[name] = item
 
     def add_label(self, name, color):
         item = self._make_label(name, color)
@@ -289,7 +266,6 @@ class ClassPicker(GridLayout):
         return item
 
     def _change_label(self, instance):
-        self.eraser_enabled = False
         if self.current_label:
             self.current_label.disable_cb()
         self.current_label = instance
@@ -431,17 +407,13 @@ class Painter(RelativeLayout):
 
 
 class DrawTool(MouseDrawnTool):
-    ERASER_COLOR = [0, 0, 0]
-
-    def __init__(self, paint_window, pen_size=10, eraser=False, **kwargs):
+    def __init__(self, paint_window, pen_size=10, **kwargs):
         super().__init__(**kwargs)
         self.app = App.get_running_app()
         self.paint_window = paint_window
 
         self.size_hint = (None, None)
         self.pen_size = pen_size
-        self.eraser = eraser
-
         self.keyboard.create_shortcut(("lctrl", "z"), self.paint_window.undo)
         self.keyboard.create_shortcut(("lctrl", "y"), self.paint_window.redo)
         self.keyboard.create_shortcut("spacebar", self.app.root.current_screen.add_layer)
@@ -451,7 +423,6 @@ class DrawTool(MouseDrawnTool):
 
     def on_touch_down_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
-        color = self.ERASER_COLOR if self.eraser else None
         if self.keyboard.is_key_down("lctrl"):
             selected = self.paint_window.detect_collision(touch.pos)
             layer_name = selected[self.consecutive_clicks % len(selected)]
@@ -460,15 +431,14 @@ class DrawTool(MouseDrawnTool):
         else:
             self.consecutive_clicks = 0
             if self.keyboard.is_key_down("shift"):
-                self.paint_window.fill(pos, color)
+                self.paint_window.fill(pos)
             else:
-                self.paint_window.draw_line(pos, self.pen_size, color)
+                self.paint_window.draw_line(pos, self.pen_size)
         self.paint_window.queue_refresh()
 
     def on_touch_move_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
-        color = self.ERASER_COLOR if self.eraser else None
-        self.paint_window.draw_line(pos, self.pen_size, color)
+        self.paint_window.draw_line(pos, self.pen_size)
         self.paint_window.queue_refresh()
 
     def on_touch_up_hook(self, touch):
@@ -562,11 +532,6 @@ class ImageCanvas(BoxLayout):
     def load_global_alpha(self, alpha):
         self.painter.paint_window.image.opacity = alpha
 
-    def load_eraser_state(self, eraser):
-        if self.painter.draw_tool is None:
-            return
-        self.painter.draw_tool.eraser = eraser
-
     def load_current_label(self, label):
         if self.painter.paint_window is None:
             return
@@ -576,8 +541,12 @@ class ImageCanvas(BoxLayout):
     def load_current_layer(self, layer_name):
         if self.painter.paint_window is None or not layer_name:
             return
+
+        if self.painter.paint_window.get_selected_layer() is layer_name:
+            return
+
         self.painter.paint_window.select_layer(layer_name)
-        self.painter.paint_window.queue_refresh()
+        self.painter.paint_window.queue_refresh(True)
 
     def load_image(self, image_state):
         if image_state is None:

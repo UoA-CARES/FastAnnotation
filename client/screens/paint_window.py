@@ -14,7 +14,7 @@ from skimage.color import rgb2gray
 from skimage.draw import disk
 from skimage.segmentation import flood
 
-from client.utils import collapse_layers, collapse_select, draw_boxes, invert_coords, fit_box
+from client.utils import collapse_bg, collapse_top, draw_boxes, fit_box
 from client.client_config import ClientConfig
 
 # Load corresponding kivy file
@@ -59,6 +59,7 @@ class PaintWindow2(Widget):
         self.size = (image.shape[1], image.shape[0])
         self.inverter = PaintWindow2.Inverter(image)
 
+        self._bg_buffer = np.zeros(shape=image.shape, dtype=np.uint8)
         self._layer_manager = LayerManager(image)
         self._action_manager = ActionManager(self._layer_manager)
         self._box_manager = BoxManager(image.shape, self.box_color, self.box_highlight, self.box_thickness)
@@ -133,10 +134,8 @@ class PaintWindow2(Widget):
         # Collapse Operation
         bounds = self._box_manager.get_bounds()
         if self._refresh_all_flag:
-            buffer = collapse_layers(stack, bounds, self._layer_manager._layer_visibility)
-        else:
-            buffer = collapse_select(stack, bounds, self._layer_manager._layer_visibility, self._layer_manager.get_selected_layer())
-
+            self._bg_buffer = collapse_bg(stack, bounds, self._layer_manager._layer_visibility, self._layer_manager.get_selected_layer())
+        buffer = collapse_top(stack, bounds, self._layer_manager._layer_visibility, self._layer_manager.get_selected_layer(), self._bg_buffer)
         buffer = np.flip(buffer, 0)
         t2 = time.time()
         # Box Operation
@@ -185,12 +184,7 @@ class PaintWindow2(Widget):
 
     def add_layer(self, name, color, mask=None):
         print("Adding Layer[%d]: %s" % (self._layer_manager._layer_index, name))
-        color = np.array(color)
-        if np.any(color):
-            print("Incrementing zero values in label color")
-            color[color == 0] = 1
-
-        self._layer_manager.add_layer(name, color.tolist(), mask)
+        self._layer_manager.add_layer(name, color, mask)
         self._action_manager.clear_history()
         self._box_manager.add_box(self._layer_manager.get_layer(name))
         self.set_color(color, name)
@@ -206,6 +200,9 @@ class PaintWindow2(Widget):
         self._layer_manager.select_layer(name)
         self._box_manager.select_box(self._layer_manager.get_selected_layer().name)
 
+    def get_selected_layer(self):
+        return self._layer_manager.get_selected_layer()
+
     def set_visible(self, visible):
         self._layer_manager.set_visible(visible=visible)
 
@@ -219,7 +216,8 @@ class PaintWindow2(Widget):
             return
 
         mat = layer.get_mat()
-        mat[np.all(mat != (0,0,0), axis=-1)] = color
+        if np.any(color):
+            mat[np.all(mat != (0, 0, 0), axis=-1)] = color
         layer.color = color
 
 

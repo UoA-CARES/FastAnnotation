@@ -101,13 +101,11 @@ class ToolState:
             self,
             pen_size=1,
             alpha=0.0,
-            eraser=False,
             current_image_id=-1,
             current_label_name="",
             current_layer_name=""):
         self._pen_size = pen_size
         self._alpha = alpha
-        self._eraser = eraser
         self._current_image_id = current_image_id
         self._current_label_name = current_label_name
         self._current_layer_name = current_layer_name
@@ -127,14 +125,6 @@ class ToolState:
     def set_alpha(self, value):
         with self._lock:
             self._alpha = value
-
-    def get_eraser(self):
-        with self._lock:
-            return self._eraser
-
-    def set_eraser(self, value):
-        with self._lock:
-            self._eraser = value
 
     def get_current_image_id(self):
         with self._lock:

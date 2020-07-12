@@ -118,6 +118,7 @@ class InstanceAnnotatorController:
         # TODO: These arent stored in the database yet
 
         data = [
+            LabelState("BG", [0, 0, 0, 255]),
             LabelState("Trunk", [120, 80, 1, 255]),
             LabelState("Cane", [150, 250, 1, 255]),
             LabelState("Shoot", [1, 130, 200, 255]),
@@ -211,7 +212,6 @@ class InstanceAnnotatorController:
     def update_tool_state(self,
                           pen_size=None,
                           alpha=None,
-                          eraser=None,
                           current_iid=None,
                           current_label=None,
                           current_layer=None):
@@ -219,8 +219,6 @@ class InstanceAnnotatorController:
             self.model.tool.set_pen_size(pen_size)
         if alpha is not None:
             self.model.tool.set_alpha(alpha)
-        if eraser is not None:
-            self.model.tool.set_eraser(eraser)
         if current_iid is not None:
             self.model.tool.set_current_image_id(current_iid)
         if current_layer is not None:
