@@ -51,7 +51,7 @@ class DrawTool(MouseDrawnTool):
             return np.random.choice(range(256), size=3).tolist()
 
         def add_random_layer():
-            self.paint_window.add_layer(random_name(10), random_color())
+            self.paint_window.add(random_name(10), random_color())
             self.paint_window.queue_refresh(True)
 
         self.keyboard.create_shortcut("spacebar", add_random_layer)

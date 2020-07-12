@@ -339,7 +339,7 @@ class LayerView(GridLayout):
             self.current_selection = None
         self.layer_item_layout.remove_widget(instance)
         iid = self.app.root.current_screen.model.tool.get_current_image_id()
-        self.app.root.current_screen.controller.delete_layer(
+        self.app.root.current_screen.controller.delete(
             iid, instance.layer_name)
         self.app.root.current_screen.queue_update()
 
@@ -416,7 +416,7 @@ class DrawTool(MouseDrawnTool):
         self.pen_size = pen_size
         self.keyboard.create_shortcut(("lctrl", "z"), self.paint_window.undo)
         self.keyboard.create_shortcut(("lctrl", "y"), self.paint_window.redo)
-        self.keyboard.create_shortcut("spacebar", self.app.root.current_screen.add_layer)
+        self.keyboard.create_shortcut("spacebar", self.app.root.current_screen.add)
         self.keyboard.activate()
 
         self.consecutive_clicks = 0
@@ -426,7 +426,7 @@ class DrawTool(MouseDrawnTool):
         if self.keyboard.is_key_down("lctrl"):
             selected = self.paint_window.detect_collision(touch.pos)
             layer_name = selected[self.consecutive_clicks % len(selected)]
-            self.paint_window.select_layer(layer_name)
+            self.paint_window.select(layer_name)
             self.consecutive_clicks += 1
         else:
             self.consecutive_clicks = 0
@@ -542,10 +542,10 @@ class ImageCanvas(BoxLayout):
         if self.painter.paint_window is None or not layer_name:
             return
 
-        if self.painter.paint_window.get_selected_layer() is layer_name:
+        if self.painter.paint_window.get_selected() is layer_name:
             return
 
-        self.painter.paint_window.select_layer(layer_name)
+        self.painter.paint_window.select(layer_name)
         self.painter.paint_window.queue_refresh(True)
 
     def load_image(self, image_state):

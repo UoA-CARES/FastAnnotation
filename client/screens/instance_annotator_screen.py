@@ -363,7 +363,7 @@ class LayerView(GridLayout):
             self.current_selection = None
         self.layer_item_layout.remove_widget(instance)
         iid = self.app.root.current_screen.model.tool.get_current_image_id()
-        self.app.root.current_screen.controller.delete_layer(
+        self.app.root.current_screen.controller.delete(
             iid, instance.layer_name)
         self.app.root.current_screen.queue_update()
 
@@ -504,7 +504,7 @@ class DrawTool(MouseDrawnTool):
         self.keyboard_shortcuts[("lctrl", "z")] = self.undo
         self.keyboard_shortcuts[("lctrl", "y")] = self.redo
         self.keyboard_shortcuts[("spacebar",
-                                 )] = self.app.root.current_screen.add_layer
+                                 )] = self.app.root.current_screen.add
 
     def bind_keyboard(self):
         print("Binding keyboard")
@@ -958,7 +958,7 @@ class ImageCanvas(BoxLayout):
 
     def load_current_layer(self, layer_name):
         print("Loading Current Layer: %s" % layer_name)
-        layer = self.layer_stack.get_layer(layer_name)
+        layer = self.layer_stack.get(layer_name)
         if layer is None:
             return
         self.draw_tool.set_layer(layer)
@@ -986,17 +986,17 @@ class ImageCanvas(BoxLayout):
 
         for layer_name in active_layers:
             if layer_name not in active_annotations:
-                self.layer_stack.remove_layer(self.layer_stack.get_layer(layer_name))
+                self.layer_stack.remove_layer(self.layer_stack.get(layer_name))
 
         for annotation in annotations.values():
-            layer = self.layer_stack.get_layer(annotation.annotation_name)
+            layer = self.layer_stack.get(annotation.annotation_name)
             if overwrite or layer is None:
                 layer = DrawableLayer(
                     layer_name=annotation.annotation_name,
                     size=annotation.mat.shape[1::-1],
                     texture=utils.mat2texture(annotation.mat),
                     bbox=annotation.bbox)
-                self.layer_stack.add_layer(layer)
+                self.layer_stack.add(layer)
             with self.app.root.current_screen.model.labels.get(annotation.class_name) as label:
                 layer.update_label(label)
             layer.set_mask_visible(annotation.mask_enabled)

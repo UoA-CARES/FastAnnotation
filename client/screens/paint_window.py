@@ -87,14 +87,14 @@ class PaintWindow2(Widget):
 
     def draw_line(self, point, pen_size, color=None):
         point = self.inverter.invert(point)
-        if self._layer_manager.get_selected_layer() is None:
+        if self._layer_manager.get_selected() is None:
             return
         self._action_manager.draw_line(point, pen_size, color)
-        self._box_manager.update_box(self._layer_manager.get_selected_layer().name, point, pen_size)
+        self._box_manager.update_box(self._layer_manager.get_selected().name, point, pen_size)
 
     def fill(self, point, color=None):
         point = self.inverter.invert(point)
-        if self._layer_manager.get_selected_layer() is None:
+        if self._layer_manager.get_selected() is None:
             return
         self._action_manager.fill(point, color)
 
@@ -103,7 +103,7 @@ class PaintWindow2(Widget):
         mask = self._box_manager.detect_collision(point)
         if not np.any(mask):
             return None
-        return np.array(self._layer_manager.get_all_layer_names())[mask]
+        return np.array(self._layer_manager.get_all_names())[mask]
 
     def queue_checkpoint(self):
         with self._checkpoint_lock:
@@ -134,8 +134,9 @@ class PaintWindow2(Widget):
         # Collapse Operation
         bounds = self._box_manager.get_bounds()
         if self._refresh_all_flag:
-            self._bg_buffer = collapse_bg(stack, bounds, self._layer_manager._layer_visibility, self._layer_manager.get_selected_layer())
-        buffer = collapse_top(stack, bounds, self._layer_manager._layer_visibility, self._layer_manager.get_selected_layer(), self._bg_buffer)
+            self._box_manager.fit_box(self._layer_manager.get_selected())
+            self._bg_buffer = collapse_bg(stack, bounds, self._layer_manager.get_visibility(), self._layer_manager.get_selected())
+        buffer = collapse_top(stack, bounds, self._layer_manager.get_visibility(), self._layer_manager.get_selected(), self._bg_buffer)
         buffer = np.flip(buffer, 0)
         t2 = time.time()
         # Box Operation
@@ -161,17 +162,17 @@ class PaintWindow2(Widget):
 
     def load_layers(self, names, colors, masks, boxes):
         refresh_all_required = False
-        removed_layers = [x for x in self._layer_manager.get_all_layer_names() if x not in names]
+        removed_layers = [x for x in self._layer_manager.get_all_names() if x not in names]
         for name in removed_layers:
             self.delete_layer(name)
             refresh_all_required = True
 
-        selected = self._layer_manager.get_selected_layer()
+        selected = self._layer_manager.get_selected()
         selected_name = selected.name if selected else None
 
         for i in range(len(names)):
             name = names[i]
-            if name in self._layer_manager.get_all_layer_names():
+            if name in self._layer_manager.get_all_names():
                 continue
             color = colors[i]
             mask = masks[i]
@@ -184,33 +185,33 @@ class PaintWindow2(Widget):
 
     def add_layer(self, name, color, mask=None):
         print("Adding Layer[%d]: %s" % (self._layer_manager._layer_index, name))
-        self._layer_manager.add_layer(name, color, mask)
+        self._layer_manager.add(name, color, mask)
         self._action_manager.clear_history()
-        self._box_manager.add_box(self._layer_manager.get_layer(name))
+        self._box_manager.fit_box(self._layer_manager.get(name))
         self.set_color(color, name)
         self.select_layer(name)
         self.queue_checkpoint()
 
     def delete_layer(self, name):
-        self._layer_manager.delete_layer(name)
+        self._layer_manager.delete(name)
         self._box_manager.delete_box(name)
         self.queue_checkpoint()
 
     def select_layer(self, name):
-        self._layer_manager.select_layer(name)
-        self._box_manager.select_box(self._layer_manager.get_selected_layer().name)
+        self._layer_manager.select(name)
+        self._box_manager.select_box(self._layer_manager.get_selected().name)
 
     def get_selected_layer(self):
-        return self._layer_manager.get_selected_layer()
+        return self._layer_manager.get_selected()
 
     def set_visible(self, visible):
         self._layer_manager.set_visible(visible=visible)
 
     def set_color(self, color, name=None):
         if name is None:
-            layer = self._layer_manager.get_selected_layer()
+            layer = self._layer_manager.get_selected()
         else:
-            layer = self._layer_manager.get_layer(name)
+            layer = self._layer_manager.get(name)
 
         if layer is None:
             return
@@ -235,7 +236,7 @@ class ActionManager:
 
     def undo(self):
         try:
-            mat = self._layer_manager.get_selected_layer().get_mat()
+            mat = self._layer_manager.get_selected().get_mat()
             self._history_idx -= 1
             mat[:] = self._layer_history[self._history_idx].copy()
         except IndexError:
@@ -243,7 +244,7 @@ class ActionManager:
 
     def redo(self):
         try:
-            mat = self._layer_manager.get_selected_layer().get_mat()
+            mat = self._layer_manager.get_selected().get_mat()
             self._history_idx += 1
             mat[:] = self._layer_history[self._history_idx].copy()
         except IndexError:
@@ -254,7 +255,7 @@ class ActionManager:
         self._history_max = 0
 
     def checkpoint(self):
-        layer = self._layer_manager.get_selected_layer()
+        layer = self._layer_manager.get_selected()
         if layer is None:
             return
         self._current_line = None
@@ -269,7 +270,7 @@ class ActionManager:
         if self._current_line is None:
             self._current_line = tuple(point)
 
-        layer = self._layer_manager.get_selected_layer()
+        layer = self._layer_manager.get_selected()
         if layer is None:
             return
 
@@ -280,7 +281,7 @@ class ActionManager:
         self._current_line = tuple(point)
 
     def fill(self, point, color=None):
-        layer = self._layer_manager.get_selected_layer()
+        layer = self._layer_manager.get_selected()
         if layer is None:
             return
 
@@ -317,7 +318,7 @@ class LayerManager:
             self._manager = manager
 
         def get_mat(self):
-            return self._manager.get_layer_mat(self.name)
+            return self._manager.get_mat(self.name)
 
     def __init__(self, image):
         self._base_image = image
@@ -328,12 +329,12 @@ class LayerManager:
         self._layer_stack = np.empty(shape=(self._layer_capacity,) + self._base_image.shape, dtype=np.uint8)
         self._layer_visibility = np.zeros(shape=(self._layer_capacity,), dtype=bool)
         self._layer_index = -1
-        self._add_layer(self._base_image)
+        self._add(self._base_image)
 
     def get_base_image(self):
         return self._base_image
 
-    def delete_layer(self, name):
+    def delete(self, name):
         layer = self._layer_dict.pop(name, None)
         if layer is None:
             return
@@ -341,39 +342,42 @@ class LayerManager:
         self._layer_stack[layer.idx] = 0
         self._layer_visibility[layer.idx] = False
 
-    def add_layer(self, name, color, mat=None):
-        self._add_layer(mat)
+    def add(self, name, color, mat=None):
+        self._add(mat)
         layer = LayerManager.Layer(name, color, self._layer_index, self)
         self._layer_dict[layer.name] = layer
 
-    def select_layer(self, name):
+    def select(self, name):
         self._selected_layer = self._layer_dict[name]
 
-    def get_layer(self, name):
+    def get(self, name):
         return self._layer_dict.get(name, None)
 
-    def get_layer_mat(self, name):
+    def get_mat(self, name):
         try:
             layer = self._layer_dict[name]
             return self._layer_stack[layer.idx]
         except KeyError:
             return None
 
-    def get_selected_layer(self):
+    def get_selected(self):
         return self._selected_layer
 
-    def get_all_layer_names(self):
+    def get_all_names(self):
         return [x.name for x in self._layer_dict.values()]
 
     def set_visible(self, idx=None, visible=True):
         if idx is None:
-            idx = self.get_selected_layer().idx
+            idx = self.get_selected().idx
         self._layer_visibility[idx] = visible
+
+    def get_visibility(self):
+        return self._layer_visibility[:self._layer_index + 1]
 
     def get_stack(self):
         return self._layer_stack[:self._layer_index + 1]
 
-    def _add_layer(self, mat=None):
+    def _add(self, mat=None):
         self._layer_index += 1
 
         # Resize arraylists
@@ -418,7 +422,7 @@ class BoxManager:
         tr = self.get_bounds()[:, 2:]
         return np.all(np.logical_and(bl < pos, pos < tr), axis=1)
 
-    def add_box(self, layer):
+    def fit_box(self, layer):
         bounds = fit_box(layer.get_mat())
         try:
             idx = self._box_dict[layer.name]
