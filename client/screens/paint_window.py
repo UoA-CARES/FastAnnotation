@@ -131,10 +131,12 @@ class PaintWindow2(Widget):
         # Stack Operation
         stack = self._layer_manager.get_stack()
         t1 = time.time()
+
         # Collapse Operation
-        bounds = self._box_manager.get_bounds()
         if self._refresh_all_flag:
             self._box_manager.fit_box(self._layer_manager.get_selected())
+        bounds = self._box_manager.get_bounds()
+        if self._refresh_all_flag:
             self._bg_buffer = collapse_bg(stack, bounds, self._layer_manager.get_visibility(), self._layer_manager.get_selected())
         buffer = collapse_top(stack, bounds, self._layer_manager.get_visibility(), self._layer_manager.get_selected(), self._bg_buffer)
         buffer = np.flip(buffer, 0)

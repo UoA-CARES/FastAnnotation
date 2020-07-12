@@ -63,10 +63,12 @@ class InstanceAnnotatorScreen(Screen):
         current_label_name = self.model.tool.get_current_label_name()
         current_layer = self.model.tool.get_current_layer_name()
 
+        t1 = time.time()
         # Update ToolSelect
         self.left_control.tool_select.alpha.value = self.model.tool.get_alpha()
         self.left_control.tool_select.pen_size.value = self.model.tool.get_pen_size()
 
+        t2 = time.time()
         # Update Class Picker
         label_names = self.model.labels.keys()
         self.left_control.class_picker.clear()
@@ -76,6 +78,7 @@ class InstanceAnnotatorScreen(Screen):
 
         self.left_control.class_picker.select(current_label_name)  # MEM 10.7 -> 11.9 (+1.2GB)
 
+        t3 = time.time()
         # Update Layer View
         with self.model.images.get(current_iid) as image:
             if image is not None and image.annotations is not None:
@@ -86,6 +89,7 @@ class InstanceAnnotatorScreen(Screen):
         self.left_control.layer_view.select(
             self.model.tool.get_current_layer_name())
 
+        t4 = time.time()
         # Update ImageCanvas
 
         if current_iid > 0 and not self.tab_panel.has_tab(current_iid):
@@ -102,8 +106,7 @@ class InstanceAnnotatorScreen(Screen):
                 image_canvas.load_current_layer(current_layer)
                 image_canvas.load_current_label(current_label)
 
-
-
+        t5 = time.time()
         # Update ImageQueue
         self.right_control.load_image_queue()
 
@@ -115,12 +118,12 @@ class InstanceAnnotatorScreen(Screen):
                 self.right_control.image_queue_control.btn_save.disabled = False
             else:
                 self.right_control.image_queue_control.btn_save.disabled = True
-
+        t6 = time.time()
         # Reset update flag
         with self._update_lock:
             self._update_flag = False
-
-        print("Update Complete: %d" % (time.time() - t0))
+        print("[CLIENT: %.4f] | Init: %f\tToolSelect: %f\tClassPick: %f\tLayerView: %f\tImageC: %f\tImageQ: %f" %
+              (time.time() - t0, t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, t6 - t5))
 
     def on_enter(self, *args):
         self.fetch_image_metas()
@@ -416,7 +419,7 @@ class DrawTool(MouseDrawnTool):
         self.pen_size = pen_size
         self.keyboard.create_shortcut(("lctrl", "z"), self.paint_window.undo)
         self.keyboard.create_shortcut(("lctrl", "y"), self.paint_window.redo)
-        self.keyboard.create_shortcut("spacebar", self.app.root.current_screen.add)
+        self.keyboard.create_shortcut("spacebar", self.app.root.current_screen.add_layer)
         self.keyboard.activate()
 
         self.consecutive_clicks = 0
@@ -426,7 +429,7 @@ class DrawTool(MouseDrawnTool):
         if self.keyboard.is_key_down("lctrl"):
             selected = self.paint_window.detect_collision(touch.pos)
             layer_name = selected[self.consecutive_clicks % len(selected)]
-            self.paint_window.select(layer_name)
+            self.paint_window.select_layer(layer_name)
             self.consecutive_clicks += 1
         else:
             self.consecutive_clicks = 0
@@ -533,7 +536,7 @@ class ImageCanvas(BoxLayout):
         self.painter.paint_window.image.opacity = alpha
 
     def load_current_label(self, label):
-        if self.painter.paint_window is None:
+        if self.painter.paint_window is None or label is None:
             return
         self.painter.paint_window.set_color(label.get_rgb())
         self.painter.paint_window.queue_refresh()
@@ -542,10 +545,10 @@ class ImageCanvas(BoxLayout):
         if self.painter.paint_window is None or not layer_name:
             return
 
-        if self.painter.paint_window.get_selected() is layer_name:
+        if self.painter.paint_window.get_selected_layer() is layer_name:
             return
 
-        self.painter.paint_window.select(layer_name)
+        self.painter.paint_window.select_layer(layer_name)
         self.painter.paint_window.queue_refresh(True)
 
     def load_image(self, image_state):
