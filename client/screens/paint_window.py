@@ -162,8 +162,9 @@ class PaintWindow2(Widget):
             self._refresh_flag = False
             self._refresh_all_flag = False
 
-    def load_layers(self, names, colors, masks, boxes):
+    def load_layers(self, names, colors, masks, boxes, mask_vis, box_vis):
         refresh_all_required = False
+
         removed_layers = [x for x in self._layer_manager.get_all_names() if x not in names]
         for name in removed_layers:
             self.delete_layer(name)
@@ -172,6 +173,7 @@ class PaintWindow2(Widget):
         selected = self._layer_manager.get_selected()
         selected_name = selected.name if selected else None
 
+        # Load new layers
         for i in range(len(names)):
             name = names[i]
             if name in self._layer_manager.get_all_names():
@@ -183,6 +185,17 @@ class PaintWindow2(Widget):
                 refresh_all_required = True
             self.add_layer(name, color, mask)
             self._box_manager.load_box(name, box)
+
+        # Load Visibility
+        for i in range(len(names)):
+            layer = self._layer_manager.get(names[i])
+            if self._layer_manager.get_visible(layer.idx) is not mask_vis[i]:
+                self._layer_manager.set_visible(layer.idx, mask_vis[i])
+                refresh_all_required = True
+
+            if self._box_manager.get_visible(names[i]) is not mask_vis[i]:
+                self._box_manager.set_visible(names[i], box_vis[i])
+                refresh_all_required = True
         self.queue_refresh(refresh_all=refresh_all_required)
 
     def add_layer(self, name, color, mask=None):
@@ -206,8 +219,9 @@ class PaintWindow2(Widget):
     def get_selected_layer(self):
         return self._layer_manager.get_selected()
 
-    def set_visible(self, visible):
-        self._layer_manager.set_visible(visible=visible)
+    def set_visible(self, visible, layer=None):
+        idx = layer.idx if layer else None
+        self._layer_manager.set_visible(idx=idx, visible=visible)
 
     def set_color(self, color, name=None):
         if name is None:
@@ -373,6 +387,11 @@ class LayerManager:
             idx = self.get_selected().idx
         self._layer_visibility[idx] = visible
 
+    def get_visible(self, idx=None):
+        if idx is None:
+            idx = self.get_selected().idx
+        return self._layer_visibility[idx]
+
     def get_visibility(self):
         return self._layer_visibility[:self._layer_index + 1]
 
@@ -466,11 +485,15 @@ class BoxManager:
         idx = self._box_dict[name]
         self._visibility[idx] = visible
 
+    def get_visible(self, name):
+        idx = self._box_dict[name]
+        return self._visibility[idx]
+
     def select_box(self, name):
         idx = self._box_dict[name]
         self._selected_box = idx
 
     def draw_boxes(self, image):
-        draw_boxes(image, self._bounds[:self._next_idx], self.box_color, self.box_thickness)
-        draw_boxes(image, self._bounds[self._selected_box:self._selected_box + 1], self.box_select_color, self.box_thickness)
+        draw_boxes(image, self._bounds[:self._next_idx], self._visibility[:self._next_idx], self.box_color, self.box_thickness)
+        draw_boxes(image, self._bounds[self._selected_box:self._selected_box + 1], self._visibility[self._selected_box:self._selected_box + 1], self.box_select_color, self.box_thickness)
 

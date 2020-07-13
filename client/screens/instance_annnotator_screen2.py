@@ -429,7 +429,10 @@ class DrawTool(MouseDrawnTool):
         if self.keyboard.is_key_down("lctrl"):
             selected = self.paint_window.detect_collision(touch.pos)
             layer_name = selected[self.consecutive_clicks % len(selected)]
-            self.paint_window.select_layer(layer_name)
+            screen = self.app.root.current_screen
+            screen.controller.update_tool_state(
+                current_layer=layer_name)
+            screen.queue_update()
             self.consecutive_clicks += 1
         else:
             self.consecutive_clicks = 0
@@ -471,7 +474,7 @@ class ImageCanvasTabPanel(TabbedPanel):
             tab = ImageCanvasTab(image_model.name)
             tab.image_canvas.painter.bind_image(image_model.image)
             tab.image_canvas.load_image(image_model)
-            tab.image_canvas.load_annotations(image_model.annotations, overwrite=True)  # 13.1 -> 18.2 (+5.1GB)
+            tab.image_canvas.load_annotations(image_model.annotations)  # 13.1 -> 18.2 (+5.1GB)
             self.add_widget(tab)
 
     def switch_to(self, header, do_scroll=False):
@@ -562,12 +565,14 @@ class ImageCanvas(BoxLayout):
         # TODO is this needed? yes
         pass
 
-    def load_annotations(self, annotations, overwrite=False):
+    def load_annotations(self, annotations):
         print("Loading Annotations")
-        names = list(annotations.keys())
+        names = []
         colors = []
         boxes = []
+        box_vis = []
         masks = []
+        mask_vis = []
         for a in annotations.values():
             with self.app.root.current_screen.model.labels.get(a.class_name) as label:
                 if label is not None:
@@ -576,8 +581,10 @@ class ImageCanvas(BoxLayout):
                     colors.append([255, 255, 255])
                 names.append(a.annotation_name)
                 masks.append(a.mat)
+                mask_vis.append(a.mask_enabled)
                 boxes.append(utils.fit_box(a.mat))
-        self.painter.paint_window.load_layers(names, colors, masks, boxes)
+                box_vis.append(a.bbox_enabled)
+        self.painter.paint_window.load_layers(names, colors, masks, boxes, mask_vis, box_vis)
 
         #
         # if annotations is None:

@@ -264,11 +264,14 @@ def invert_coords(coords):
 
 
 @njit(parallel=True)
-def draw_boxes(mat, bounds, color, thick):
+def draw_boxes(mat, bounds, visible, color, thick):
     n_box = bounds.shape[0]
     height = mat.shape[0]
     for i in prange(n_box):
         if np.all(bounds[i, 2:] == 0):
+            continue
+
+        if not visible[i]:
             continue
 
         # Inner coordinates
@@ -301,7 +304,7 @@ def collapse_bg(stack, bounds, visible, layer):
 
 def collapse_top(stack, bounds, visible, layer, bg):
     if layer is None or layer.idx == 0 or not visible[layer.idx]:
-        return stack[0]
+        return bg
     else:
         top = stack[layer.idx]
         top_bounds = bounds[layer.idx - 1]
@@ -326,7 +329,6 @@ def _collapse_top(bg, top, top_bounds):
     cc = slice(top_bounds[1], top_bounds[3])
     out[rr, cc] = _image_add(top[rr, cc], out[rr, cc])
     return out
-
 
 @njit
 def _collapse_bg(stack, bounds, visible, idx):
