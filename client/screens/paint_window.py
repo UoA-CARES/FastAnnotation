@@ -188,9 +188,9 @@ class PaintWindow2(Widget):
 
         # Load Visibility
         for i in range(len(names)):
-            layer = self._layer_manager.get(names[i])
-            if self._layer_manager.get_visible(layer.idx) is not mask_vis[i]:
-                self._layer_manager.set_visible(layer.idx, mask_vis[i])
+            layer, _ = self._layer_manager.get(names[i])
+            if self._layer_manager.get_visible(layer.get_idx()) is not mask_vis[i]:
+                self._layer_manager.set_visible(layer.get_idx(), mask_vis[i])
                 refresh_all_required = True
 
             if self._box_manager.get_visible(names[i]) is not mask_vis[i]:
@@ -202,7 +202,8 @@ class PaintWindow2(Widget):
         print("Adding Layer[%d]: %s" % (self._layer_manager._layer_index, name))
         self._layer_manager.add(name, color, mask)
         self._action_manager.clear_history()
-        self._box_manager.fit_box(self._layer_manager.get(name))
+        layer, _ = self._layer_manager.get(name)
+        self._box_manager.fit_box(layer)
         self.set_color(color, name)
         self.select_layer(name)
         self.queue_checkpoint()
@@ -219,23 +220,29 @@ class PaintWindow2(Widget):
     def get_selected_layer(self):
         return self._layer_manager.get_selected()
 
+    def get_all_layers(self):
+        return self._layer_manager.get_all()
+
+    def get_all_bounds(self):
+        return self._box_manager.get_bounds()
+
     def set_visible(self, visible, layer=None):
-        idx = layer.idx if layer else None
+        idx = layer.get_idx() if layer else None
         self._layer_manager.set_visible(idx=idx, visible=visible)
 
     def set_color(self, color, name=None):
         if name is None:
             layer = self._layer_manager.get_selected()
         else:
-            layer = self._layer_manager.get(name)
+            layer, _ = self._layer_manager.get(name)
 
-        if layer is None:
+        try:
+            mat = layer.get_mat()
+            if np.any(color):
+                mat[np.all(mat != (0, 0, 0), axis=-1)] = color
+            layer.color = color
+        except (AttributeError, TypeError):
             return
-
-        mat = layer.get_mat()
-        if np.any(color):
-            mat[np.all(mat != (0, 0, 0), axis=-1)] = color
-        layer.color = color
 
 
 class ActionManager:
@@ -255,7 +262,7 @@ class ActionManager:
             mat = self._layer_manager.get_selected().get_mat()
             self._history_idx -= 1
             mat[:] = self._layer_history[self._history_idx].copy()
-        except IndexError:
+        except (IndexError, AttributeError):
             return
 
     def redo(self):
@@ -263,7 +270,7 @@ class ActionManager:
             mat = self._layer_manager.get_selected().get_mat()
             self._history_idx += 1
             mat[:] = self._layer_history[self._history_idx].copy()
-        except IndexError:
+        except (IndexError, AttributeError):
             return
 
     def clear_history(self):
@@ -277,10 +284,15 @@ class ActionManager:
         self._current_line = None
         self._history_idx += 1
         self._history_max = self._history_idx + 1
+
         if self._history_idx >= self._layer_history.shape[0]:
             self._layer_history.resize((self._layer_history.shape[0] * self.growth_factor,) + self._layer_history.shape[1:], refcheck=False)
             print("LayerHistory: %s %s" % (str(self._layer_history.shape), str(self._layer_history.dtype)))
-        self._layer_history[self._history_idx] = layer.get_mat().copy()
+
+        try:
+            self._layer_history[self._history_idx] = layer.get_mat().copy()
+        except AttributeError:
+            return
 
     def draw_line(self, point, pen_size, color=None):
         if self._current_line is None:
@@ -303,10 +315,12 @@ class ActionManager:
 
         if color is None:
             color = layer.color
-
-        mat = layer.get_mat()
-        mat_grey = rgb2gray(mat)
-        mat[flood(mat_grey, tuple(point), connectivity=1)] = color
+        try:
+            mat = layer.get_mat()
+            mat_grey = rgb2gray(mat)
+            mat[flood(mat_grey, tuple(point), connectivity=1)] = color
+        except (AttributeError, IndexError):
+            return
 
     def _draw_line_thick(self, mat, p0, p1, color, thickness):
         mat[disk(p0, thickness, shape=mat.shape)] = color
@@ -327,11 +341,17 @@ class LayerManager:
     growth_factor = 2
 
     class Layer:
-        def __init__(self, name, color, idx, manager):
+        def __init__(self, name, color, manager):
             self.name = name
             self.color = color
-            self.idx = idx
             self._manager = manager
+
+        def get_idx(self):
+            try:
+                keys = self._manager.get_all_names()
+                return keys.index(self.name)
+            except ValueError:
+                return None
 
         def get_mat(self):
             return self._manager.get_mat(self.name)
@@ -340,7 +360,7 @@ class LayerManager:
         self._base_image = image
         self._selected_layer = None
 
-        self._layer_dict = {}
+        self._layer_dict = []
         self._layer_capacity = self.initial_capacity
         self._layer_stack = np.empty(shape=(self._layer_capacity,) + self._base_image.shape, dtype=np.uint8)
         self._layer_visibility = np.zeros(shape=(self._layer_capacity,), dtype=bool)
@@ -351,45 +371,56 @@ class LayerManager:
         return self._base_image
 
     def delete(self, name):
-        layer = self._layer_dict.pop(name, None)
-        if layer is None:
+        try:
+            layer = self.get(name)
+            self._layer_dict.remove(layer)
+            self._layer_stack = np.delete(self._layer_stack, layer.get_idx(), 0)
+            self._layer_visibility = np.delete(self._layer_visibility, layer.get_idx(), 0)
+            self._layer_index -= 1
+        except ValueError:
             return
-
-        self._layer_stack[layer.idx] = 0
-        self._layer_visibility[layer.idx] = False
 
     def add(self, name, color, mat=None):
         self._add(mat)
-        layer = LayerManager.Layer(name, color, self._layer_index, self)
-        self._layer_dict[layer.name] = layer
+        layer = LayerManager.Layer(name, color, self)
+        self._layer_dict.append(layer)
 
     def select(self, name):
-        self._selected_layer = self._layer_dict[name]
+        self._selected_layer, _ = self.get(name)
 
     def get(self, name):
-        return self._layer_dict.get(name, None)
+        names = self.get_all_names()
+        if name not in names:
+            return None
+
+        idx = names.index(name)
+        value = self._layer_dict[idx]
+        return value, idx
 
     def get_mat(self, name):
         try:
-            layer = self._layer_dict[name]
-            return self._layer_stack[layer.idx]
-        except KeyError:
+            _, idx = self.get(name)
+            return self._layer_stack[idx + 1]
+        except (TypeError, KeyError):
             return None
 
     def get_selected(self):
         return self._selected_layer
 
+    def get_all(self):
+        return self._layer_dict
+
     def get_all_names(self):
-        return [x.name for x in self._layer_dict.values()]
+        return [x.name for x in self._layer_dict]
 
     def set_visible(self, idx=None, visible=True):
         if idx is None:
-            idx = self.get_selected().idx
+            idx = self.get_selected().get_idx()
         self._layer_visibility[idx] = visible
 
     def get_visible(self, idx=None):
         if idx is None:
-            idx = self.get_selected().idx
+            idx = self.get_selected().get_idx()
         return self._layer_visibility[idx]
 
     def get_visibility(self):
@@ -431,7 +462,7 @@ class BoxManager:
         self.box_select_color = np.array(box_select_color)
         self.image_shape = image_shape
 
-        self._box_dict = {}
+        self._box_dict = []
         """ Bounding box in the form (x1, y1, x2, y2)"""
         self._bounds = np.empty(shape=(self.initial_capacity, 4), dtype=int)
         self._visibility = np.empty(shape=(self.initial_capacity,), dtype=bool)
@@ -444,25 +475,27 @@ class BoxManager:
         return np.all(np.logical_and(bl < pos, pos < tr), axis=1)
 
     def fit_box(self, layer):
-        bounds = fit_box(layer.get_mat())
         try:
-            idx = self._box_dict[layer.name]
+            bounds = fit_box(layer.get_mat())
+            idx = self._box_dict.index(layer.name)
             self._bounds[idx] = bounds
-        except KeyError:
+        except ValueError:
             self._bounds[self._next_idx] = bounds
             self._visibility[self._next_idx] = True
-            self._box_dict[layer.name] = self._next_idx
+            self._box_dict.append(layer.name)
             self._next_idx += 1
             if self._next_idx == self._bounds.shape[0]:
                 self._bounds.resize((self._bounds.shape[0] * self.growth_factor, 4), refcheck=False)
                 self._visibility.resize((self._visibility.shape[0] * self.growth_factor,), refcheck=False)
                 print("Bounds: %s %s" % (str(self._bounds.shape), str(self._bounds.dtype)))
                 print("BoundsVisibility: %s %s" % (str(self._visibility.shape), str(self._visibility.dtype)))
+        except AttributeError:
+            return
 
     def update_box(self, name, point, radius):
         point = np.array(point)
         try:
-            idx = self._box_dict[name]
+            idx = self._box_dict.index(name)
             bounds = self._bounds[idx]
             bounds[:2] = np.min((bounds[:2], point - radius), axis=0)
             bounds[:2] = np.max((bounds[:2], np.zeros(2)), axis=0)
@@ -472,25 +505,32 @@ class BoxManager:
             return
 
     def load_box(self, name, box):
-        idx = self._box_dict[name]
+        idx = self._box_dict.index(name)
         self._bounds[idx] = box
 
     def delete_box(self, name):
-        self._box_dict.pop(name, None)
+        try:
+            idx = self._box_dict.index(name)
+            self._box_dict.pop(idx)
+            self._bounds = np.delete(self._bounds, idx, 0)
+            self._visibility = np.delete(self._visibility, idx, 0)
+            self._next_idx -= 1
+        except ValueError:
+            return
 
     def get_bounds(self):
         return self._bounds[:self._next_idx]
 
     def set_visible(self, name, visible):
-        idx = self._box_dict[name]
+        idx = self._box_dict.index(name)
         self._visibility[idx] = visible
 
     def get_visible(self, name):
-        idx = self._box_dict[name]
+        idx = self._box_dict.index(name)
         return self._visibility[idx]
 
     def select_box(self, name):
-        idx = self._box_dict[name]
+        idx = self._box_dict.index(name)
         self._selected_box = idx
 
     def draw_boxes(self, image):

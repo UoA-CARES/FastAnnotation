@@ -296,18 +296,18 @@ def draw_boxes(mat, bounds, visible, color, thick):
 
 
 def collapse_bg(stack, bounds, visible, layer):
-    if layer is None or layer.idx == 0:
+    if layer is None or bounds.shape[0] < 2:
         return stack[0]
     else:
-        return _collapse_bg(stack, bounds, visible, layer.idx).copy()
+        return _collapse_bg(stack, bounds, visible, layer.get_idx()).copy()
 
 
 def collapse_top(stack, bounds, visible, layer, bg):
-    if layer is None or layer.idx == 0 or not visible[layer.idx]:
+    if layer is None or layer.get_idx() == 0 or not visible[layer.get_idx()]:
         return bg
     else:
-        top = stack[layer.idx]
-        top_bounds = bounds[layer.idx - 1]
+        top = stack[layer.get_idx()]
+        top_bounds = bounds[layer.get_idx() - 1]
         return _collapse_top(bg, top, top_bounds)
 
 

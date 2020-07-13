@@ -242,6 +242,12 @@ class LabelCache(BlockingCache):
     A thread-safe cache of class labels used by the Instance Annotator
     """
 
+    def get_class_name(self, color):
+        with self._lock:
+            for k in self._cache.keys():
+                if np.all(self._cache[k].get_rgb() == color):
+                    return k
+        return None
 
 class LabelState:
     """

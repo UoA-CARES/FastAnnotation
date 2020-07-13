@@ -342,7 +342,7 @@ class LayerView(GridLayout):
             self.current_selection = None
         self.layer_item_layout.remove_widget(instance)
         iid = self.app.root.current_screen.model.tool.get_current_image_id()
-        self.app.root.current_screen.controller.delete(
+        self.app.root.current_screen.controller.delete_layer(
             iid, instance.layer_name)
         self.app.root.current_screen.queue_update()
 
