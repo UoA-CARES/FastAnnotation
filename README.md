@@ -3,6 +3,8 @@ A tool which aims to streamline the annotation process for computer vision proje
 
 
 ## Installation 
+### Requirements
+Python 3.6 or greater
 
 ### Client
 Note: For the following Installation steps please ensure pip is run with administrative privileges.
@@ -18,7 +20,7 @@ Note: For the following Installation steps please ensure pip is run with adminis
         ```
     2. Ubuntu:
         ```
-        python -m pip install -r requirements.txt
+        python -m pip install -r client_requirements.txt
         ```
 
 ### Server
@@ -34,7 +36,9 @@ Note: For the following Installation steps please ensure pip is run with adminis
     ```
    2. Ubuntu
    
-   Installed from the requirements.txt file
+   ```
+   python -m pip install -r server_requirements.txt
+   ```
 
 2. MySql Installation
     1. Windows:
