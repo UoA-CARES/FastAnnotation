@@ -170,18 +170,18 @@ class InstanceAnnotatorController:
             annotations = {}
             i = 0
             pw = image_canvas.painter.paint_window
-            layers = pw.get_all_layers()
-            bounds = pw.get_all_bounds()
-            for i in range(len(layers)):
-                layer = layers[i]
-                box = bounds[i]
-                mat = layer.get_mat().copy()
-                class_name = self.model.labels.get_class_name(layer.color)
-                annotation = AnnotationState(annotation_name=layer.name,
+            for name in pw.get_all_names():
+                if not name:
+                    continue
+                box = pw.get_bound(name)
+                mat = pw.get_mask(name).copy()
+                color = pw.get_color(name)
+                class_name = self.model.labels.get_class_name(color)
+                annotation = AnnotationState(annotation_name=name,
                                              class_name=class_name,
                                              mat=mat,
                                              bbox=box)
-                annotations[layer.name] = annotation
+                annotations[name] = annotation
                 print("CLIENT: outgoing bbox")
                 print("\t%s" % str(box))
 

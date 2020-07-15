@@ -428,12 +428,13 @@ class DrawTool(MouseDrawnTool):
         pos = np.round(touch.pos).astype(int)
         if self.keyboard.is_key_down("lctrl"):
             selected = self.paint_window.detect_collision(touch.pos)
-            layer_name = selected[self.consecutive_clicks % len(selected)]
-            screen = self.app.root.current_screen
-            screen.controller.update_tool_state(
-                current_layer=layer_name)
-            screen.queue_update()
-            self.consecutive_clicks += 1
+            if len(selected) > 0:
+                layer_name = selected[self.consecutive_clicks % len(selected)]
+                screen = self.app.root.current_screen
+                screen.controller.update_tool_state(
+                    current_layer=layer_name)
+                screen.queue_update()
+                self.consecutive_clicks += 1
         else:
             self.consecutive_clicks = 0
             if self.keyboard.is_key_down("shift"):
