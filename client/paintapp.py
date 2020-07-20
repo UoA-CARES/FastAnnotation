@@ -8,7 +8,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.relativelayout import RelativeLayout
 
 from client.screens.common import MouseDrawnTool
-from client.screens.paint_window import PaintWindow2
+from client.screens.paint_window import PaintWindow
 
 
 class PaintApp(App):
@@ -25,7 +25,7 @@ class Test(RelativeLayout):
         image[290:300, 0:10, :] = 80
         image[0:10, 190:200, :] = 160
         image[290:300, 190:200, :] = 240
-        pw = PaintWindow2(image)
+        pw = PaintWindow(image)
         self.add_widget(pw)
         pw.add_layer('test', [255, 255, 255])
         drawtool = DrawTool(pw)

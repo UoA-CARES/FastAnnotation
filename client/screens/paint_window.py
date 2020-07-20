@@ -1,21 +1,20 @@
-import time
 import os
-import cv2
+import time
+from threading import Lock
 
 import numpy as np
-from threading import Lock
-from kivy.lang import Builder
+from kivy.clock import mainthread
 from kivy.graphics.texture import Texture
+from kivy.lang import Builder
 from kivy.properties import ObjectProperty, NumericProperty
 from kivy.uix.widget import Widget
-from kivy.clock import mainthread
 from kivy.utils import get_color_from_hex
 from skimage.color import rgb2gray
 from skimage.draw import disk
 from skimage.segmentation import flood
 
-from client.utils import collapse_bg, collapse_top, draw_boxes, fit_box, DynamicTable
 from client.client_config import ClientConfig
+from client.utils import collapse_bg, collapse_top, draw_boxes, fit_box, DynamicTable
 
 # Load corresponding kivy file
 Builder.load_file(
@@ -29,7 +28,7 @@ BOUNDS_KEY = "bounds"
 VISIBLE_KEY = "vis"
 
 
-class PaintWindow2(Widget):
+class PaintWindow(Widget):
     image = ObjectProperty(None)
     bg_image = ObjectProperty(None)
     box_color = ObjectProperty(None)
@@ -62,7 +61,7 @@ class PaintWindow2(Widget):
         self.bg_image.canvas.ask_update()
         self.size_hint = (None, None)
         self.size = (image.shape[1], image.shape[0])
-        self.inverter = PaintWindow2.Inverter(image)
+        self.inverter = PaintWindow.Inverter(image)
 
         self._bg_buffer = np.zeros(shape=image.shape, dtype=np.uint8)
         self._layer_manager = LayerManager(image)

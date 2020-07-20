@@ -1,13 +1,9 @@
+import time
 from threading import Lock
 
-import cv2
-import time
 import kivy.utils
 from kivy.app import App
-from kivy.clock import Clock
 from kivy.clock import mainthread
-from kivy.core.window import Window
-from kivy.graphics import Ellipse, InstructionGroup, Line
 from kivy.properties import BooleanProperty
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.screenmanager import Screen
@@ -17,14 +13,14 @@ import client.utils as utils
 from client.controller.instance_annotator_controller import InstanceAnnotatorController
 from client.model.instance_annotator_model import InstanceAnnotatorModel
 from client.screens.common import *
+from client.screens.paint_window import PaintWindow
 from client.utils import background
-from client.screens.paint_window import PaintWindow2
 
 # Load corresponding kivy file
 Builder.load_file(
     os.path.join(
         ClientConfig.DATA_DIR,
-        'instance_annotator_screen2.kv'))
+        'instance_annotator_screen.kv'))
 
 
 class InstanceAnnotatorScreen(Screen):
@@ -402,7 +398,7 @@ class Painter(RelativeLayout):
 
     def bind_image(self, image):
         self.clear_widgets()
-        self.paint_window = PaintWindow2(image)
+        self.paint_window = PaintWindow(image)
         self.draw_tool = DrawTool(self.paint_window)
         self.add_widget(self.paint_window)
         self.add_widget(self.draw_tool)
