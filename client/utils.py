@@ -383,10 +383,11 @@ def collapse_bg(stack, bounds, visible, idx):
 
 
 def collapse_top(stack, bounds, visible, idx, bg):
-    if idx < 0 or not visible[idx]:
+    stack_idx = idx + 1
+    if idx < 0 or not visible[stack_idx]:
         return bg
     else:
-        top = stack[idx + 1]
+        top = stack[stack_idx]
         top_bounds = bounds[idx]
         return _collapse_top(bg, top, top_bounds)
 
