@@ -403,6 +403,13 @@ def fit_box(img):
     return rmin, cmin, rmax, cmax
 
 
+def is_valid_bounds(bounds):
+    bounds = np.array(bounds)
+    if np.sum(bounds) <= 0:
+        return False
+    return np.all(bounds[:2] < bounds[2:])
+
+
 @njit(parallel=True)
 def _collapse_top(bg, top, top_bounds):
     out = bg.copy()

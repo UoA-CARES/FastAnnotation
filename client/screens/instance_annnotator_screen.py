@@ -88,20 +88,26 @@ class InstanceAnnotatorScreen(Screen):
         t4 = time.time()
         # Update ImageCanvas
 
+        tt0 = time.time()
         if current_iid > 0 and not self.tab_panel.has_tab(current_iid):
             self.tab_panel.add_tab(current_iid)  # MEM 11.9 -> 18.2 (+5.1GB)
             tab = self.tab_panel.get_tab(current_iid)
             self.tab_panel.switch_to(tab, do_scroll=True)
 
+        tt1 = time.time()
         image_canvas = self.get_current_image_canvas()
         with self.model.labels.get(current_label_name) as current_label:
-            if image_canvas is not None:
-                image_canvas.load_pen_size(self.model.tool.get_pen_size())
-                image_canvas.load_global_alpha(self.model.tool.get_alpha())
-                image_canvas.load_annotations(image.annotations)
-                image_canvas.load_current_layer(current_layer)
-                image_canvas.load_current_label(current_label)
+            with self.model.images.get(current_iid) as image:
+                if image_canvas is not None:
+                    image_canvas.load_pen_size(self.model.tool.get_pen_size())
+                    image_canvas.load_global_alpha(self.model.tool.get_alpha())
+                    if image_canvas.load_annotations(image.annotations):
+                        self.models.images.add(current_iid, image)
+                    image_canvas.load_current_layer(current_layer)
+                    image_canvas.load_current_label(current_label)
 
+        tt2 = time.time()
+        print("\t[IC] | %f, %f" % (tt1- tt0, tt2-tt1))
         t5 = time.time()
         # Update ImageQueue
         self.right_control.load_image_queue()
@@ -570,6 +576,8 @@ class ImageCanvas(BoxLayout):
         box_vis = []
         masks = []
         mask_vis = []
+        controller = self.app.root.current_screen.controller
+        update_required = False
         for a in annotations.values():
             with self.app.root.current_screen.model.labels.get(a.class_name) as label:
                 if label is not None:
@@ -579,8 +587,15 @@ class ImageCanvas(BoxLayout):
                 names.append(a.annotation_name)
                 masks.append(a.mat)
                 mask_vis.append(a.mask_enabled)
-                boxes.append(utils.fit_box(a.mat))
+                if not utils.is_valid_bounds(a.bbox):
+                    new_box = utils.fit_box(a.mat)
+                    if not np.all(np.equal(new_box, a.bbox)):
+                        a.bbox = new_box
+                        update_required = True
+                boxes.append(a.bbox)
                 box_vis.append(a.bbox_enabled)
+        if update_required:
+            controller.load_annotations(annotations=annotations)
         self.painter.paint_window.load_layers(names, colors, masks, boxes, mask_vis, box_vis)
 
         #

@@ -237,6 +237,16 @@ class InstanceAnnotatorController:
         if current_label is not None:
             self.model.tool.set_current_label_name(current_label)
 
+    def load_annotations(self, iid=None, annotations=None):
+        if iid is None:
+            iid = self.model.tool.get_current_image_id()
+
+        with self.model.images.get(iid) as image:
+            if image is None or image.annotations is None:
+                return
+            image.annotations = annotations
+            self.model.images.add(iid, image)
+
     def update_annotation(
             self,
             iid=None,

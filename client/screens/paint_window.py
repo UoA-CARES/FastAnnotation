@@ -176,17 +176,13 @@ class PaintWindow(Widget):
             refresh_all_required = True
 
         # Load new layers
-        for i in range(len(names)):
+        new_layers = [x for x in names if x not in self._layer_manager.get_all_names()]
+        for i in range(len(new_layers)):
             name = names[i]
-            if name in self._layer_manager.get_all_names():
-                continue
-            color = colors[i]
-            mask = masks[i]
-            box = boxes[i]
             if name is not self._layer_manager.get_selected():
                 refresh_all_required = True
-            self.add_layer(name, color, mask)
-            self._box_manager.set_bound(name, box)
+            self.add_layer(name, colors[i], mask=masks[i])
+            self._box_manager.set_bound(name, boxes[i])
 
         # Load Visibility
         for i in range(len(names)):
@@ -199,11 +195,10 @@ class PaintWindow(Widget):
                 refresh_all_required = True
         self.queue_refresh(refresh_all=refresh_all_required)
 
-    def add_layer(self, name, color, mask=None):
+    def add_layer(self, name, color, box=None, mask=None):
         self._layer_manager.add(name, color, mask)
         self._action_manager.clear_history()
-        self._box_manager.add(name)
-        self._box_manager.fit_box(name, self._layer_manager.get_mask(name))
+        self._box_manager.add(name, box)
         self.set_color(color, name)
         self.select_layer(name)
         self.queue_checkpoint()
