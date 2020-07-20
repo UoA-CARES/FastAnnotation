@@ -6,15 +6,17 @@ import numpy as np
 
 
 class BlockItem:
-    def __init__(self, item):
-        self.item = item
+    def __init__(self, parent, key):
+        self.parent = parent
+        self.key = key
 
     def __enter__(self):
-        self.item_copy = deepcopy(self.item)
-        return self.item_copy
+        self.parent._lock.acquire()
+        return self.parent._cache.get(self.key, None)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        del self.item_copy
+        self.parent._lock.release()
+
 
 
 class BlockingList:
@@ -67,8 +69,7 @@ class BlockingCache:
             self._cache[key] = obj
 
     def get(self, key):
-        with self._lock:
-            return BlockItem(self._cache.get(key, None))
+        return BlockItem(self, key)
 
     def delete(self, key):
         with self._lock:
@@ -95,7 +96,12 @@ class ToolState:
     """
     A thread-safe object containing state related to the Instance Annotator Tool
     """
-    _lock = Lock()
+
+    PEN_SIZE_KEY = "pen_size"
+    ALPHA_KEY = "alpha"
+    CURRENT_IMAGE_KEY = "current_iid"
+    CURRENT_LABEL_KEY = "current_label"
+    CURRENT_LAYER_KEY = "current_layer"
 
     def __init__(
             self,
@@ -104,52 +110,44 @@ class ToolState:
             current_image_id=-1,
             current_label_name="",
             current_layer_name=""):
-        self._pen_size = pen_size
-        self._alpha = alpha
-        self._current_image_id = current_image_id
-        self._current_label_name = current_label_name
-        self._current_layer_name = current_layer_name
+        self._cache = BlockingCache()
+        self._cache.add(self.PEN_SIZE_KEY, pen_size)
+        self._cache.add(self.ALPHA_KEY, alpha)
+        self._cache.add(self.CURRENT_IMAGE_KEY, current_image_id)
+        self._cache.add(self.CURRENT_LABEL_KEY, current_label_name)
+        self._cache.add(self.CURRENT_LAYER_KEY, current_layer_name)
 
     def get_pen_size(self):
-        with self._lock:
-            return self._pen_size
+        with self._cache.get(self.PEN_SIZE_KEY) as value:
+            return value
 
     def set_pen_size(self, value):
-        with self._lock:
-            self._pen_size = value
+        self._cache.add(self.PEN_SIZE_KEY, value)
 
     def get_alpha(self):
-        with self._lock:
-            return self._alpha
+        with self._cache.get(self.ALPHA_KEY) as value:
+            return value
 
     def set_alpha(self, value):
-        with self._lock:
-            self._alpha = value
+        self._cache.add(self.ALPHA_KEY, value)
 
     def get_current_image_id(self):
-        with self._lock:
-            return self._current_image_id
+        return self._cache.get(self.CURRENT_IMAGE_KEY)
 
     def set_current_image_id(self, value):
-        with self._lock:
-            self._current_image_id = value
+        self._cache.add(self.CURRENT_IMAGE_KEY, value)
 
     def get_current_label_name(self):
-        with self._lock:
-            return self._current_label_name
+        return self._cache.get(self.CURRENT_LABEL_KEY)
 
     def set_current_label_name(self, value):
-        with self._lock:
-            self._current_label_name = value
+        self._cache.add(self.CURRENT_LABEL_KEY, value)
 
     def get_current_layer_name(self):
-        with self._lock:
-            return self._current_layer_name
+        return self._cache.get(self.CURRENT_LAYER_KEY)
 
     def set_current_layer_name(self, value):
-        with self._lock:
-            print("[Layer_Name]: %s" % value)
-            self._current_layer_name = value
+        self._cache.add(self.CURRENT_LAYER_KEY, value)
 
 
 class ActiveImages(BlockingList):
