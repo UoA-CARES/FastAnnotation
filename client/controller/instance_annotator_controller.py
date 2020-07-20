@@ -177,6 +177,8 @@ class InstanceAnnotatorController:
                 mat = pw.get_mask(name).copy()
                 color = pw.get_color(name)
                 class_name = self.model.labels.get_class_name(color)
+                if class_name is None:
+                    class_name = self.model.labels.get_default_name()
                 annotation = AnnotationState(annotation_name=name,
                                              class_name=class_name,
                                              mat=mat,
