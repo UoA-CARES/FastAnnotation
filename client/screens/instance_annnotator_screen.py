@@ -76,14 +76,23 @@ class InstanceAnnotatorScreen(Screen):
 
         t3 = time.time()
         # Update Layer View
+
+        tt0 = time.time()
+        tt1 = time.time()
+
         with self.model.images.get(current_iid) as image:
+            tt1 = time.time()
             if image is not None and image.annotations is not None:
-                self.left_control.layer_view.clear()
-                for annotation in image.annotations.values():
-                    self.left_control.layer_view.add_layer_item(annotation)
+
+                self.left_control.layer_view.load_layer_items(image.annotations.values())
+        tt2 = time.time()
 
         self.left_control.layer_view.select(
             self.model.tool.get_current_layer_name())
+
+        tt3 = time.time()
+        print("\t[LV] | %f, %f, %f" % (tt1-tt0, tt2-tt1, tt3-tt2))
+
 
         t4 = time.time()
         # Update ImageCanvas
@@ -323,14 +332,23 @@ class LayerView(GridLayout):
             return
         self._change_layer(item)
 
-    def add_layer_item(self, annotation):
-        item = LayerViewItem(annotation.annotation_name)
-        item.layer_select_cb = lambda: self._change_layer(item)
-        item.layer_delete_cb = lambda: self._delete_layer(item)
-        item.mask_enabled = annotation.mask_enabled
-        item.bbox_enabled = annotation.bbox_enabled
-        self.layer_item_layout.add_widget(item)
-        self.layers[annotation.annotation_name] = item
+    def load_layer_items(self, annotations):
+        deleted_names = (x for x in self.layers if x not in (a.annotation_name for a in annotations))
+        for name in deleted_names:
+            layer = self.layers.pop(name, None)
+            if layer:
+                self.layer_item_layout.remove_widget(layer)
+
+        for a in annotations:
+            if a.annotation_name not in self.layers:
+                item = LayerViewItem(a.annotation_name)
+                item.layer_select_cb = lambda: self._change_layer(item)
+                item.layer_delete_cb = lambda: self._delete_layer(item)
+                self.layer_item_layout.add_widget(item)
+                self.layers[a.annotation_name] = item
+
+            self.layers[a.annotation_name].mask_enabled = a.mask_enabled
+            self.layers[a.annotation_name].bbox_enabled = a.bbox_enabled
 
     def _change_layer(self, instance):
         if self.current_selection:
