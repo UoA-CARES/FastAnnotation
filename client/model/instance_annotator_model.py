@@ -1,6 +1,6 @@
 import uuid
 from copy import deepcopy
-from threading import Lock
+from threading import Lock, RLock
 
 import numpy as np
 
@@ -16,7 +16,6 @@ class BlockItem:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.parent._lock.release()
-
 
 
 class BlockingList:
@@ -47,11 +46,11 @@ class BlockingList:
 
     def clear(self):
         with self._lock:
-            self._list = []
+            self._list.clear()
 
 
 class BlockingCache:
-    _lock = Lock()
+    _lock = RLock()
 
     def __init__(self):
         self._cache = {}
@@ -132,19 +131,22 @@ class ToolState:
         self._cache.add(self.ALPHA_KEY, value)
 
     def get_current_image_id(self):
-        return self._cache.get(self.CURRENT_IMAGE_KEY)
+        with self._cache.get(self.CURRENT_IMAGE_KEY) as iid:
+            return iid
 
     def set_current_image_id(self, value):
         self._cache.add(self.CURRENT_IMAGE_KEY, value)
 
     def get_current_label_name(self):
-        return self._cache.get(self.CURRENT_LABEL_KEY)
+        with self._cache.get(self.CURRENT_LABEL_KEY) as label:
+            return label
 
     def set_current_label_name(self, value):
         self._cache.add(self.CURRENT_LABEL_KEY, value)
 
     def get_current_layer_name(self):
-        return self._cache.get(self.CURRENT_LAYER_KEY)
+        with self._cache.get(self.CURRENT_LAYER_KEY) as layer:
+            return layer
 
     def set_current_layer_name(self, value):
         self._cache.add(self.CURRENT_LAYER_KEY, value)
