@@ -5,6 +5,7 @@ import base64
 import io
 import json
 import os
+import time
 
 import cv2
 from numba import njit, vectorize, uint8, int32, boolean, prange
@@ -14,13 +15,12 @@ from PIL import Image
 from kivy.app import App
 from kivy.graphics.texture import Texture
 from kivy.uix.image import CoreImage
-from numba import jit
 
 from client.client_config import ClientConfig
 
 
 class DynamicTable:
-    def __init__(self, initial_capacity=2, growth_factor=4):
+    def __init__(self, initial_capacity=2, growth_factor=2):
         self.capacity = initial_capacity
         self.growth_factor = growth_factor
         self._next_col = 0
@@ -36,8 +36,7 @@ class DynamicTable:
         self._row_dict[name] = row
 
     def get_row(self, name):
-        active_idxs = [self._col_map[x] for x in self._active_cols]
-        return self._row_dict[name][active_idxs]
+        return self._row_dict[name][slice(self._next_col)]
 
     def add_col(self, name, row_data):
         if name in self._col_map:
@@ -59,6 +58,7 @@ class DynamicTable:
 
     def del_col(self, name):
         self._active_cols.remove(name)
+        self._clean()
 
     def get_all(self):
         row_data = {}
@@ -73,12 +73,14 @@ class DynamicTable:
         return list(self._row_dict.keys())
 
     def _clean(self):
+        deleted_idxs = [self._col_map[x] for x in self._col_map.keys() if x not in self._active_cols]
+
         for k in self._row_dict.keys():
-            self._row_dict[k] = self.get_row(k)
+            self._row_dict[k] = np.delete(self._row_dict[k], deleted_idxs, 0)
 
         self._col_map = {}
         self._next_col = len(self._active_cols)
-        self.capacity = len(self._active_cols)
+        self.capacity -= 1
         for i in range(len(self._active_cols)):
             self._col_map[self._active_cols[i]] = i
 
