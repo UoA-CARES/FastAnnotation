@@ -67,11 +67,12 @@ class InstanceAnnotatorScreen(Screen):
         t2 = time.time()
         # Update Class Picker
         label_names = self.model.labels.keys()
-        self.left_control.class_picker.clear()
+        labels = []
         for name in label_names:
             with self.model.labels.get(name) as label:
-                self.left_control.class_picker.add_label(label.name, label.color)
+                labels.append(label)
 
+        self.left_control.class_picker.load_labels(labels)
         self.left_control.class_picker.select(current_label_name)  # MEM 10.7 -> 11.9 (+1.2GB)
 
         t3 = time.time()
@@ -264,6 +265,17 @@ class ClassPicker(GridLayout):
         if label is None:
             return
         self._change_label(label)
+
+    def load_labels(self, labels):
+        deleted_labels = [self.label_dict[x] for x in self.label_dict.keys() if x not in [l.name for l in labels]]
+        for l in deleted_labels:
+            self.grid.remove_widget(l)
+            self.label_dict.pop(l.name, None)
+
+        for l in labels:
+            if l.name not in self.label_dict:
+                self.add_label(l.name, l.color)
+            self.label_dict[l.name].class_color = l.color
 
     def add_label(self, name, color):
         item = self._make_label(name, color)
@@ -686,14 +698,12 @@ class RightControlColumn(BoxLayout):
         self.app = App.get_running_app()
 
     def load_image_queue(self):
-        self.image_queue.clear()
         image_ids = self.app.root.current_screen.model.images.keys()
+        images = []
         for iid in image_ids:
             with self.app.root.current_screen.model.images.get(iid) as image:
-                self.image_queue.add_item(image.name,
-                                          iid,
-                                          locked=image.is_locked,
-                                          opened=image.is_open)
+                images.append(image)
+        self.image_queue.load_items(images)
 
 
 class ImageQueueControl(GridLayout):
@@ -711,6 +721,17 @@ class ImageQueue(GridLayout):
     def clear(self):
         self.queue.clear_widgets()
         self.queue_item_dict.clear()
+
+    def load_items(self, images):
+        deleted_items = [self.queue_item_dict[x] for x in self.queue_item_dict.keys() if x not in [img.id for img in images]]
+
+        for item in deleted_items:
+            self.queue_item_dict.pop(item, None)
+            self.queue.remove_widget(item)
+
+        for img in images:
+            if img.id not in self.queue_item_dict:
+                self.add_item(img.name, img.id, img.is_locked, img.is_open)
 
     def add_item(self, name, image_id, locked=False, opened=False):
         item = ImageQueueItem()

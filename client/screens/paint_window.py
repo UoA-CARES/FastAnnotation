@@ -515,9 +515,11 @@ class BoxManager:
         return self._box_table.get_row(BOUNDS_KEY)
 
     def get_idx(self, name):
-        if name is None:
+        boxes = self._box_table.columns()
+        if name not in boxes:
             return -1
-        return self._box_table.columns().index(name)
+        else:
+            return boxes.index(name)
 
     def detect_collision(self, pos):
         bounds = self._box_table.get_row(BOUNDS_KEY)
