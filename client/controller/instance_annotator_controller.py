@@ -208,10 +208,8 @@ class InstanceAnnotatorController:
                 msg = "Failed to unlock the image with id %d." % iid
                 raise ApiException(message=msg, code=resp.status_code)
 
-            image_model.is_locked = False
-            image_model.unsaved = False
-
             self.model.images.add(iid, image_model)
+            self.update_image_meta(iid, unsaved=False, is_locked=False)
 
     def update_tool_state(self,
                           pen_size=None,
@@ -289,10 +287,13 @@ class InstanceAnnotatorController:
 
     def update_image_meta(
             self,
-            iid,
+            iid=None,
             is_locked=None,
             is_open=None,
             unsaved=None):
+
+        if iid is None:
+            iid = self.model.tool.get_current_image_id()
 
         with self.model.images.get(iid) as image:
             if image is None:
@@ -318,16 +319,17 @@ class InstanceAnnotatorController:
             bbox = (0, 0, 0, 0)
             annotation = AnnotationState(layer_name, class_name, mask, bbox)
             img.annotations[layer_name] = annotation
-            img.unsaved = True
             self.model.images.add(iid, img)
             self.model.tool.set_current_layer_name(layer_name)
             print("Controller: Adding blank layer (%s)" % layer_name)
+        self.update_image_meta(iid, unsaved=True)
 
     def delete_layer(self, iid, layer_name):
         with self.model.images.get(iid) as img:
             img.annotations.pop(layer_name, None)
-            img.unsaved = True
             self.model.images.add(iid, img)
             if self.model.tool.get_current_layer_name() is layer_name:
                 self.model.tool.set_current_layer_name(None)
             print("Controller: Deleting layer (%s)" % layer_name)
+
+        self.update_image_meta(iid, unsaved=True)

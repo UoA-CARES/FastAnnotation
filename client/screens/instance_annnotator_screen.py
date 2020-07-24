@@ -50,8 +50,8 @@ class InstanceAnnotatorScreen(Screen):
 
     @mainthread
     def _update(self):
-        # TODO: Implement a diff system which only updates changed sections of
-        # the model
+        # TODO: Implement a diff system which only updates specific sections of view
+        # E.g. self.queue_update(ToolSelect=True, ImageCanvas=True)
 
         t0 = time.time()
 
@@ -83,8 +83,7 @@ class InstanceAnnotatorScreen(Screen):
 
         with self.model.images.get(current_iid) as image:
             tt1 = time.time()
-            if image is not None and image.annotations is not None:
-
+            if image is not None:
                 self.left_control.layer_view.load_layer_items(image.annotations.values())
         tt2 = time.time()
 
@@ -124,7 +123,7 @@ class InstanceAnnotatorScreen(Screen):
 
         with self.model.images.get(current_iid) as image:
             if image is not None:
-                self.tab_panel.current_tab.unsaved = image.unsaved
+                self.tab_panel.current_tab.set_unsaved(image.unsaved)
 
             if image is not None and image.unsaved:
                 self.right_control.image_queue_control.btn_save.disabled = False
@@ -462,11 +461,11 @@ class DrawTool(MouseDrawnTool):
 
     def on_touch_down_hook(self, touch):
         pos = np.round(touch.pos).astype(int)
+        screen = self.app.root.current_screen
         if self.keyboard.is_key_down("lctrl"):
             selected = self.paint_window.detect_collision(touch.pos)
             if len(selected) > 0:
                 layer_name = selected[self.consecutive_clicks % len(selected)]
-                screen = self.app.root.current_screen
                 screen.controller.update_tool_state(
                     current_layer=layer_name)
                 screen.queue_update()
@@ -477,6 +476,8 @@ class DrawTool(MouseDrawnTool):
                 self.paint_window.fill(pos)
             else:
                 self.paint_window.draw_line(pos, self.pen_size)
+        screen.controller.update_image_meta(unsaved=True)
+        screen.queue_update()
         self.paint_window.queue_refresh()
 
     def on_touch_move_hook(self, touch):
@@ -542,6 +543,10 @@ class ImageCanvasTab(TabbedPanelItem):
     def get_iid(self):
         return self.image_canvas.image_id
 
+    def set_unsaved(self, unsaved):
+        self.unsaved = unsaved
+        self.image_canvas.unsaved_state = unsaved
+
 
 class ImageCanvas(BoxLayout):
     painter = ObjectProperty(None)
@@ -563,9 +568,6 @@ class ImageCanvas(BoxLayout):
         #     layer.prepare_matrix()
         # TODO
         pass
-
-    def load_save_status(self, unsaved):
-        self.unsaved = unsaved
 
     def load_pen_size(self, size):
         if self.painter.draw_tool is None:
@@ -732,6 +734,13 @@ class ImageQueue(GridLayout):
         for img in images:
             if img.id not in self.queue_item_dict:
                 self.add_item(img.name, img.id, img.is_locked, img.is_open)
+            self.update_item(img.id, lock=img.is_locked, opened=img.is_open)
+
+    def update_item(self, image_id, lock=None, opened=None):
+        if image_id not in self.queue_item_dict:
+            return
+        item = self.queue_item_dict[image_id]
+        item.set_status(lock=lock, opened=opened)
 
     def add_item(self, name, image_id, locked=False, opened=False):
         item = ImageQueueItem()
@@ -751,12 +760,16 @@ class ImageQueueItem(BoxLayout):
     image_open = BooleanProperty(False)
     image_locked = BooleanProperty(False)
 
-    def set_status(self, opened=False, lock=False):
-        self.image_open = opened
-        self.image_locked = lock
-        if opened:
-            self.button_color = kivy.utils.get_color_from_hex(
-                ClientConfig.CLIENT_HIGHLIGHT_1)
-        else:
-            self.button_color = kivy.utils.get_color_from_hex(
-                ClientConfig.CLIENT_DARK_3)
+    def set_status(self, opened=None, lock=None):
+        if opened is not None:
+            self.image_open = opened
+            if opened:
+                self.button_color = kivy.utils.get_color_from_hex(
+                    ClientConfig.CLIENT_HIGHLIGHT_1)
+            else:
+                self.button_color = kivy.utils.get_color_from_hex(
+                    ClientConfig.CLIENT_DARK_3)
+
+        if lock is not None:
+            self.image_locked = lock
+

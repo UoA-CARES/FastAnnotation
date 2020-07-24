@@ -161,6 +161,7 @@ class PaintWindow(Widget):
         print("[FPS: %s #%d] | Stack: %f\tCollapse: %f\tBox: %f (%f)\tCanvas: %f" %
               (fps, stack.shape[0], t1 - t0, t2 - t1, t3 - t2, (t3 - t2)/stack.shape[0],t4 - t3))
 
+        # Mark image as unsaved
         with self._refresh_lock:
             self._refresh_flag = False
             self._refresh_all_flag = False
