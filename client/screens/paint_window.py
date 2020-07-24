@@ -178,7 +178,7 @@ class PaintWindow(Widget):
         # Load new layers
         new_layers = [x for x in names if x not in self._layer_manager.get_all_names()]
         for i in range(len(new_layers)):
-            name = names[i]
+            name = new_layers[i]
             if name is not self._layer_manager.get_selected():
                 refresh_all_required = True
             self.add_layer(name, colors[i], mask=masks[i])
