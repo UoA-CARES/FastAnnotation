@@ -54,10 +54,25 @@ class PaintWindow(Widget):
     def __init__(self, image, **kwargs):
         super().__init__(**kwargs)
         self.image_shape = image.shape
-        self.image.texture = Texture.create(size=(image.shape[1], image.shape[0]), colorfmt='rgb', bufferfmt='ubyte')
+        self.image.texture = Texture.create(
+            size=(
+                image.shape[1],
+                image.shape[0]),
+            colorfmt='rgb',
+            bufferfmt='ubyte')
         self.bg_image.shape = image.shape
-        self.bg_image.texture = Texture.create(size=(image.shape[1], image.shape[0]), colorfmt='rgb', bufferfmt='ubyte')
-        self.bg_image.texture.blit_buffer(np.flip(image, 0).ravel(), colorfmt='rgb', bufferfmt='ubyte')
+        self.bg_image.texture = Texture.create(
+            size=(
+                image.shape[1],
+                image.shape[0]),
+            colorfmt='rgb',
+            bufferfmt='ubyte')
+        self.bg_image.texture.blit_buffer(
+            np.flip(
+                image,
+                0).ravel(),
+            colorfmt='rgb',
+            bufferfmt='ubyte')
         self.bg_image.canvas.ask_update()
         self.size_hint = (None, None)
         self.size = (image.shape[1], image.shape[0])
@@ -66,10 +81,26 @@ class PaintWindow(Widget):
         self._bg_buffer = np.zeros(shape=image.shape, dtype=np.uint8)
         self._layer_manager = LayerManager(image)
         self._action_manager = ActionManager(self._layer_manager)
-        self._box_manager = BoxManager(image.shape, self.box_color, self.box_highlight, self.box_thickness)
+        self._box_manager = BoxManager(
+            image.shape,
+            self.box_color,
+            self.box_highlight,
+            self.box_thickness)
 
-        self.box_color = (np.array(get_color_from_hex(ClientConfig.BBOX_UNSELECT)) * 255).astype(np.uint8)[:3]
-        self.box_highlight = (np.array(get_color_from_hex(ClientConfig.BBOX_SELECT)) * 255).astype(np.uint8)[:3]
+        self.box_color = (
+            np.array(
+                get_color_from_hex(
+                    ClientConfig.BBOX_UNSELECT)) *
+            255).astype(
+                np.uint8)[
+                    :3]
+        self.box_highlight = (
+            np.array(
+                get_color_from_hex(
+                    ClientConfig.BBOX_SELECT)) *
+            255).astype(
+                np.uint8)[
+                    :3]
         self.queue_refresh()
 
     def on_box_color(self, instance, value):
@@ -94,7 +125,8 @@ class PaintWindow(Widget):
         if self._layer_manager.get_selected() is None:
             return
         self._action_manager.draw_line(point, pen_size, color)
-        self._box_manager.update_box(self._layer_manager.get_selected(), point, pen_size)
+        self._box_manager.update_box(
+            self._layer_manager.get_selected(), point, pen_size)
 
     def fill(self, point, color=None):
         point = self.inverter.invert(point)
@@ -140,8 +172,14 @@ class PaintWindow(Widget):
             self._box_manager.fit_box(name, self._layer_manager.get_mask(name))
         bounds = self._box_manager.get_bounds()
         if self._refresh_all_flag:
-            self._bg_buffer = collapse_bg(stack, bounds, self._layer_manager.get_visibility(), idx)
-        buffer = collapse_top(stack, bounds, self._layer_manager.get_visibility(), idx, self._bg_buffer)
+            self._bg_buffer = collapse_bg(
+                stack, bounds, self._layer_manager.get_visibility(), idx)
+        buffer = collapse_top(
+            stack,
+            bounds,
+            self._layer_manager.get_visibility(),
+            idx,
+            self._bg_buffer)
         buffer = np.flip(buffer, 0)
         t2 = time.time()
         # Box Operation
@@ -149,7 +187,8 @@ class PaintWindow(Widget):
         self._box_manager.draw_boxes(buffer)
         t3 = time.time()
         # Canvas Operation
-        self.image.texture.blit_buffer(buffer.ravel(), colorfmt='rgb', bufferfmt='ubyte')
+        self.image.texture.blit_buffer(
+            buffer.ravel(), colorfmt='rgb', bufferfmt='ubyte')
         self.image.canvas.ask_update()
         t4 = time.time()
 
@@ -158,8 +197,8 @@ class PaintWindow(Widget):
         except ZeroDivisionError:
             fps = "MAX"
 
-        print("[FPS: %s #%d] | Stack: %f\tCollapse: %f\tBox: %f (%f)\tCanvas: %f" %
-              (fps, stack.shape[0], t1 - t0, t2 - t1, t3 - t2, (t3 - t2)/stack.shape[0],t4 - t3))
+        print("[FPS: %s #%d] | Stack: %f\tCollapse: %f\tBox: %f (%f)\tCanvas: %f" % (
+            fps, stack.shape[0], t1 - t0, t2 - t1, t3 - t2, (t3 - t2) / stack.shape[0], t4 - t3))
 
         # Mark image as unsaved
         with self._refresh_lock:
@@ -169,7 +208,8 @@ class PaintWindow(Widget):
     def load_layers(self, names, colors, masks, boxes, mask_vis, box_vis):
         refresh_all_required = False
 
-        removed_layers = [x for x in self._layer_manager.get_all_names() if x not in names]
+        removed_layers = [
+            x for x in self._layer_manager.get_all_names() if x not in names]
         for name in removed_layers:
             if not name:
                 continue
@@ -177,7 +217,8 @@ class PaintWindow(Widget):
             refresh_all_required = True
 
         # Load new layers
-        new_layers = [x for x in names if x not in self._layer_manager.get_all_names()]
+        new_layers = [
+            x for x in names if x not in self._layer_manager.get_all_names()]
         for i in range(len(new_layers)):
             name = new_layers[i]
             if name is not self._layer_manager.get_selected():
@@ -259,7 +300,11 @@ class ActionManager:
     def __init__(self, layer_manager):
         self._layer_manager = layer_manager
         self._current_line = None
-        self._layer_history = np.empty(shape=(self.initial_capacity,) + self._layer_manager.get_base_image().shape, dtype=np.uint8)
+        self._layer_history = np.empty(
+            shape=(
+                self.initial_capacity,
+            ) + self._layer_manager.get_base_image().shape,
+            dtype=np.uint8)
         self._history_idx = -1
         self._history_max = 0
 
@@ -294,8 +339,13 @@ class ActionManager:
         self._history_max = self._history_idx + 1
 
         if self._history_idx >= self._layer_history.shape[0]:
-            self._layer_history.resize((self._layer_history.shape[0] * self.growth_factor,) + self._layer_history.shape[1:], refcheck=False)
-            print("LayerHistory: %s %s" % (str(self._layer_history.shape), str(self._layer_history.dtype)))
+            self._layer_history.resize(
+                (self._layer_history.shape[0] * self.growth_factor,) + self._layer_history.shape[1:], refcheck=False)
+            print(
+                "LayerHistory: %s %s" %
+                (str(
+                    self._layer_history.shape), str(
+                    self._layer_history.dtype)))
 
         try:
             mat = self._layer_manager.get_mask(name)
@@ -315,7 +365,12 @@ class ActionManager:
             color = self._layer_manager.get_color(name)
 
         mat = self._layer_manager.get_mask(name)
-        self._draw_line_thick(mat, self._current_line, tuple(point), color, pen_size)
+        self._draw_line_thick(
+            mat,
+            self._current_line,
+            tuple(point),
+            color,
+            pen_size)
         self._current_line = tuple(point)
 
     def fill(self, point, color=None):
@@ -340,7 +395,8 @@ class ActionManager:
         if np.all(np.abs(d) <= 5):
             return
         else:
-            step_size = thickness * self.line_granularity / np.sqrt(np.dot(d, d))
+            step_size = thickness * \
+                self.line_granularity / np.sqrt(np.dot(d, d))
             for i in np.arange(0.0, 1.0, step_size):
                 c = np.round(p0 + i * d)
                 mat[disk(c, thickness, shape=mat.shape)] = color
@@ -352,7 +408,10 @@ class LayerManager:
         self._selected_layer = None
 
         self._layers = DynamicTable()
-        self._layers.add_row(STACK_KEY, dtype=np.uint8, cell_shape=self._base_image.shape)
+        self._layers.add_row(
+            STACK_KEY,
+            dtype=np.uint8,
+            cell_shape=self._base_image.shape)
         self._layers.add_row(VISIBLE_KEY, dtype=bool, cell_shape=(1,))
         self._layers.add_row(COLOR_KEY, dtype=np.uint8, cell_shape=(3,))
 
@@ -441,7 +500,12 @@ class LayerManager:
 
 
 class BoxManager:
-    def __init__(self, image_shape, box_color, box_select_color, box_thickness):
+    def __init__(
+            self,
+            image_shape,
+            box_color,
+            box_select_color,
+            box_thickness):
         self.box_thickness = box_thickness
         self.box_color = np.array(box_color)
         self.box_select_color = np.array(box_select_color)
@@ -545,7 +609,8 @@ class BoxManager:
             bounds = self.get_bound(name)
             bounds[:2] = np.min((bounds[:2], point - radius), axis=0)
             bounds[:2] = np.max((bounds[:2], np.zeros(2)), axis=0)
-            bounds[2:] = np.max((bounds[2:], point + radius, np.zeros(2)), axis=0)
+            bounds[2:] = np.max(
+                (bounds[2:], point + radius, np.zeros(2)), axis=0)
             bounds[2:] = np.min((bounds[2:], self.image_shape[:2]), axis=0)
         except KeyError:
             return
@@ -562,5 +627,8 @@ class BoxManager:
             return
 
         select_idx = self.get_idx(self._selected_box)
-        draw_boxes(image, bounds[select_idx:select_idx+1], visible[select_idx:select_idx+1], self.box_select_color, self.box_thickness)
-
+        draw_boxes(image,
+                   bounds[select_idx:select_idx + 1],
+                   visible[select_idx:select_idx + 1],
+                   self.box_select_color,
+                   self.box_thickness)

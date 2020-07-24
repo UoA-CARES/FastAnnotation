@@ -50,9 +50,6 @@ class InstanceAnnotatorScreen(Screen):
 
     @mainthread
     def _update(self):
-        # TODO: Implement a diff system which only updates specific sections of view
-        # E.g. self.queue_update(ToolSelect=True, ImageCanvas=True)
-
         t0 = time.time()
 
         current_iid = self.model.tool.get_current_image_id()
@@ -73,33 +70,32 @@ class InstanceAnnotatorScreen(Screen):
                 labels.append(label)
 
         self.left_control.class_picker.load_labels(labels)
-        self.left_control.class_picker.select(current_label_name)  # MEM 10.7 -> 11.9 (+1.2GB)
+        self.left_control.class_picker.select(current_label_name)
 
         t3 = time.time()
         # Update Layer View
 
         tt0 = time.time()
-        tt1 = time.time()
 
         with self.model.images.get(current_iid) as image:
             tt1 = time.time()
             if image is not None:
-                self.left_control.layer_view.load_layer_items(image.annotations.values())
+                self.left_control.layer_view.load_layer_items(
+                    image.annotations.values())
         tt2 = time.time()
 
         self.left_control.layer_view.select(
             self.model.tool.get_current_layer_name())
 
         tt3 = time.time()
-        print("\t[LV] | %f, %f, %f" % (tt1-tt0, tt2-tt1, tt3-tt2))
-
+        print("\t[LV] | %f, %f, %f" % (tt1 - tt0, tt2 - tt1, tt3 - tt2))
 
         t4 = time.time()
         # Update ImageCanvas
 
         tt0 = time.time()
         if current_iid > 0 and not self.tab_panel.has_tab(current_iid):
-            self.tab_panel.add_tab(current_iid)  # MEM 11.9 -> 18.2 (+5.1GB)
+            self.tab_panel.add_tab(current_iid)
             tab = self.tab_panel.get_tab(current_iid)
             self.tab_panel.switch_to(tab, do_scroll=True)
 
@@ -116,7 +112,7 @@ class InstanceAnnotatorScreen(Screen):
                     image_canvas.load_current_label(current_label)
 
         tt2 = time.time()
-        print("\t[IC] | %f, %f" % (tt1- tt0, tt2-tt1))
+        print("\t[IC] | %f, %f" % (tt1 - tt0, tt2 - tt1))
         t5 = time.time()
         # Update ImageQueue
         self.right_control.load_image_queue()
@@ -133,8 +129,9 @@ class InstanceAnnotatorScreen(Screen):
         # Reset update flag
         with self._update_lock:
             self._update_flag = False
-        print("[CLIENT: %.4f] | Init: %f\tToolSelect: %f\tClassPick: %f\tLayerView: %f\tImageC: %f\tImageQ: %f" %
-              (time.time() - t0, t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, t6 - t5))
+        print(
+            "[CLIENT: %.4f] | Init: %f\tToolSelect: %f\tClassPick: %f\tLayerView: %f\tImageC: %f\tImageQ: %f" %
+            (time.time() - t0, t1 - t0, t2 - t1, t3 - t2, t4 - t3, t5 - t4, t6 - t5))
 
     def on_enter(self, *args):
         self.fetch_image_metas()
@@ -169,7 +166,6 @@ class InstanceAnnotatorScreen(Screen):
         image_canvas = self.get_current_image_canvas()
         if image_canvas is None:
             return
-        image_canvas.prepare_to_save()
         self._save_image()
 
     @background
@@ -266,7 +262,9 @@ class ClassPicker(GridLayout):
         self._change_label(label)
 
     def load_labels(self, labels):
-        deleted_labels = [self.label_dict[x] for x in self.label_dict.keys() if x not in [l.name for l in labels]]
+        deleted_labels = [
+            self.label_dict[x] for x in self.label_dict.keys() if x not in [
+                l.name for l in labels]]
         for l in deleted_labels:
             self.grid.remove_widget(l)
             self.label_dict.pop(l.name, None)
@@ -344,7 +342,9 @@ class LayerView(GridLayout):
         self._change_layer(item)
 
     def load_layer_items(self, annotations):
-        deleted_names = [x for x in self.layers if x not in [a.annotation_name for a in annotations]]
+        deleted_names = [
+            x for x in self.layers if x not in [
+                a.annotation_name for a in annotations]]
         for name in deleted_names:
             layer = self.layers.pop(name, None)
             if layer:
@@ -454,7 +454,8 @@ class DrawTool(MouseDrawnTool):
         self.pen_size = pen_size
         self.keyboard.create_shortcut(("lctrl", "z"), self.paint_window.undo)
         self.keyboard.create_shortcut(("lctrl", "y"), self.paint_window.redo)
-        self.keyboard.create_shortcut("spacebar", self.app.root.current_screen.add_layer)
+        self.keyboard.create_shortcut(
+            "spacebar", self.app.root.current_screen.add_layer)
         self.keyboard.activate()
 
         self.consecutive_clicks = 0
@@ -507,22 +508,17 @@ class ImageCanvasTabPanel(TabbedPanel):
         return self.get_tab(iid) is not None
 
     def add_tab(self, iid):
-        with self.app.root.current_screen.model.images.get(iid) as image_model:  # MEM 11.9 -> 13.1 (+1.2GB)
+        with self.app.root.current_screen.model.images.get(iid) as image_model:
             # Add Tab + Load everything
             tab = ImageCanvasTab(image_model.name)
             tab.image_canvas.painter.bind_image(image_model.image)
             tab.image_canvas.load_image(image_model)
-            tab.image_canvas.load_annotations(image_model.annotations)  # 13.1 -> 18.2 (+5.1GB)
+            tab.image_canvas.load_annotations(image_model.annotations)
             self.add_widget(tab)
 
     def switch_to(self, header, do_scroll=False):
         if not isinstance(header, ImageCanvasTab):
             return
-        if isinstance(self.current_tab, ImageCanvasTab):
-            # self.current_tab.image_canvas.draw_tool.unbind_keyboard()
-            pass
-
-        # header.image_canvas.draw_tool.bind_keyboard()
 
         screen = self.app.root.current_screen
         screen.controller.update_tool_state(
@@ -562,13 +558,6 @@ class ImageCanvas(BoxLayout):
         super().__init__(**kwargs)
         self.app = App.get_running_app()
 
-    def prepare_to_save(self):
-        # Note: This method must be run on the main thread
-        # for layer in self.layer_stack.get_all_layers():
-        #     layer.prepare_matrix()
-        # TODO
-        pass
-
     def load_pen_size(self, size):
         if self.painter.draw_tool is None:
             return
@@ -596,13 +585,7 @@ class ImageCanvas(BoxLayout):
     def load_image(self, image_state):
         if image_state is None:
             return
-        # print("Loading Image")
         self.image_id = image_state.id
-        # texture = utils.mat2texture(image_state.image)
-        # self.image.texture = texture
-        # self.image.size = image_state.shape[1::-1]
-        # TODO is this needed? yes
-        pass
 
     def load_annotations(self, annotations):
         print("Loading Annotations")
@@ -632,40 +615,12 @@ class ImageCanvas(BoxLayout):
                 box_vis.append(a.bbox_enabled)
         if update_required:
             controller.load_annotations(annotations=annotations)
-        self.painter.paint_window.load_layers(names, colors, masks, boxes, mask_vis, box_vis)
-
-        #
-        # if annotations is None:
-        #     return
-        #
-        # if overwrite:
-        #     self.layer_stack.clear()
-        #
-        # active_layers = [x.layer_name for x in self.layer_stack.get_all_layers()]
-        # active_annotations = [x.annotation_name for x in annotations.values()]
-        #
-        # for layer_name in active_layers:
-        #     if layer_name not in active_annotations:
-        #         self.layer_stack.remove_layer(self.layer_stack.get_layer(layer_name))
-        #
-        # for annotation in annotations.values():
-        #     layer = self.layer_stack.get_layer(annotation.annotation_name)
-        #     if overwrite or layer is None:
-        #         layer = DrawableLayer(
-        #             layer_name=annotation.annotation_name,
-        #             size=annotation.mat.shape[1::-1],
-        #             texture=utils.mat2texture(annotation.mat),
-        #             bbox=annotation.bbox)
-        #         self.layer_stack.add_layer(layer)
-        #     with self.app.root.current_screen.model.labels.get(annotation.class_name) as label:
-        #         layer.update_label(label)
-        #     layer.set_mask_visible(annotation.mask_enabled)
-        #     layer.set_bbox_visible(annotation.bbox_enabled)
-        # TODO
-        pass
+        self.painter.paint_window.load_layers(
+            names, colors, masks, boxes, mask_vis, box_vis)
 
     def on_touch_down(self, touch):
-        if self.painter.draw_tool.keyboard.is_key_down("lctrl") and touch.is_mouse_scrolling:
+        if self.painter.draw_tool.keyboard.is_key_down(
+                "lctrl") and touch.is_mouse_scrolling:
             if touch.button == 'scrolldown':
                 self.zoom(1.0 + self.step_scale)
             elif touch.button == 'scrollup':
@@ -684,11 +639,22 @@ class ImageCanvas(BoxLayout):
         self.scatter.pos = self.pos
         self.painter.pos = self.pos
 
-        print("PosList: \n\tScatter: %s\n\tScrollView: %s\n\tPainter: %s\n\tPaintW: %s\n\tDrawTool: %s\n\t" %
-              (str(self.scatter.pos), str(self.scroll_view.pos), str(self.painter.pos), str(self.painter.paint_window.pos), str(self.painter.draw_tool.pos)))
-        print("SizeList: \n\tScatter: %s\n\tScrollView: %s\n\tPainter: %s\n\tPaintW: %s\n\tDrawTool: %s\n\t" %
-              (str(self.scatter.size), str(self.scroll_view.size), str(self.painter.size), str(self.painter.paint_window.size),
-               str(self.painter.draw_tool.size)))
+        print(
+            "PosList: \n\tScatter: %s\n\tScrollView: %s\n\tPainter: %s\n\tPaintW: %s\n\tDrawTool: %s\n\t" %
+            (str(
+                self.scatter.pos), str(
+                self.scroll_view.pos), str(
+                self.painter.pos), str(
+                    self.painter.paint_window.pos), str(
+                        self.painter.draw_tool.pos)))
+        print(
+            "SizeList: \n\tScatter: %s\n\tScrollView: %s\n\tPainter: %s\n\tPaintW: %s\n\tDrawTool: %s\n\t" %
+            (str(
+                self.scatter.size), str(
+                self.scroll_view.size), str(
+                self.painter.size), str(
+                    self.painter.paint_window.size), str(
+                        self.painter.draw_tool.size)))
 
 
 class RightControlColumn(BoxLayout):
@@ -725,7 +691,9 @@ class ImageQueue(GridLayout):
         self.queue_item_dict.clear()
 
     def load_items(self, images):
-        deleted_items = [self.queue_item_dict[x] for x in self.queue_item_dict.keys() if x not in [img.id for img in images]]
+        deleted_items = [
+            self.queue_item_dict[x] for x in self.queue_item_dict.keys() if x not in [
+                img.id for img in images]]
 
         for item in deleted_items:
             self.queue_item_dict.pop(item, None)
@@ -772,4 +740,3 @@ class ImageQueueItem(BoxLayout):
 
         if lock is not None:
             self.image_locked = lock
-

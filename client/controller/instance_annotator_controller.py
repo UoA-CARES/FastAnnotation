@@ -59,7 +59,8 @@ class InstanceAnnotatorController:
                     "Failed to lock image with id %d" %
                     image_id, resp.status_code)
 
-            resp = utils.get_image_by_id(image_id, max_dim=ClientConfig.EDITOR_MAX_DIM)
+            resp = utils.get_image_by_id(
+                image_id, max_dim=ClientConfig.EDITOR_MAX_DIM)
             if resp.status_code == 404:
                 raise ApiException(
                     "Image does not exist with id %d." %
@@ -77,7 +78,8 @@ class InstanceAnnotatorController:
             image_model.image = utils.bytes2mat(img_bytes)
             image_model.shape = image_model.image.shape
 
-            resp = utils.get_image_annotation(image_id, max_dim=ClientConfig.EDITOR_MAX_DIM)
+            resp = utils.get_image_annotation(
+                image_id, max_dim=ClientConfig.EDITOR_MAX_DIM)
             if resp.status_code != 200:
                 raise ApiException(
                     "Failed to retrieve annotations for the image with id %d." %
@@ -139,7 +141,7 @@ class InstanceAnnotatorController:
 
         with self.model.images.get(image_id) as image_model:
             if image_model is None or image_model.image is None:
-                self.fetch_image(image_id) #MEM: 9.0 -> 10.7 (+1.7GB)
+                self.fetch_image(image_id)  # MEM: 9.0 -> 10.7 (+1.7GB)
 
         if not self.model.images.contains(image_id):
             return
@@ -231,7 +233,8 @@ class InstanceAnnotatorController:
                 if img is not None:
                     annotation = img.annotations.get(current_layer, None)
                     if annotation is not None:
-                        self.model.tool.set_current_label_name(annotation.class_name)
+                        self.model.tool.set_current_label_name(
+                            annotation.class_name)
         if current_label is not None:
             self.model.tool.set_current_label_name(current_label)
 

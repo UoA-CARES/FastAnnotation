@@ -95,7 +95,7 @@ def resourcePath():
 
 
 if __name__ == "__main__":
-    resource_add_path(resourcePath())  # add this line
+    resource_add_path(resourcePath())
     app = AnnotationClientApp()
     try:
         app.run()
