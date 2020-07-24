@@ -66,3 +66,25 @@ Note: For the following Installation steps please ensure pip is run with adminis
        ```
        >> docker-compose down -v
        ```
+## Build
+### Client
+#### Windows
+1. Install Tools
+```
+pip install pyinstaller
+```
+2. Navigate to build/windows
+```
+pyinstaller client.spec
+```
+#### Linux
+1. Install Tools (replace python version if required)
+```
+pip install pyinstaller
+pip install --upgrade setuptools
+apt-get install python3.6-dev
+```
+2. Navigate to build/linux directory
+```
+pyinstaller client.spec
+```
