@@ -3,6 +3,8 @@ A tool which aims to streamline the annotation process for computer vision proje
 
 
 ## Installation 
+### Requirements
+Python 3.6 or greater
 
 ### Client
 Note: For the following Installation steps please ensure pip is run with administrative privileges.
@@ -18,12 +20,13 @@ Note: For the following Installation steps please ensure pip is run with adminis
         ```
     2. Ubuntu:
         ```
-        python -m pip install --upgrade pip wheel setuptools
-        python -m pip install kivy
+        python -m pip install -r client_requirements.txt
         ```
 
 ### Server
 1. Flask installation
+    
+    1.Windows installation 
     ```
     python -m pip install flask
     python -m pip install flask-restplus
@@ -31,6 +34,11 @@ Note: For the following Installation steps please ensure pip is run with adminis
     python -m pip install python-dateutil
     python -m pip install mysql-connector-python
     ```
+   2. Ubuntu
+   
+   ```
+   python -m pip install -r server_requirements.txt
+   ```
 
 2. MySql Installation
     1. Windows:
@@ -44,5 +52,17 @@ Note: For the following Installation steps please ensure pip is run with adminis
             ```
         1. Create a connection to the database and run the `database/create_database.sql` script
         1. (Optional) run the 'database/create_test_data.sql' script to populate tables with test data
-    
-             
+    3. Alternatively, Docker can be used to run a MySQL database for development. 
+        1. Download and install Docker and Docker Compose
+        2. Start the container with
+        ```
+       >> docker-compose up
+       ```
+       3. Stop the container with
+       ```
+       >> docker-compose down
+       ```
+       4. To stop the container and delete the volume (deleting all data in the DB)
+       ```
+       >> docker-compose down -v
+       ```
