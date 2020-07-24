@@ -114,7 +114,7 @@ class ImageList(Resource):
         content = request.json
 
         image_data_flag = request.args.get('image-data')
-        if image_data_flag.lower() not in ("true", "false"):
+        if image_data_flag is None or image_data_flag.lower() not in ("true", "false"):
             image_data_flag = True
         else:
             image_data_flag = image_data_flag.lower() == "true"

@@ -6,6 +6,7 @@ import client.utils as utils
 from client.screens.common import *
 from client.utils import ApiException
 from client.utils import background
+from kivy.clock import mainthread
 
 # Load corresponding kivy file
 Builder.load_file(
