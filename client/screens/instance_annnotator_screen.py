@@ -262,9 +262,7 @@ class ClassPicker(GridLayout):
         self._change_label(label)
 
     def load_labels(self, labels):
-        deleted_labels = [
-            self.label_dict[x] for x in self.label_dict.keys() if x not in [
-                l.name for l in labels]]
+        deleted_labels = {self.label_dict[x] for x in self.label_dict.keys()} - {l.name for l in labels}
         for l in deleted_labels:
             self.grid.remove_widget(l)
             self.label_dict.pop(l.name, None)
@@ -342,9 +340,7 @@ class LayerView(GridLayout):
         self._change_layer(item)
 
     def load_layer_items(self, annotations):
-        deleted_names = [
-            x for x in self.layers if x not in [
-                a.annotation_name for a in annotations]]
+        deleted_names = {self.layers} - {a.annotation_name for a in annotations}
         for name in deleted_names:
             layer = self.layers.pop(name, None)
             if layer:
@@ -691,10 +687,7 @@ class ImageQueue(GridLayout):
         self.queue_item_dict.clear()
 
     def load_items(self, images):
-        deleted_items = [
-            self.queue_item_dict[x] for x in self.queue_item_dict.keys() if x not in [
-                img.id for img in images]]
-
+        deleted_items = {self.queue_item_dict[x] for x in self.queue_item_dict.keys()} - {img.id for img in images}
         for item in deleted_items:
             self.queue_item_dict.pop(item, None)
             self.queue.remove_widget(item)
