@@ -350,7 +350,7 @@ def draw_boxes(mat, bounds, visible, color, thick):
     n_box = bounds.shape[0]
     height = mat.shape[0]
     for i in prange(n_box):
-        if np.all(bounds[i, 2:] == 0):
+        if bounds[i, 2] == 0 and bounds[i, 3] == 0:
             continue
 
         if not visible[i]:
