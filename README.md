@@ -73,18 +73,43 @@ Note: For the following Installation steps please ensure pip is run with adminis
 ```
 pip install pyinstaller
 ```
-2. Navigate to build/windows
+2. Navigate to [build_scripts](build_scripts)
 ```
-pyinstaller client.spec
+pyinstaller --clean client.spec
 ```
+3. Move zip to desired location
 #### Linux
-1. Install Tools (replace python version if required)
+1. Install Tools (replace python version as required)
 ```
 pip install pyinstaller
 pip install --upgrade setuptools
 apt-get install python3.6-dev
 ```
-2. Navigate to build/linux directory
+2. Navigate to [build_scripts](build_scripts)
 ```
-pyinstaller client.spec
+pyinstaller --clean client.spec
 ```
+3. Move zip to desired location
+### Server
+#### Windows
+1. Install Tools
+```
+pip installer
+```
+2. Navigate to [build_scripts](build_scripts)
+```
+pyinstaller --clean server.spec
+```
+3. Move zip to desired location
+#### Linux
+1. Install Tools (replace python version as required)
+```
+pip install pyinstaller
+pip install --upgrade setuptools
+apt-get install python3.6-dev
+```
+2. Navigate to [build_scripts](build_scripts)
+```
+pyinstaller --clean server.spec
+```
+3. Move zip to desired location
