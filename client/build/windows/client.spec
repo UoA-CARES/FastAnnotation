@@ -32,3 +32,8 @@ exe = EXE(pyz, Tree('..\\..\\data','client\\data'),
           strip=False,
           upx=True,
           console=True)
+
+
+# Copy config file to output location
+import shutil
+shutil.copyfile('..\\..\\config.ini', '{0}/config.ini'.format(DISTPATH))

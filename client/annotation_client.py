@@ -1,6 +1,8 @@
 import os
 import sys
 import traceback
+import configparser
+import pathlib
 from concurrent.futures import ThreadPoolExecutor
 
 from kivy.app import App
@@ -19,7 +21,10 @@ from client.screens.project_tool_screen import ProjectToolScreen
 
 from client.utils import ApiException
 
+
 Config.set('input', 'mouse', 'mouse,disable_multitouch')
+
+CONFIG_FILE = os.path.join(pathlib.Path(__file__).parent.absolute(), 'config.ini')
 
 
 class MyScreenManager(ScreenManager):
@@ -94,8 +99,42 @@ def resourcePath():
     return os.path.join(os.path.abspath("."))
 
 
+def load_config(path):
+    config = configparser.ConfigParser()
+    config.read(path)
+    try:
+        for k in config[ClientConfig.CONFIG_FILE_SECTION]:
+            try:
+                setattr(ClientConfig, k.upper(), _get_best_type(config[ClientConfig.CONFIG_FILE_SECTION], k))
+            except AttributeError:
+                continue
+    except KeyError:
+        pass
+
+
+def _get_best_type(section, key):
+    output = section.get(key)
+    try:
+        output = section.getboolean(key)
+    except ValueError:
+        pass
+
+    try:
+        output = section.getfloat(key)
+    except ValueError:
+        pass
+
+    try:
+        output = section.getint(key)
+    except ValueError:
+        pass
+
+    return output
+
+
 if __name__ == "__main__":
     resource_add_path(resourcePath())
+    load_config(CONFIG_FILE)
     app = AnnotationClientApp()
     try:
         app.run()

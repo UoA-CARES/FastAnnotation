@@ -4,11 +4,17 @@ from definitions import ROOT_DIR
 
 
 class ClientConfig:
-    """ A collection of constants utilized by the client """
+    """
+    A collection of constants utilized by the client
+
+    NOTE: All editable fields of this Config must be UPPERCASE to ensure correct loading from
+    the config.ini file
+    """
+
+    # The section name which populates this config class
+    CONFIG_FILE_SECTION = "CLIENT"
 
     SERVER_URL = "http://localhost:5001/"
-    # Switch to production URL before building executable
-    #SERVER_URL = ""
 
     SECONDS_PER_MINUTE = 60
     SECONDS_PER_HOUR = 3600
