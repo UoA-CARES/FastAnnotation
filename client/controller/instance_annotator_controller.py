@@ -2,6 +2,7 @@ import numpy as np
 
 import client.utils as utils
 from client.model.instance_annotator_model import ImageState, AnnotationState, LabelState
+from client.model.instance_annotator_model import LabelCache
 from client.utils import ApiException, ClientConfig
 
 
@@ -117,10 +118,10 @@ class InstanceAnnotatorController:
         """
         print("Fetching Class Labels")
 
-        # TODO: These arent stored in the database yet
+        # TODO: These labels are project specific and should be editable by the user and stored in the database.
 
         data = [
-            LabelState("BG", [0, 0, 0, 255]),
+            LabelState(LabelCache.BG_CLASS, [0, 0, 0, 255]),
             LabelState("Trunk", [120, 80, 1, 255]),
             LabelState("Cane", [150, 250, 1, 255]),
             LabelState("Shoot", [1, 130, 200, 255]),
