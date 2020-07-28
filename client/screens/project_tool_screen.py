@@ -41,7 +41,8 @@ class ProjectToolScreen(Screen):
             result = resp.json()
             msg = []
             for row in result["results"]:
-                msg.append(row["error"]["message"])
+                if "error" in row:
+                    msg.append(row["error"]["message"])
             msg = '\n'.join(msg)
             raise ApiException(
                 message="The following errors occurred while trying to upload images:\n %s" %
