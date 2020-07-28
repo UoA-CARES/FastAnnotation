@@ -1,0 +1,347 @@
+#:import utils kivy.utils
+#:import ClientConfig client.client_config.ClientConfig
+#:import common client.screens.common
+
+<InstanceAnnotatorScreen>:
+    left_control: left_control
+    right_control: right_control
+    tab_panel: tab_panel
+    BoxLayout:
+        orientation: "vertical"
+        ActionBar:
+            pos_hint: {'top':1}
+            ActionView:
+                use_separator: True
+                ActionPrevious:
+                    title: app.current_project_name
+                    with_previous: True
+                    on_release: app.show_project_tools(app.current_project_name, app.current_project_id)
+        BoxLayout:
+            orientation: "horizontal"
+            LeftControlColumn:
+                id: left_control
+                size_hint_x: 350 / root.width
+            ImageCanvasTabPanel:
+                id: tab_panel
+
+            RightControlColumn:
+                id: right_control
+                size_hint_x: 350 / root.width
+
+<ImageCanvasTabPanel>:
+    do_default_tab: False
+
+<TabbedPanelItem>:
+    tab_name: self.tab_name
+    unsaved: self.unsaved
+    image_canvas: image_canvas
+    text: self.tab_name + "*" * self.unsaved
+    halign: 'left'
+    valign: 'center'
+    text_size: self.size
+    padding: (10,0)
+    shorten: True
+    ImageCanvas:
+        id: image_canvas
+
+<LeftControlColumn>:
+    tool_select: tool_select
+    class_picker: class_picker
+    layer_view: layer_view
+    orientation: "vertical"
+    canvas:
+        Color:
+            rgba: utils.get_color_from_hex(ClientConfig.CLIENT_DARK_3)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    ToolSelect:
+        id: tool_select
+        size_hint_y: 300 / root.height
+
+    ClassPicker:
+        id: class_picker
+        size_hint_y: 500 / root.height
+    LayerView:
+        id: layer_view
+
+<ToolSelect>:
+    pen_size: pen_size
+    alpha: alpha
+    cols: 1
+    Label:
+        text: "Tool Options"
+        size_hint_y: None
+        height: 50
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_y: None
+        height: 30
+        Label:
+            text: "pen size"
+        NumericInput:
+            id: pen_size
+            min: 1
+            max: 100
+            value: 10
+            step: 5
+            on_value: root.set_pencil_size(self.value)
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_y: None
+        height: 30
+        Label:
+            text: "alpha"
+        NumericInput:
+            id: alpha
+            min: 0.0
+            max: 1.0
+            value: 1.0
+            step: 0.1
+            on_value: root.set_alpha(self.value)
+
+<ClassPicker>:
+    current_class: self.current_class
+    grid: grid
+    cols: 1
+    Label:
+        text: "Class Picker"
+        size_hint_y: None
+        height: 50
+    GridLayout:
+        id: grid
+        cols: 2
+
+<ClassPickerItem>
+    class_color: self.class_color
+    class_name: self.class_name
+    class_id: self.class_id
+    release_cb: self.release_cb
+
+    background_color: root.class_color
+    background_down: ''
+    size_hint_y: None
+    height: 50
+    text: self.class_name
+
+<LayerView>:
+    layer_item_layout: layer_item_layout
+    cols: 1
+    Button:
+        size_hint_y: None
+        height: 50
+        text: "Add Layer"
+        on_release: app.root.current_screen.add_layer()
+    ScrollView:
+        GridLayout:
+            cols: 1
+            size_hint_y: None
+            height: self.minimum_height
+            id: layer_item_layout
+
+<LayerViewItem>:
+    layer_name: self.layer_name
+
+    mask_enabled: self.mask_enabled
+    bbox_enabled: self.bbox_enabled
+    layer_selected: self.layer_selected
+
+    layer_select_cb: self.layer_select_cb
+    layer_delete_cb: self.layer_delete_cb
+
+    button_up_color: self.button_up_color
+    button_down_color : self.button_down_color
+
+    btn_base: btn_base
+    btn_mask: btn_mask
+    btn_bbox: btn_bbox
+
+    height: 50
+    size_hint_y: None
+    Button:
+        id: btn_base
+        size_hint: (1,1)
+        background_color: root.button_up_color
+        on_release: root.layer_select_cb()
+    BoxLayout:
+        size_hint: (1, 1)
+        pos_hint: {'center_x': .5, 'center_y': .5}
+        padding: 8
+        spacing: 8
+        Button:
+            id: btn_mask
+            text: "M"
+            size_hint_x: None
+            width: self.height
+            on_release: root.mask_enabled = not root.mask_enabled
+            background_color: root.button_down_color
+        Button:
+            id: btn_bbox
+            text: "B"
+            size_hint_x: None
+            width: self.height
+            on_release: root.bbox_enabled = not root.bbox_enabled
+            background_color: root.button_down_color
+        Label:
+            text: root.layer_name
+            halign: 'left'
+            valign: 'center'
+            text_size: self.size
+            shorten: True
+    BoxLayout:
+        pos_hint: {'right': 1, 'top': 1}
+        size_hint_y: 0.5
+        size_hint_x: None
+        width: self.height
+        spacing: 8
+        padding: 8
+        Button:
+            text: "X"
+            on_release: root.layer_delete_cb()
+
+<ImageCanvas>:
+    image_id: self.image_id
+    pen_size: self.pen_size
+    alpha: self.alpha
+    current_class: self.current_class
+    current_layer: self.current_layer
+
+    scatter: scatter
+    image: image
+    layer_stack: layer_stack
+    draw_tool: draw_tool
+    scroll_view: scroll_view
+    canvas:
+        Color:
+            rgba: 1.0, 0.0, 0.1, 0.8
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    Scatter:
+        id: scatter
+        pos: (0,0)
+        ScrollView:
+            scroll_type: ['bars', 'content']
+            scroll_timeout: 5
+            bar_width: '10dp'
+            id: scroll_view
+            width: root.width / root.scatter.scale
+            height: root.height / root.scatter.scale
+            on_size: print("ScrollView Size: %s" % str(self.size))
+            on_pos: print("ScrollView Pos: %s" % str(self.pos))
+            RelativeLayout:
+                pos: (0,0)
+                size: root.image.size
+                size_hint:(None, None)
+                Image:
+                    id: image
+                    keep_ratio: True
+                    pos: (0,0)
+                DrawTool:
+                    id: draw_tool
+                    pos: (0,0)
+                LayerStack:
+                    id: layer_stack
+                    pos: (0,0)
+
+
+<LayerStack>:
+    layer_list: self.layer_list
+    current_layer: self.current_layer
+
+<DrawTool>
+    layer: self.layer
+    pen_size: self.pen_size
+    layer_color: self.layer_color
+
+<DrawableLayer>:
+    paint_window: paint_window
+    mask_color: self.mask_color
+
+    bbox_layer: bbox_layer
+    bbox_color: self.bbox_color
+    bbox_thickness: self.bbox_thickness
+    bbox_bounds: self.bbox_bounds
+
+    PaintWindow:
+        id: paint_window
+        size: root.size
+    Widget:
+        id: bbox_layer
+        canvas:
+            Color:
+                rgba: root.bbox_color
+            Line:
+                width: root.bbox_thickness
+                rectangle: root.bbox_bounds
+
+
+<RightControlColumn>:
+    image_queue: image_queue
+    image_queue_control: image_queue_control
+    orientation: "vertical"
+    canvas:
+        Color:
+            rgba: utils.get_color_from_hex(ClientConfig.CLIENT_DARK_3)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    ImageQueueControl:
+        id: image_queue_control
+        size_hint_y: 400 / root.height
+        size_hint_x: 1
+    ImageQueue:
+        id: image_queue
+
+<ImageQueueControl>:
+    btn_save: btn_save
+    cols: 1
+    padding: 16
+    spacing: 16
+    Button:
+        text: "Next"
+        size_hint_y: None
+        height: 50
+        on_release: app.root.current_screen.load_next()
+    Button:
+        id: btn_save
+        text: "Save"
+        size_hint_y: None
+        height: 50
+        disabled: True
+        on_release: app.root.current_screen.save_image()
+    Button:
+        text: "Refresh"
+        size_hint_y: None
+        height: 50
+        on_release: app.root.current_screen.fetch_image_metas()
+
+<ImageQueue>:
+    queue: queue
+    cols: 1
+    Label:
+        text: "Image Queue"
+        size_hint_y: None
+        height: 50
+    ScrollView:
+        GridLayout:
+            id: queue
+            cols: 1
+            size_hint_y: None
+            height: self.minimum_height
+
+
+<ImageQueueItem>:
+    image_name: self.image_name
+    image_id: self.image_id
+    image_open: self.image_open
+    image_locked: self.image_locked
+    button_color: self.button_color
+
+    size_hint_y: None
+    height: 50
+    Button:
+        text: root.image_name
+        background_color: root.button_color
+        on_release: app.root.current_screen.load_image(root.image_id)
+        disabled: root.image_locked
