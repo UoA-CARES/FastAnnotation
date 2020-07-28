@@ -8,7 +8,7 @@ class ClientConfig:
 
     SERVER_URL = "http://localhost:5001/"
     # Switch to production URL before building executable
-    # SERVER_URL = "http://130.216.239.117:5000/"
+    #SERVER_URL = ""
 
     SECONDS_PER_MINUTE = 60
     SECONDS_PER_HOUR = 3600
@@ -25,3 +25,6 @@ class ClientConfig:
     DATA_DIR = os.path.join(ROOT_DIR, 'client', 'data')
 
     CLIENT_POOL_LIMIT = 50
+
+    EDITOR_MAX_DIM = None
+    TILE_MAX_DIM = 150

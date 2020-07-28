@@ -5,8 +5,10 @@ import base64
 import io
 import json
 import os
+import time
 
 import cv2
+from numba import njit, vectorize, uint8, int32, boolean, prange
 import numpy as np
 import requests
 from PIL import Image
@@ -15,6 +17,88 @@ from kivy.graphics.texture import Texture
 from kivy.uix.image import CoreImage
 
 from client.client_config import ClientConfig
+
+
+class DynamicTable:
+    def __init__(self, initial_capacity=2, growth_factor=2):
+        self.capacity = initial_capacity
+        self.growth_factor = growth_factor
+        self._next_col = 0
+        self._active_cols = []
+        self._col_map = {}
+        self._row_dict = {}
+
+    def add_row(self, name, dtype, cell_shape):
+        shape = (self.capacity,) + cell_shape
+        row = np.zeros(shape=shape, dtype=dtype)
+        if name in self._row_dict:
+            raise KeyError("Row named '%s' already exists" % name)
+        self._row_dict[name] = row
+
+    def get_row(self, name):
+        return self._row_dict[name][slice(self._next_col)]
+
+    def add_col(self, name, row_data):
+        if name in self._col_map:
+            raise KeyError("Column named '%s' already exists" % name)
+        self._active_cols.append(name)
+        self._col_map[name] = self._next_col
+        for k in row_data.keys():
+            self._row_dict[k][self._next_col] = row_data[k]
+        self._next_col += 1
+        if self._next_col >= self.capacity:
+            self._resize()
+
+    def get_col(self, name):
+        row_data = {}
+        idx = self._col_map[name]
+        for k in self._row_dict.keys():
+            row_data[k] = self._row_dict[k][idx]
+        return row_data
+
+    def del_col(self, name):
+        self._active_cols.remove(name)
+        self._clean()
+
+    def get_all(self):
+        row_data = {}
+        for k in self._row_dict.keys():
+            row_data[k] = self.get_row(k)
+        return row_data
+
+    def columns(self):
+        return self._active_cols
+
+    def rows(self):
+        return list(self._row_dict.keys())
+
+    def _clean(self):
+        deleted_idxs = [self._col_map[x] for x in self._col_map.keys() if x not in self._active_cols]
+
+        for k in self._row_dict.keys():
+            self._row_dict[k] = np.delete(self._row_dict[k], deleted_idxs, 0)
+
+        self._col_map = {}
+        self._next_col = len(self._active_cols)
+        self.capacity -= 1
+        for i in range(len(self._active_cols)):
+            self._col_map[self._active_cols[i]] = i
+
+    def _resize(self):
+        if len(self._active_cols) < len(self._col_map.keys()):
+            self._clean()
+        self.capacity = self.capacity * self.growth_factor
+        for row in self._row_dict.values():
+            new_shape = list(row.shape)
+            new_shape[0] = self.capacity
+            row.resize(new_shape, refcheck=False)
+        print("Resizing to %d. Total Size: %s" % (self.capacity, '{:,}'.format(self._get_size())))
+
+    def _get_size(self):
+        total = 0
+        for row in self._row_dict.values():
+            total += np.product(row.shape)
+        return total
 
 
 class ApiException(Exception):
@@ -118,29 +202,24 @@ def update_image_meta_by_id(image_id, name=None, lock=None, labeled=None):
     return requests.put(url, headers=headers, data=payload)
 
 
-def get_image_by_id(image_id):
+def get_image_by_id(image_id, max_dim=None):
     url = ClientConfig.SERVER_URL + "images/" + str(image_id)
+    if isinstance(max_dim, int):
+        url += "?max-dim=%d" % max_dim
     headers = {"Accept": "application/json"}
 
     return requests.get(url, headers=headers)
 
 
-def get_images_by_ids(image_ids):
+def get_images_by_ids(image_ids, image_data=False, max_dim=None):
     url = ClientConfig.SERVER_URL + "images"
+    url += "?image-data=%s" % str(image_data)
+    if isinstance(max_dim, int):
+        url += "&max-dim=%d" % max_dim
     headers = {"Accept": "application/json",
                "Content-Type": "application/json"}
     body = {"ids": image_ids}
 
-    payload = json.dumps(body)
-
-    return requests.get(url, headers=headers, data=payload)
-
-
-def get_image_metas_by_ids(image_ids):
-    url = ClientConfig.SERVER_URL + "images?image-data=False"
-    headers = {"Accept": "application/json",
-               "Content-Type": "application/json"}
-    body = {"ids": image_ids}
     payload = json.dumps(body)
 
     return requests.get(url, headers=headers, data=payload)
@@ -170,8 +249,10 @@ def delete_image_annotation(image_id, on_success=None, on_fail=None):
     return requests.delete(url)
 
 
-def get_image_annotation(image_id, on_success=None, on_fail=None):
+def get_image_annotation(image_id, max_dim=None, on_success=None, on_fail=None):
     url = ClientConfig.SERVER_URL + "images/" + str(image_id) + "/annotation"
+    if isinstance(max_dim, int):
+        url += "?max-dim=%d" % max_dim
     headers = {"Accept": "application/json"}
     return requests.get(url, headers=headers)
 
@@ -206,7 +287,7 @@ def decode_mask(b64_str, shape):
 
 def mask2mat(mask):
     mat = mask.astype(np.uint8) * 255
-    return cv2.cvtColor(mat, cv2.COLOR_GRAY2BGR)
+    return cv2.cvtColor(mat, cv2.COLOR_GRAY2RGB)
 
 
 def mat2mask(mat):
@@ -257,4 +338,107 @@ def texture2mat(texture):
 
     mat = np.array(pil_image)
     mat = cv2.flip(mat, 0)
-    return cv2.cvtColor(mat, cv2.COLOR_RGBA2BGR)
+    return cv2.cvtColor(mat, cv2.COLOR_RGBA2RGB)
+
+
+def invert_coords(coords):
+    return coords[::-1]
+
+
+@njit(parallel=True)
+def draw_boxes(mat, bounds, visible, color, thick):
+    n_box = bounds.shape[0]
+    height = mat.shape[0]
+    for i in prange(n_box):
+        if bounds[i, 2] == 0 and bounds[i, 3] == 0:
+            continue
+
+        if not visible[i]:
+            continue
+
+        # Inner coordinates
+        x0, y0, x1, y1 = bounds[i]
+
+        # Flip coords to accomodate kivy
+        ix0 = height - x1
+        ix1 = height - x0
+        iy0 = y0
+        iy1 = y1
+
+        ox0 = max(ix0 - thick, 0)
+        oy0 = max(iy0 - thick, 0)
+        ox1 = min(ix1 + thick, mat.shape[0])
+        oy1 = min(iy1 + thick, mat.shape[1])
+
+        mat[ox0:ox1, oy0:iy0] = color
+        mat[ox0:ox1, iy1:oy1] = color
+
+        mat[ox0:ix0, oy0:oy1] = color
+        mat[ix1:ox1, oy0:oy1] = color
+
+
+def collapse_bg(stack, bounds, visible, idx):
+    if bounds.shape[0] < 2:
+        return stack[0]
+    else:
+        return _collapse_bg(stack, bounds, visible, idx).copy()
+
+
+def collapse_top(stack, bounds, visible, idx, bg):
+    stack_idx = idx + 1
+    if idx < 0 or not visible[stack_idx]:
+        return bg
+    else:
+        top = stack[stack_idx]
+        top_bounds = bounds[idx]
+        return _collapse_top(bg, top, top_bounds)
+
+
+def fit_box(img):
+    if not np.any(img):
+        return img.shape[0], img.shape[1], 0, 0
+
+    rows = np.any(img, axis=1)
+    cols = np.any(img, axis=0)
+    rmin, rmax = np.where(rows)[0][[0, -1]]
+    cmin, cmax = np.where(cols)[0][[0, -1]]
+    return rmin, cmin, rmax, cmax
+
+
+def is_valid_bounds(bounds):
+    bounds = np.array(bounds)
+    if np.sum(bounds) <= 0:
+        return False
+    return np.all(bounds[:2] < bounds[2:])
+
+
+@njit(parallel=True)
+def _collapse_top(bg, top, top_bounds):
+    out = bg.copy()
+    rr = slice(top_bounds[0], top_bounds[2])
+    cc = slice(top_bounds[1], top_bounds[3])
+    out[rr, cc] = _image_add(top[rr, cc], out[rr, cc])
+    return out
+
+@njit
+def _collapse_bg(stack, bounds, visible, idx):
+    n_stack = stack.shape[0]
+    out = stack[0].copy()
+    for n in range(1, n_stack):
+        if not visible[n]:
+            continue
+
+        if n is idx + 1:
+            continue
+
+        img = stack[n]
+        box = bounds[n - 1]
+        rr = slice(box[0], box[2])
+        cc = slice(box[1], box[3])
+        out[rr, cc] = _image_add(img[rr, cc], out[rr, cc])
+    return out
+
+
+@vectorize([uint8(uint8, uint8)])
+def _image_add(top, bot):
+    return bot if top == 0 else top

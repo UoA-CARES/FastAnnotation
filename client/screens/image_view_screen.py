@@ -1,5 +1,6 @@
 from kivy.app import App
 from kivy.uix.screenmanager import Screen
+from kivy.clock import mainthread
 
 import client.utils as utils
 from client.screens.common import *
@@ -46,14 +47,8 @@ class ImageViewScreen(Screen):
                 resp.status_code)
 
         result = resp.json()
-
-        resp = utils.get_images_by_ids(result["ids"])
-        if resp.status_code != 200:
-            raise ApiException(
-                "Failed to load project images from server.",
-                resp.status_code)
+        resp = utils.get_images_by_ids(result["ids"], image_data=True, max_dim=ClientConfig.TILE_MAX_DIM)
         result = resp.json()
-
         for row in result["images"]:
             img = utils.decode_image(row["image_data"])
             self.add_thumbnail(img)

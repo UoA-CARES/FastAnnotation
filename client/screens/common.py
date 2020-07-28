@@ -2,6 +2,7 @@ import math
 import os
 
 import numpy as np
+from kivy.core.window import Window
 from kivy.graphics import Color
 from kivy.graphics import Rectangle, Fbo
 from kivy.lang import Builder
@@ -40,6 +41,10 @@ class TileView(GridLayout):
 
 
 class MouseDrawnTool(FloatLayout):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.keyboard = KeyboardManager(Window.request_keyboard(lambda: None, self))
+
     # Override these in child classes
     def on_touch_down_hook(self, touch):
         pass
@@ -62,6 +67,42 @@ class MouseDrawnTool(FloatLayout):
     def on_touch_up(self, touch):
         self.on_touch_up_hook(touch)
         return super(MouseDrawnTool, self).on_touch_up(touch)
+
+
+class KeyboardManager:
+    def __init__(self, keyboard):
+        self._keyboard_shortcuts = {}
+        self.keycode_buffer = {}
+        self._keyboard = keyboard
+
+    def activate(self):
+        self._keyboard.bind(on_key_down=self.on_key_down)
+        self._keyboard.bind(on_key_up=self.on_key_up)
+
+    def deactivate(self):
+        self._keyboard.unbind(on_key_down=self.on_key_down)
+        self._keyboard.unbind(on_key_up=self.on_key_up)
+
+    def is_key_down(self, keycode):
+        return keycode in self.keycode_buffer
+
+    def create_shortcut(self, shortcut, func):
+        if not isinstance(shortcut, tuple):
+            shortcut = (shortcut,)
+        self._keyboard_shortcuts[shortcut] = func
+
+    def on_key_down(self, keyboard, keycode, text, modifiers):
+        if keycode[1] in self.keycode_buffer:
+            return
+        self.keycode_buffer[keycode[1]] = keycode[0]
+
+    def on_key_up(self, keyboard, keycode):
+        for shortcut in self._keyboard_shortcuts.keys():
+            if keycode[1] in shortcut and set(
+                    shortcut).issubset(self.keycode_buffer):
+                self._keyboard_shortcuts[shortcut]()
+
+        self.keycode_buffer.pop(keycode[1])
 
 
 class NumericInput(StackLayout):
@@ -99,51 +140,3 @@ class NumericInput(StackLayout):
         x = np.clip(x, self.min, self.max)
         # Maintain type of value (int or float)
         self.value = type(self.value)(x)
-
-
-class TransparentBlackEffect(EffectBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.glsl = """
-        vec4 effect(vec4 color, sampler2D texture, vec2 tex_coords, vec2 coords)
-        {
-            if (color.r < 0.01 && color.g < 0.01 && color.b < 0.01) {
-                return vec4(0.0, 0.0, 0.0, 0.0);
-            }
-            return color;
-        }
-        """
-
-
-class PaintWindow(Widget):
-    fbo = ObjectProperty(None)
-    mask_layer = ObjectProperty(None)
-    color = ObjectProperty(None)
-
-    def refresh(self):
-        with self.mask_layer.canvas:
-            self.color = Color([1, 0, 1, 1])
-            self.fbo = Fbo(size=self.size)
-            Rectangle(size=self.size, texture=self.fbo.texture)
-
-    def set_visible(self, visible=True):
-        self.mask_layer.canvas.opacity = float(visible)
-
-    def update_color(self, color):
-        if self.color is None:
-            return
-        self.color.rgba = color
-
-    def add_instruction(self, instruction):
-        self.fbo.add(instruction)
-
-    def remove_instruction(self, instruction):
-        new_children = [x for x in self.fbo.children if x != instruction]
-        self.fbo.clear()
-        self.fbo.bind()
-        self.fbo.clear_buffer()
-        self.fbo.release()
-        for c in new_children:
-            self.fbo.add(c)
-
-        self.fbo.draw()
