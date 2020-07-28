@@ -1,10 +1,16 @@
 # -*- mode: python ; coding: utf-8 -*-
-
+import shutil
 import os
+from sys import platform
 block_cipher = None
 
+shutil.rmtree(DISTPATH, ignore_errors=True)
+os.mkdir(DISTPATH)
+shutil.rmtree(workpath, ignore_errors=True)
+os.mkdir(workpath)
+
 spec_root = os.path.abspath(SPECPATH)
-server_root = os.path.join(spec_root, "..", "..")
+server_root = os.path.join(spec_root, "..", "server")
 
 a = Analysis([os.path.join(server_root, "app.py")],
              pathex=[server_root],
@@ -38,12 +44,9 @@ exe = EXE(a.scripts,
 
 
 # Copy config file to output location
-import shutil
 shutil.copyfile(os.path.join(server_root, "config.ini"), os.path.join(DISTPATH, "config.ini"))
 
 # Check Platform
-from sys import platform
-
 output = "fastannotation_server_"
 if platform.startswith('win32') or platform.startswith('cygwin'):
     output += "win"

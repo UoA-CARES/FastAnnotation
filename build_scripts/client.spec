@@ -1,12 +1,18 @@
 # -*- mode: python -*-
-
+import shutil
 import os
+from sys import platform
 from kivy_deps import sdl2, glew
 
 block_cipher = None
 
+shutil.rmtree(DISTPATH, ignore_errors=True)
+os.mkdir(DISTPATH)
+shutil.rmtree(workpath, ignore_errors=True)
+os.mkdir(workpath)
+
 spec_root = os.path.abspath(SPECPATH)
-client_root = os.path.join(spec_root, "..", "..")
+client_root = os.path.join(spec_root, "..", "client")
 
 a = Analysis([os.path.join(client_root, "annotation_client.py")],
              pathex=[client_root],
@@ -15,7 +21,7 @@ a = Analysis([os.path.join(client_root, "annotation_client.py")],
              hiddenimports=['scipy.special.cython_special', 'skimage.feature._orb_descriptor_positions'],
              hookspath=[],
              runtime_hooks=[],
-             excludes=[],
+             excludes=['tornado'],
              win_no_prefer_redirects=False,
              win_private_assemblies=False,
              cipher=block_cipher)
@@ -37,12 +43,9 @@ exe = EXE(pyz, Tree(os.path.join(client_root, "data"), os.path.join("client", "d
 
 
 # Copy config file to output location
-import shutil
-shutil.copyfile('..\\..\\config.ini', '{0}/config.ini'.format(DISTPATH))
+shutil.copyfile(os.path.join(client_root, "config.ini"), os.path.join(DISTPATH, "config.ini"))
 
 # Check Platform
-from sys import platform
-
 output = "fastannotation_client_"
 if platform.startswith('win32') or platform.startswith('cygwin'):
     output += "win"
