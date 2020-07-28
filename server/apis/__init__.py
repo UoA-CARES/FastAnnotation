@@ -9,6 +9,5 @@ api = Api(
     description='The annotation handling API for the FastAnnotation tool.',
 )
 
-
 api.add_namespace(project_api)
 api.add_namespace(image_api)
