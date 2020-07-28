@@ -67,23 +67,17 @@ Note: For the following Installation steps please ensure pip is run with adminis
        >> docker-compose down -v
        ```
 ## Build
-### Client
-#### Windows
-1. Install Tools
+
+### Linux builds
+Prior to any linux builds please install the appropriate python dev tools and upgrade setuptools. (Replace python verson as required)
 ```
-pip install pyinstaller
-```
-2. Navigate to [build_scripts](build_scripts)
-```
-pyinstaller --clean client.spec
-```
-3. Move zip to desired location
-#### Linux
-1. Install Tools (replace python version as required)
-```
-pip install pyinstaller
 pip install --upgrade setuptools
 apt-get install python3.6-dev
+```
+### Client
+1. Install Pyinstaller (if required)
+```
+pip install pyinstaller
 ```
 2. Navigate to [build_scripts](build_scripts)
 ```
@@ -91,22 +85,9 @@ pyinstaller --clean client.spec
 ```
 3. Move zip to desired location
 ### Server
-#### Windows
-1. Install Tools
+1. Install Pyinstaller (if required)
 ```
 pip installer
-```
-2. Navigate to [build_scripts](build_scripts)
-```
-pyinstaller --clean server.spec
-```
-3. Move zip to desired location
-#### Linux
-1. Install Tools (replace python version as required)
-```
-pip install pyinstaller
-pip install --upgrade setuptools
-apt-get install python3.6-dev
 ```
 2. Navigate to [build_scripts](build_scripts)
 ```
