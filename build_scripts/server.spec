@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+
 import shutil
 import os
 from sys import platform
@@ -6,17 +7,20 @@ block_cipher = None
 
 shutil.rmtree(DISTPATH, ignore_errors=True)
 os.mkdir(DISTPATH)
-shutil.rmtree(workpath, ignore_errors=True)
-os.mkdir(workpath)
 
 spec_root = os.path.abspath(SPECPATH)
 server_root = os.path.join(spec_root, "..", "server")
+config_file = os.path.join(server_root, "config.ini")
+
+# Copy config file to build and target locations
+shutil.copyfile(config_file, os.path.join(spec_root, "config.ini"))
+shutil.copyfile(config_file, os.path.join(DISTPATH, "config.ini"))
 
 a = Analysis([os.path.join(server_root, "app.py")],
              pathex=[server_root],
              binaries=[],
              datas=[],
-             hiddenimports=["mysql.connector.locales.eng"],
+             hiddenimports=[],
              hookspath=[],
              runtime_hooks=[],
              excludes=[],
@@ -24,16 +28,15 @@ a = Analysis([os.path.join(server_root, "app.py")],
              win_private_assemblies=False,
              cipher=block_cipher,
              noarchive=False)
-
 pyz = PYZ(a.pure, a.zipped_data,
              cipher=block_cipher)
-
-exe = EXE(a.scripts,
+exe = EXE(pyz,
+          a.scripts,
           a.binaries,
           a.zipfiles,
           a.datas,
           [],
-          name='fastannotation_server',
+          name='test',
           debug=False,
           bootloader_ignore_signals=False,
           strip=False,
@@ -41,10 +44,6 @@ exe = EXE(a.scripts,
           upx_exclude=[],
           runtime_tmpdir=None,
           console=True )
-
-
-# Copy config file to output location
-shutil.copyfile(os.path.join(server_root, "config.ini"), os.path.join(DISTPATH, "config.ini"))
 
 # Check Platform
 output = "fastannotation_server_"
@@ -59,3 +58,7 @@ else:
 
 # Create target zip
 shutil.make_archive(output, "zip", DISTPATH)
+
+# Clean up
+shutil.rmtree(workpath)
+os.remove(os.path.join(os.path.join(spec_root, "config.ini")))

@@ -7,7 +7,7 @@ from definitions import ROOT_DIR
 
 class ServerConfig:
     CONFIG_FILE_SECTION = "SERVER"
-    DATABASE_HOST = ""
+    DATABASE_HOST = "localhost"
     DATABASE_USER = ""
     DATABASE_PASSWORD = ""
     DATABASE_NAME = ""

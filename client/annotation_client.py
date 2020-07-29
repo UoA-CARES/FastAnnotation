@@ -23,7 +23,7 @@ from client.utils import ApiException
 
 Config.set('input', 'mouse', 'mouse,disable_multitouch')
 
-CONFIG_PATH = os.path.join(pathlib.Path(__file__).parent.absolute(), 'config.ini')
+
 
 
 class MyScreenManager(ScreenManager):
@@ -100,6 +100,7 @@ def resourcePath():
 
 if __name__ == "__main__":
     resource_add_path(resourcePath())
+    CONFIG_PATH = os.path.join(pathlib.Path(sys.argv[0]).parent.absolute(), 'config.ini')
     ClientConfig.load_config(CONFIG_PATH)
     app = AnnotationClientApp()
     try:
