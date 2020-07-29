@@ -87,7 +87,7 @@ pyinstaller --clean client.spec
 ### Server
 1. Install Pyinstaller (if required)
 ```
-pip installer
+pip installer pyinstaller
 ```
 2. Navigate to [build_scripts](build_scripts)
 ```
