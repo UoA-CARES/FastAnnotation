@@ -136,6 +136,10 @@ class InstanceAnnotatorScreen(Screen):
         self.fetch_image_metas()
         self.fetch_class_labels()
 
+    @mainthread
+    def export(self):
+        utils.export_dataset(self.app.current_project_id)
+
     @background
     def load_next(self):
         image_ids = self.model.images.keys()

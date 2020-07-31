@@ -16,6 +16,9 @@
                     title: app.current_project_name
                     with_previous: True
                     on_release: app.show_project_tools(app.current_project_name, app.current_project_id)
+                ActionButton:
+                    text: "Export"
+                    on_release: app.root.current_screen.export()
         BoxLayout:
             orientation: "horizontal"
             LeftControlColumn:
