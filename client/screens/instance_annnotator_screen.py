@@ -1,3 +1,5 @@
+size_hint_y: None
+height: 50
 import time
 from threading import Lock
 
@@ -79,7 +81,7 @@ class InstanceAnnotatorScreen(Screen):
 
         with self.model.images.get(current_iid) as image:
             tt1 = time.time()
-            if image is not None:
+            if image is not None and image.annotations is not None:
                 self.left_control.layer_view.load_layer_items(
                     image.annotations.values())
         tt2 = time.time()
@@ -120,11 +122,8 @@ class InstanceAnnotatorScreen(Screen):
         with self.model.images.get(current_iid) as image:
             if image is not None:
                 self.tab_panel.current_tab.set_unsaved(image.unsaved)
-
-            if image is not None and image.unsaved:
-                self.right_control.image_queue_control.btn_save.disabled = False
-            else:
-                self.right_control.image_queue_control.btn_save.disabled = True
+                self.right_control.image_queue_control.btn_save.disabled = not image.unsaved
+                self.right_control.image_queue_control.btn_label.state = "down" if image.is_labeled else "normal"
         t6 = time.time()
         # Reset update flag
         with self._update_lock:
@@ -136,6 +135,10 @@ class InstanceAnnotatorScreen(Screen):
     def on_enter(self, *args):
         self.fetch_image_metas()
         self.fetch_class_labels()
+
+    @mainthread
+    def export(self):
+        utils.export_dataset(self.app.current_project_id)
 
     @background
     def load_next(self):
@@ -174,6 +177,15 @@ class InstanceAnnotatorScreen(Screen):
         if image_canvas is None:
             return
         self.controller.save_image(image_canvas)
+        self.queue_update()
+
+    @mainthread
+    def label_image(self, state):
+        self._label_image(state)
+
+    @background
+    def _label_image(self, state):
+        self.controller.update_image_meta(unsaved=True, is_labeled=state)
         self.queue_update()
 
     @background
@@ -262,10 +274,14 @@ class ClassPicker(GridLayout):
         self._change_label(label)
 
     def load_labels(self, labels):
-        deleted_labels = {self.label_dict[x] for x in self.label_dict.keys()} - {l.name for l in labels}
-        for l in deleted_labels:
+        deleted_labels = set(self.label_dict.keys()) - set(l.name for l in labels)
+        for name in deleted_labels:
+            l = next((x for x in labels if x.name == name), None)
+            if l is None:
+                continue
+
             self.grid.remove_widget(l)
-            self.label_dict.pop(l.name, None)
+            self.label_dict.pop(l.class_name, None)
 
         for l in labels:
             if l.name not in self.label_dict:
@@ -340,7 +356,7 @@ class LayerView(GridLayout):
         self._change_layer(item)
 
     def load_layer_items(self, annotations):
-        deleted_names = {self.layers} - {a.annotation_name for a in annotations}
+        deleted_names = set(self.layers) - set(a.annotation_name for a in annotations)
         for name in deleted_names:
             layer = self.layers.pop(name, None)
             if layer:
@@ -584,6 +600,8 @@ class ImageCanvas(BoxLayout):
         self.image_id = image_state.id
 
     def load_annotations(self, annotations):
+        if annotations is None:
+            return
         print("Loading Annotations")
         names = []
         colors = []
@@ -672,6 +690,7 @@ class RightControlColumn(BoxLayout):
 
 class ImageQueueControl(GridLayout):
     btn_save = ObjectProperty(None)
+    btn_label = ObjectProperty(None)
 
 
 class ImageQueue(GridLayout):
@@ -687,10 +706,11 @@ class ImageQueue(GridLayout):
         self.queue_item_dict.clear()
 
     def load_items(self, images):
-        deleted_items = {self.queue_item_dict[x] for x in self.queue_item_dict.keys()} - {img.id for img in images}
-        for item in deleted_items:
-            self.queue_item_dict.pop(item, None)
-            self.queue.remove_widget(item)
+        deleted_items = set(self.queue_item_dict.keys()) - set(img.id for img in images)
+        for iid in deleted_items:
+            item = self.queue_item_dict.pop(iid, None)
+            if item is not None:
+                self.queue.remove_widget(item)
 
         for img in images:
             if img.id not in self.queue_item_dict:

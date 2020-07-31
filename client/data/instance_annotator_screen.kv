@@ -16,6 +16,9 @@
                     title: app.current_project_name
                     with_previous: True
                     on_release: app.show_project_tools(app.current_project_name, app.current_project_id)
+                ActionButton:
+                    text: "Export"
+                    on_release: app.root.current_screen.export()
         BoxLayout:
             orientation: "horizontal"
             LeftControlColumn:
@@ -255,25 +258,32 @@
 
 <ImageQueueControl>:
     btn_save: btn_save
+    btn_label: btn_label
     cols: 1
     padding: 16
     spacing: 16
     Button:
         text: "Next"
         size_hint_y: None
-        height: 50
+        height: 40
         on_release: app.root.current_screen.load_next()
     Button:
         id: btn_save
         text: "Save"
         size_hint_y: None
-        height: 50
+        height: 40
         disabled: True
         on_release: app.root.current_screen.save_image()
+    ToggleButton:
+        id: btn_label
+        text: "Label" if self.state == "normal" else "Unlabel"
+        size_hint_y: None
+        height: 40
+        on_release: app.root.current_screen.label_image(self.state == "down")
     Button:
         text: "Refresh"
         size_hint_y: None
-        height: 50
+        height: 40
         on_release: app.root.current_screen.fetch_image_metas()
 
 <ImageQueue>:

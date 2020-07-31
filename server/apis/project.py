@@ -1,12 +1,12 @@
 import base64
 import os
 from pathlib import Path
-from shutil import copyfile, rmtree
+from shutil import copyfile, rmtree, make_archive
 
 import cv2
 import numpy as np
-from flask import request
-from flask_restplus import Namespace, Resource, fields
+from flask import request, Response
+from flask_restplus import Namespace, Resource, fields, marshal
 from mysql.connector.errors import DatabaseError
 
 from server.core.common_dtos import common_store
@@ -376,9 +376,6 @@ class ProjectImageList(Resource):
 @api.doc(params={"pid": "An id associated with a project."})
 @api.route("/<int:pid>/dataset")
 class ProjectDataset(Resource):
-    @api.response(200, "OK", api.models['generic_response'])
-    @api.response(500, "Unexpected Failure", api.models['generic_response'])
-    @api.marshal_with(api.models['generic_response'], skip_none=True)
     def get(self, pid):
         q_labelled_images = "SELECT image_id FROM fadb.image "
         q_labelled_images += "WHERE project_fid = %s"
@@ -394,12 +391,8 @@ class ProjectDataset(Resource):
         q_annotations += q_labelled_images
         q_annotations += ")"
 
-        rmtree(
-            os.path.join(
-                ServerConfig.DATA_ROOT_DIR,
-                "export",
-                str(pid)),
-            ignore_errors=True)
+        root_path = os.path.join(ServerConfig.DATA_ROOT_DIR, "export", str(pid))
+        rmtree(root_path, ignore_errors=True)
 
         jpgs_folder = os.path.join(
             ServerConfig.DATA_ROOT_DIR,
@@ -450,6 +443,17 @@ class ProjectDataset(Resource):
                 copyfile(row["mask_path"], new_mask_path)
                 copyfile(row["info_path"], new_info_path)
 
+            # Make Zip File
+            make_archive(root_path, 'zip', root_path)
+            zipname = root_path + ".zip"
+            with open(zipname, 'rb') as f:
+                data = f.readlines()
+            os.remove(zipname)
+            return Response(data, headers={
+                'Content-Type': 'application/zip',
+                'Content-Disposition': 'attachment; filename=%s.zip;' % str(pid)
+            })
+
         except DatabaseError as e:
             response = {
                 "action": "failed",
@@ -468,10 +472,4 @@ class ProjectDataset(Resource):
                 }
             }
             code = 500
-        else:
-            response = {
-                "action": "created"
-            }
-            code = 200
-
-        return response, code
+        return marshal(response), code

@@ -208,7 +208,7 @@ class PaintWindow(Widget):
     def load_layers(self, names, colors, masks, boxes, mask_vis, box_vis):
         refresh_all_required = False
 
-        removed_layers = {self._layer_manager.get_all_names()} - {names}
+        removed_layers = set(self._layer_manager.get_all_names()) - set(names)
         for name in removed_layers:
             if not name:
                 continue
@@ -216,13 +216,13 @@ class PaintWindow(Widget):
             refresh_all_required = True
 
         # Load new layers
-        new_layers = list({names} - {self._layer_manager.get_all_names()})
-        for i in range(len(new_layers)):
-            name = new_layers[i]
+        new_layers = set(names) - set(self._layer_manager.get_all_names())
+        for name in new_layers:
             if name is not self._layer_manager.get_selected():
                 refresh_all_required = True
-            self.add_layer(name, colors[i], mask=masks[i])
-            self._box_manager.set_bound(name, boxes[i])
+            idx = names.index(name)
+            self.add_layer(name, colors[idx], mask=masks[idx])
+            self._box_manager.set_bound(name, boxes[idx])
 
         # Load Visibility
         for i in range(len(names)):

@@ -5,19 +5,20 @@ import base64
 import io
 import json
 import os
-import time
+from tkinter import filedialog
+from urllib.request import urlretrieve
 
 import cv2
-from numba import njit, vectorize, uint8, int32, boolean, prange
 import numpy as np
 import requests
 from PIL import Image
 from kivy.app import App
 from kivy.graphics.texture import Texture
 from kivy.uix.image import CoreImage
+from numba import njit, vectorize, uint8, prange
 
 from client.client_config import ClientConfig
-
+from definitions import ROOT_DIR
 
 class DynamicTable:
     def __init__(self, initial_capacity=2, growth_factor=2):
@@ -256,6 +257,16 @@ def get_image_annotation(image_id, max_dim=None, on_success=None, on_fail=None):
     headers = {"Accept": "application/json"}
     return requests.get(url, headers=headers)
 
+
+def export_dataset(project_id):
+    url = ClientConfig.SERVER_URL + "projects/" + str(project_id) + "/dataset"
+    directory = filedialog.asksaveasfilename(title="Export dataset as zip",
+                                             initialdir=ROOT_DIR,
+                                             filetypes=[("ZIP Files", "*.zip")],
+                                             defaultextension=".zip")
+    if directory is None:
+        return
+    return urlretrieve(url, directory)
 
 # ======================
 # === Helper methods ===
