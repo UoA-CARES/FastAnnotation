@@ -177,7 +177,12 @@ class InstanceAnnotatorScreen(Screen):
 
     @mainthread
     def label_image(self, state):
-        print(state)
+        self._label_image(state)
+
+    @background
+    def _label_image(self, state):
+        self.controller.update_image_meta(unsaved=True, is_labeled=state)
+        self.queue_update()
 
     @background
     def add_layer(self):

@@ -254,20 +254,20 @@ class Image(Resource):
         #TODO: Update to raise 409 when lock is requested on already locked object
 
         content = request.json
-
-        query = "UPDATE image SET"
+        query_params = []
         params = []
+
         if "name" in content:
-            query += " image_name = %s"
+            query_params.append("image_name = %s")
             params.append(content["name"])
         if "ext" in content:
-            query += " image_ext = %s"
+            query_params.append("image_ext = %s")
             params.append(content["ext"])
         if "is_locked" in content:
-            query += " is_locked = %s"
+            query_params.append("is_locked = %s")
             params.append(content["is_locked"])
         if "is_labeled" in content:
-            query += " is_labeled = %s"
+            query_params.append("is_labeled = %s")
             params.append(content["is_labeled"])
 
         if not params:
@@ -280,7 +280,7 @@ class Image(Resource):
             }
             return response, 400
 
-        query += " WHERE image_id = %s"
+        query = "UPDATE image SET {0} WHERE image_id = %s".format(", ".join(query_params))
         params.append(iid)
         try:
             db.query(query, tuple(params))

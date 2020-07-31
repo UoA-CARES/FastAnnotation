@@ -206,7 +206,7 @@ class InstanceAnnotatorController:
                 msg = "Failed to save annotations to the image with id %d." % iid
                 raise ApiException(message=msg, code=resp.status_code)
 
-            resp = utils.update_image_meta_by_id(iid, lock=False)
+            resp = utils.update_image_meta_by_id(iid, lock=False, labeled=image_model.is_labeled)
             if resp.status_code != 200:
                 msg = "Failed to unlock the image with id %d." % iid
                 raise ApiException(message=msg, code=resp.status_code)
@@ -231,7 +231,7 @@ class InstanceAnnotatorController:
             # If current layer changes update current_label aswell
             iid = self.model.tool.get_current_image_id()
             with self.model.images.get(iid) as img:
-                if img is not None:
+                if img is not None and img.annotations is not None:
                     annotation = img.annotations.get(current_layer, None)
                     if annotation is not None:
                         self.model.tool.set_current_label_name(
@@ -293,6 +293,7 @@ class InstanceAnnotatorController:
             self,
             iid=None,
             is_locked=None,
+            is_labeled=None,
             is_open=None,
             unsaved=None):
 
@@ -305,6 +306,9 @@ class InstanceAnnotatorController:
 
             if is_locked is not None:
                 image.is_locked = is_locked
+
+            if is_labeled is not None:
+                image.is_labeled = is_labeled
 
             if is_open is not None:
                 image.is_open = is_open
