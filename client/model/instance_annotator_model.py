@@ -180,6 +180,7 @@ class ImageState:
                  name="",
                  is_open=False,
                  is_locked=False,
+                 is_labeled=False,
                  unsaved=False,
                  image=None,
                  annotations=None):
@@ -188,6 +189,7 @@ class ImageState:
         self.unsaved = unsaved
         self.is_open = is_open
         self.is_locked = is_locked
+        self.is_labeled = is_labeled
 
         # State for opened images, should be none if unopened
         self.image = image
