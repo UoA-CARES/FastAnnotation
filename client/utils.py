@@ -21,9 +21,9 @@ from client.client_config import ClientConfig
 from definitions import ROOT_DIR
 
 class DynamicTable:
-    def __init__(self, initial_capacity=2, growth_factor=2):
+    def __init__(self, initial_capacity=10, growth_amount=10):
         self.capacity = initial_capacity
-        self.growth_factor = growth_factor
+        self.growth_amount = growth_amount
         self._next_col = 0
         self._active_cols = []
         self._col_map = {}
@@ -88,7 +88,7 @@ class DynamicTable:
     def _resize(self):
         if len(self._active_cols) < len(self._col_map.keys()):
             self._clean()
-        self.capacity = self.capacity * self.growth_factor
+        self.capacity = self.capacity + self.growth_amount
         for row in self._row_dict.values():
             new_shape = list(row.shape)
             new_shape[0] = self.capacity
