@@ -7,6 +7,11 @@ from definitions import ROOT_DIR
 
 class ServerConfig:
     CONFIG_FILE_SECTION = "SERVER"
+
+    SERVER_PORT = "5001"
+    SERVER_DEBUG = True
+    SERVER_PUBLIC = True
+
     DATABASE_HOST = "localhost"
     DATABASE_USER = ""
     DATABASE_PASSWORD = ""
