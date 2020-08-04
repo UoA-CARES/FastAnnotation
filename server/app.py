@@ -1,4 +1,3 @@
-import pkg_resources
 import pathlib
 import os
 from flask import Flask
