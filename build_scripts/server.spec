@@ -31,6 +31,7 @@ a = Analysis([os.path.join(server_root, "app.py")],
 pyz = PYZ(a.pure, a.zipped_data,
              cipher=block_cipher)
 exe = EXE(pyz,
+          Tree(os.path.join(server_root, "data"), os.path.join("server", "data")),
           a.scripts,
           a.binaries,
           a.zipfiles,
