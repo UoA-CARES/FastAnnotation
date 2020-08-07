@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import time
 
@@ -27,7 +28,7 @@ class InstanceAnnotatorController:
 
         result = resp.json()
 
-        resp = utils.get_images_by_ids(result["ids"], image_data=False)
+        resp = utils.get_images_by_ids(result["ids"])
         if resp.status_code != 200:
             raise ApiException(
                 "Failed to retrieve image meta information.",
@@ -61,8 +62,7 @@ class InstanceAnnotatorController:
                     "Failed to lock image with id %d" %
                     image_id, resp.status_code)
 
-            resp = utils.get_image_by_id(
-                image_id, max_dim=ClientConfig.EDITOR_MAX_DIM)
+            resp = utils.get_image_by_id(image_id)
             if resp.status_code == 404:
                 raise ApiException(
                     "Image does not exist with id %d." %
@@ -73,15 +73,15 @@ class InstanceAnnotatorController:
                     image_id, resp.status_code)
 
             result = resp.json()
-            img_bytes = utils.decode_image(result["image_data"])
+
             image_model.id = result["id"]
             image_model.name = result["name"]
             image_model.is_locked = result["is_locked"]
-            image_model.image = utils.bytes2mat(img_bytes)
+
+            image_model.image = utils.download_image(image_id)
             image_model.shape = image_model.image.shape
 
-            resp = utils.get_image_annotation(
-                image_id, max_dim=ClientConfig.EDITOR_MAX_DIM)
+            resp = utils.get_image_annotation(image_id)
             if resp.status_code != 200:
                 raise ApiException(
                     "Failed to retrieve annotations for the image with id %d." %
@@ -95,7 +95,6 @@ class InstanceAnnotatorController:
                 # TODO: Add actual annotation names to database
                 annotation_name = row["name"]
                 class_name = row["class_name"]
-                mask = utils.decode_mask(row["mask_data"], row["shape"][:2])
 
                 bbox = row["bbox"]
                 print("CLIENT: incoming bbox")
@@ -104,7 +103,7 @@ class InstanceAnnotatorController:
                 annotations[annotation_name] = AnnotationState(
                     annotation_name=annotation_name,
                     class_name=class_name,
-                    mat=utils.mask2mat(mask),
+                    mat=utils.download_annotation(row["id"]),
                     bbox=bbox)
 
                 i += 1

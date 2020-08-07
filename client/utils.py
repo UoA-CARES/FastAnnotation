@@ -20,6 +20,7 @@ from numba import njit, vectorize, uint8, prange
 from client.client_config import ClientConfig
 from definitions import ROOT_DIR
 
+
 class DynamicTable:
     def __init__(self, initial_capacity=10, growth_amount=10):
         self.capacity = initial_capacity
@@ -203,20 +204,52 @@ def update_image_meta_by_id(image_id, name=None, lock=None, labeled=None):
     return requests.put(url, headers=headers, data=payload)
 
 
-def get_image_by_id(image_id, max_dim=None):
+def get_image_by_id(image_id):
     url = ClientConfig.SERVER_URL + "images/" + str(image_id)
-    if isinstance(max_dim, int):
-        url += "?max-dim=%d" % max_dim
     headers = {"Accept": "application/json"}
 
     return requests.get(url, headers=headers)
 
 
-def get_images_by_ids(image_ids, image_data=False, max_dim=None):
+def download_image(image_id):
+    url = ClientConfig.SERVER_URL + "files/image/" + str(image_id)
+
+    resp = requests.get(url)
+    if resp.status_code == 404:
+        raise ApiException(
+            "Image does not exist with id %d." %
+            image_id, resp.status_code)
+    elif resp.status_code != 200:
+        raise ApiException(
+            "Failed to retrieve image with id %d." %
+            image_id, resp.status_code)
+
+    nparr = np.frombuffer(resp.content, np.uint8)
+    mat = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
+    return mat
+
+
+def download_annotation(annotation_id):
+    url = ClientConfig.SERVER_URL + "files/annotation/" + str(annotation_id)
+    resp = requests.get(url)
+    if resp.status_code == 404:
+        raise ApiException(
+            "Annotation does not exist with id %d." %
+            annotation_id, resp.status_code)
+    elif resp.status_code != 200:
+        raise ApiException(
+            "Failed to retrieve annotation with id %d." %
+            annotation_id, resp.status_code)
+
+    nparr = np.frombuffer(resp.content, np.uint8)
+    mat = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
+    return mat
+
+
+def get_images_by_ids(image_ids):
     url = ClientConfig.SERVER_URL + "images"
-    url += "?image-data=%s" % str(image_data)
-    if isinstance(max_dim, int):
-        url += "&max-dim=%d" % max_dim
     headers = {"Accept": "application/json",
                "Content-Type": "application/json"}
     body = {"ids": image_ids}
