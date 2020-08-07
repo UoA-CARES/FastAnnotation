@@ -36,6 +36,8 @@ class ClientConfig:
     EDITOR_MAX_DIM = None
     TILE_MAX_DIM = 150
 
+    REFIT_IMAGES = False
+
     @classmethod
     def load_config(cls, path):
         def get_best_type(section, key):
