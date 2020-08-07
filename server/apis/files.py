@@ -70,7 +70,7 @@ class AnnotationDownload(Resource):
         A file serving operation for retrieving annotations by id.
         """
 
-        query = "SELECT image_path FROM instance_seg_meta WHERE annotation_id  = %s"
+        query = "SELECT mask_path FROM instance_seg_meta WHERE annotation_id  = %s"
         try:
             result, _ = db.query(query, (aid,))
         except DatabaseError as e:
@@ -102,5 +102,5 @@ class AnnotationDownload(Resource):
                 }
                 return response, 404
 
-            path = result[0]["image_path"]
+            path = result[0]["mask_path"]
             return send_file(path)
