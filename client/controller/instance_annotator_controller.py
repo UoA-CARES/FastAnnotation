@@ -300,6 +300,8 @@ class InstanceAnnotatorController:
             is_open=None,
             unsaved=None):
 
+        diff = False
+
         if iid is None:
             iid = self.model.tool.get_current_image_id()
 
@@ -308,9 +310,11 @@ class InstanceAnnotatorController:
                 return
 
             if is_locked is not None:
+                diff = diff or image.is_locked is not is_locked
                 image.is_locked = is_locked
 
             if is_labeled is not None:
+                diff = diff or image.is_labeled is not is_labeled
                 image.is_labeled = is_labeled
 
             if is_open is not None:
@@ -321,11 +325,13 @@ class InstanceAnnotatorController:
                 image.unsaved = unsaved
 
             self.model.images.add(iid, image)
-            resp = utils.update_image_meta_by_id(iid, lock=image.is_locked, labeled=image.is_labeled)
-            if resp.status_code != 200:
-                raise ApiException(
-                    "Failed to update image with id %d" %
-                    iid, resp.status_code)
+
+            if diff:
+                resp = utils.update_image_meta_by_id(iid, lock=image.is_locked, labeled=image.is_labeled)
+                if resp.status_code != 200:
+                    raise ApiException(
+                        "Failed to update image with id %d" %
+                        iid, resp.status_code)
 
     def add_blank_layer(self, iid):
         with self.model.images.get(iid) as img:
