@@ -533,8 +533,7 @@ class ImageCanvasTabPanel(TabbedPanel):
             return
 
         screen = self.app.root.current_screen
-        screen.controller.update_tool_state(
-            current_iid=header.image_canvas.image_id)
+        screen.controller.update_tool_state(current_iid=header.image_canvas.image_id, current_layer=None)
         screen.queue_update()
         return super(ImageCanvasTabPanel, self).switch_to(header, do_scroll)
 
@@ -620,7 +619,7 @@ class ImageCanvas(BoxLayout):
                 names.append(a.annotation_name)
                 masks.append(a.mat)
                 mask_vis.append(a.mask_enabled)
-                if not utils.is_valid_bounds(a.bbox):
+                if not utils.is_valid_bounds(a.bbox) or ClientConfig.REFIT_IMAGES:
                     new_box = utils.fit_box(a.mat)
                     if not np.all(np.equal(new_box, a.bbox)):
                         a.bbox = new_box

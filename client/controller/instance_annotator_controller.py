@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 import client.utils as utils
 from client.model.instance_annotator_model import ImageState, AnnotationState, LabelState
@@ -89,6 +90,7 @@ class InstanceAnnotatorController:
             result = resp.json()
             annotations = {}
             i = 0
+            t0 = time.time()
             for row in result["annotations"]:
                 # TODO: Add actual annotation names to database
                 annotation_name = row["name"]
@@ -107,6 +109,7 @@ class InstanceAnnotatorController:
 
                 i += 1
 
+            t1 = time.time()
             image_model.annotations = annotations
             self.model.images.add(image_id, image_model)
 
@@ -218,15 +221,15 @@ class InstanceAnnotatorController:
                           pen_size=None,
                           alpha=None,
                           current_iid=None,
-                          current_label=None,
-                          current_layer=None):
+                          current_label='',
+                          current_layer=''):
         if pen_size is not None:
             self.model.tool.set_pen_size(pen_size)
         if alpha is not None:
             self.model.tool.set_alpha(alpha)
         if current_iid is not None:
             self.model.tool.set_current_image_id(current_iid)
-        if current_layer is not None:
+        if current_layer != '':
             self.model.tool.set_current_layer_name(current_layer)
             # If current layer changes update current_label aswell
             iid = self.model.tool.get_current_image_id()
@@ -236,7 +239,7 @@ class InstanceAnnotatorController:
                     if annotation is not None:
                         self.model.tool.set_current_label_name(
                             annotation.class_name)
-        if current_label is not None:
+        if current_label != '':
             self.model.tool.set_current_label_name(current_label)
 
     def load_annotations(self, iid=None, annotations=None):
