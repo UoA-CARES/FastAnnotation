@@ -532,10 +532,10 @@ class ImageCanvasTabPanel(TabbedPanel):
         if not isinstance(header, ImageCanvasTab):
             return
 
-        screen = self.app.root.current_screen
-        screen.controller.update_tool_state(
-            current_iid=header.image_canvas.image_id)
-        screen.queue_update()
+        if isinstance(self.current_tab, ImageCanvasTab):
+            self.current_tab.deactivate()
+        header.activate()
+
         return super(ImageCanvasTabPanel, self).switch_to(header, do_scroll)
 
 
@@ -546,6 +546,7 @@ class ImageCanvasTab(TabbedPanelItem):
 
     def __init__(self, name, **kwargs):
         self.tab_name = name
+        self.app = App.get_running_app()
         super().__init__(**kwargs)
 
     def get_iid(self):
@@ -554,6 +555,21 @@ class ImageCanvasTab(TabbedPanelItem):
     def set_unsaved(self, unsaved):
         self.unsaved = unsaved
         self.image_canvas.unsaved_state = unsaved
+
+    def activate(self):
+        screen = self.app.root.current_screen
+        # Set Current Image Id and Current Layer
+        screen.controller.update_tool_state(current_iid=self.image_canvas.image_id, current_layer=None)
+        screen.queue_update()
+
+        # Activate Shortcuts
+        self.image_canvas.painter.draw_tool.keyboard.activate()
+
+    def deactivate(self):
+        # Deactivate Shortcuts
+        self.image_canvas.painter.draw_tool.keyboard.deactivate()
+
+
 
 
 class ImageCanvas(BoxLayout):
@@ -620,7 +636,7 @@ class ImageCanvas(BoxLayout):
                 names.append(a.annotation_name)
                 masks.append(a.mat)
                 mask_vis.append(a.mask_enabled)
-                if not utils.is_valid_bounds(a.bbox):
+                if not utils.is_valid_bounds(a.bbox) or ClientConfig.REFIT_IMAGES:
                     new_box = utils.fit_box(a.mat)
                     if not np.all(np.equal(new_box, a.bbox)):
                         a.bbox = new_box

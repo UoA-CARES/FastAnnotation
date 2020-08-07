@@ -472,4 +472,4 @@ class ProjectDataset(Resource):
                 }
             }
             code = 500
-        return marshal(response), code
+        return marshal(response, api.models['generic_response']), code

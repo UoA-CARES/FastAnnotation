@@ -1,4 +1,3 @@
-import pkg_resources
 import pathlib
 import os
 from flask import Flask
@@ -15,4 +14,5 @@ if __name__ == "__main__":
     app.config['RESTPLUS_MASK_SWAGGER'] = False
 
     api.init_app(app)
-    app.run(debug=True, port="5001")
+    host = '0.0.0.0' if ServerConfig.SERVER_PUBLIC else 'localhost'
+    app.run(debug=ServerConfig.SERVER_DEBUG, host=host, port=ServerConfig.SERVER_PORT)
