@@ -89,16 +89,13 @@ bulk_annotations = api.model('bulk_annotations', {
     'annotations': fields.List(fields.Nested(annotation))
 })
 
-bulk_image_request = api.model('bulk_image_request', {'ids': fields.List(
-    fields.Integer, required=True, description="The list of image ids to retrieve")})
-
 
 @api.route("")
 class ImageList(Resource):
     @api.response(200, "OK", bulk_images)
     @api.response(400, "Invalid Payload")
     @api.response(500, "Unexpected Failure", api.models["generic_response"])
-    @api.expect(bulk_image_request)
+    @api.expect(api.models["bulk_id_request"])
     @api.param(
         'image-data',
         description='A flag indicating whether image data is required',

@@ -212,6 +212,9 @@ def get_image_by_id(image_id, max_dim=None):
     return requests.get(url, headers=headers)
 
 
+def get_image_data_by_id(image_id):
+
+
 def get_images_by_ids(image_ids, image_data=False, max_dim=None):
     url = ClientConfig.SERVER_URL + "images"
     url += "?image-data=%s" % str(image_data)

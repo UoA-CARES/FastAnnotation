@@ -59,7 +59,7 @@ class ImageDownload(Resource):
             return send_file(path)
 
 
-@api.route("/annotation/<int:aid>")
+@api.route("/image/<int:iid>/annotations")
 class AnnotationDownload(Resource):
     @api.response(200, "OK")
     @api.response(400, "Database Failure", api.models["generic_response"])
@@ -67,10 +67,10 @@ class AnnotationDownload(Resource):
     @api.response(500, "Unexpected Failure", api.models["generic_response"])
     def get(self, aid):
         """
-        A file serving operation for retrieving annotations by id.
+        A file serving operation for retrieving all annotations associated with an image.
         """
 
-        query = "SELECT mask_path FROM instance_seg_meta WHERE annotation_id  = %s"
+        query = "SELECT annnotation_id, mask_path FROM instance_seg_meta WHERE image_id  = %s"
         try:
             result, _ = db.query(query, (aid,))
         except DatabaseError as e:
