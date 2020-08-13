@@ -5,6 +5,7 @@ import base64
 import io
 import json
 import os
+import zipfile
 from tkinter import filedialog
 from urllib.request import urlretrieve
 
@@ -228,6 +229,31 @@ def download_image(image_id):
     mat = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
     return mat
+
+def download_annotations(image_id):
+    url = ClientConfig.SERVER_URL + "files/image/" + str(image_id) + "/annotations"
+
+    resp = requests.get(url)
+    if resp.status_code == 404:
+        raise ApiException(
+            "Image does not exist with id %d." %
+            image_id, resp.status_code)
+    elif resp.status_code != 200:
+        raise ApiException(
+            "Failed to retrieve image with id %d." %
+            image_id, resp.status_code)
+
+    z = zipfile.ZipFile(io.BytesIO(resp.content))
+
+    output = {}
+    for filename in z.namelist():
+        annotation_id, _ = os.path.splitext(filename)
+        nparr = np.frombuffer(z.read(filename), np.uint8)
+        mat = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
+        output[int(annotation_id)] = mat
+
+    return output
 
 
 def download_annotation(annotation_id):

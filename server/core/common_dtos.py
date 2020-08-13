@@ -40,3 +40,7 @@ common_store.add_dto(generic_model)
 common_store.add_dto(Model('bulk_response', {
     'results': fields.List(fields.Nested(generic_model, skip_none=True))
 }))
+
+
+common_store.add_dto(Model('bulk_id_request', {'ids': fields.List(
+    fields.Integer, required=True, description="The list of ids.")}))
