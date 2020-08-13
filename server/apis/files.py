@@ -1,3 +1,7 @@
+import io
+import os
+import zipfile
+
 from flask import send_file
 from flask_restplus import Namespace, Resource
 from mysql.connector.errors import DatabaseError
@@ -65,14 +69,38 @@ class AnnotationDownload(Resource):
     @api.response(400, "Database Failure", api.models["generic_response"])
     @api.response(404, "Image not found", api.models["generic_response"])
     @api.response(500, "Unexpected Failure", api.models["generic_response"])
-    def get(self, aid):
+    def get(self, iid):
         """
         A file serving operation for retrieving all annotations associated with an image.
         """
 
-        query = "SELECT annnotation_id, mask_path FROM instance_seg_meta WHERE image_id  = %s"
+        query = "SELECT annotation_id, mask_path, info_path FROM instance_seg_meta WHERE image_id  = %s"
         try:
-            result, _ = db.query(query, (aid,))
+            result, _ = db.query(query, (iid,))
+
+            if not result:
+                response = {
+                    "action": "failed",
+                    "error": {
+                        "code": 404,
+                        "message": "Image with id %s, does not exist." % iid
+                    }
+                }
+                return response, 404
+
+            data = io.BytesIO()
+            with zipfile.ZipFile(data, mode='w') as z:
+                for row in result:
+                    _, ext = os.path.splitext(os.path.basename(row['mask_path']))
+                    z.write(row['mask_path'], str(row["annotation_id"]) + ext)
+            data.seek(0)
+
+            return send_file(
+                data,
+                mimetype='application/zip',
+                as_attachment=True,
+                attachment_filename='data.zip'
+            )
         except DatabaseError as e:
             response = {
                 "action": "failed",
@@ -91,16 +119,3 @@ class AnnotationDownload(Resource):
                 }
             }
             return response, 500
-        else:
-            if not result:
-                response = {
-                    "action": "failed",
-                    "error": {
-                        "code": 404,
-                        "message": "Image with id %s, does not exist." % aid
-                    }
-                }
-                return response, 404
-
-            path = result[0]["mask_path"]
-            return send_file(path)
