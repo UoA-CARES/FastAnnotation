@@ -195,17 +195,8 @@ class InstanceAnnotatorController:
 
             image_model.annotations = annotations
 
-            resp = utils.add_image_annotation(iid, image_model.annotations)
-            if resp.status_code == 200:
-                result = resp.json()
-                errors = []
-                for row in result["results"]:
-                    errors.append(row["error"]["message"])
-                errors = '\n'.join(errors)
-                msg = "The following errors occurred while saving annotations to the image with id %d:\n" % iid
-                msg += errors
-                raise ApiException(message=msg, code=resp.status_code)
-            elif resp.status_code != 201:
+            resp = utils.upload_annotations(iid, image_model.annotations)
+            if resp.status_code != 201:
                 msg = "Failed to save annotations to the image with id %d." % iid
                 raise ApiException(message=msg, code=resp.status_code)
 

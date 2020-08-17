@@ -304,6 +304,30 @@ def add_image_annotation(image_id, annotations):
     return requests.post(url, headers=headers, data=payload)
 
 
+import zipfile
+def upload_annotations(image_id, annotations, ext='.jpg'):
+    url = ClientConfig.SERVER_URL + "files/image/" + str(image_id) + "/annotations"
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, mode='w') as z:
+        for annotation in annotations.values():
+            img_bytes = mat2bytes(annotation.mat, ext)
+            z.writestr(annotation.annotation_name + ext, img_bytes)
+    data.seek(0)
+
+    payload = {"image_id": image_id, "annotations": []}
+    for annotation in annotations.values():
+        body = {
+            'name': annotation.annotation_name,
+            'bbox': np.array(annotation.bbox).tolist(),
+            'class_name': annotation.class_name,
+            'shape': annotation.mat.shape}
+        payload["annotations"].append(body)
+
+    payload = json.dumps(payload).encode('utf-8')
+
+    return requests.post(url, files={'file': data, 'info': payload})
+
+
 def delete_image_annotation(image_id, on_success=None, on_fail=None):
     url = ClientConfig.SERVER_URL + "images/" + str(image_id) + "/annotation"
     return requests.delete(url)
