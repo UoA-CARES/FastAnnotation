@@ -21,7 +21,7 @@ class ServerConfig:
 
     DATA_ROOT_DIR = os.path.join(ROOT_DIR, "database", "DATA")
     XML_TEMPLATE_PATH = os.path.join(ROOT_DIR, "server", "data", "template.xml")
-    DEFAULT_IMAGE_EXT = ".jpg"
+    DEFAULT_IMAGE_EXT = ".png"
     DEFAULT_MASK_EXT = ".png"
     DEFAULT_INFO_EXT = ".xml"
 

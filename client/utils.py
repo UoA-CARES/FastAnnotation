@@ -8,7 +8,6 @@ import os
 import zipfile
 from tkinter import filedialog
 from urllib.request import urlretrieve
-
 import cv2
 import numpy as np
 import requests
@@ -230,6 +229,7 @@ def download_image(image_id):
     mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
     return mat
 
+
 def download_annotations(image_id):
     url = ClientConfig.SERVER_URL + "files/image/" + str(image_id) + "/annotations"
 
@@ -252,7 +252,6 @@ def download_annotations(image_id):
         mat = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
         output[int(annotation_id)] = mat
-
     return output
 
 
@@ -270,7 +269,7 @@ def download_annotation(annotation_id):
 
     nparr = np.frombuffer(resp.content, np.uint8)
     mat = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
+    mat = cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY)
     return mat
 
 
@@ -305,7 +304,7 @@ def add_image_annotation(image_id, annotations):
 
 
 import zipfile
-def upload_annotations(image_id, annotations, ext='.jpg'):
+def upload_annotations(image_id, annotations, ext='.png'):
     url = ClientConfig.SERVER_URL + "files/image/" + str(image_id) + "/annotations"
     data = io.BytesIO()
     with zipfile.ZipFile(data, mode='w') as z:
@@ -481,7 +480,7 @@ def collapse_bg(stack, bounds, visible, idx):
 def collapse_top(stack, bounds, visible, idx, bg):
     stack_idx = idx + 1
     if idx < 0 or not visible[stack_idx]:
-        return bg
+        return bg.copy()
     else:
         top = stack[stack_idx]
         top_bounds = bounds[idx]

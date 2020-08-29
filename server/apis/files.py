@@ -169,7 +169,7 @@ class AnnotationDownload(Resource):
 
             folder = os.path.dirname(mask_path)
             Path(folder).mkdir(parents=True, exist_ok=True)
-            cv2.imwrite(mask_path, utils.bytes2mat(zf.read(row['name'] + ".jpg")))
+            cv2.imwrite(mask_path, utils.bytes2mat(zf.read(row['name'] + ServerConfig.DEFAULT_MASK_EXT)))
 
             utils.save_info(
                 shape=row["shape"],
@@ -181,10 +181,11 @@ class AnnotationDownload(Resource):
         q_replace = "REPLACE INTO instance_seg_meta (annotation_name, image_id, mask_path, info_path, class_name)"
         try:
             db.query(q_delete_old, (iid,))
-            q_replace += "\nVALUES "
-            q_replace += ",".join(["(%s,%s,%s,%s,%s)"] * len(new_rows))
-            params = tuple(sum(new_rows, ()))
-            _, ids = db.query(q_replace, params)
+            if new_rows:
+                q_replace += "\nVALUES "
+                q_replace += ",".join(["(%s,%s,%s,%s,%s)"] * len(new_rows))
+                params = tuple(sum(new_rows, ()))
+                _, ids = db.query(q_replace, params)
         except DatabaseError as e:
             response = {
                 "action": "failed",
