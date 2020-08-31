@@ -15,4 +15,4 @@ if __name__ == "__main__":
 
     api.init_app(app)
     host = '0.0.0.0' if ServerConfig.SERVER_PUBLIC else 'localhost'
-    app.run(debug=ServerConfig.SERVER_DEBUG, host=host, port=ServerConfig.SERVER_PORT)
+    app.run(debug=ServerConfig.SERVER_DEBUG, host=host, port=ServerConfig.SERVER_PORT, threaded=True)
