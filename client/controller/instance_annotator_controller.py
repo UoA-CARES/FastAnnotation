@@ -90,27 +90,31 @@ class InstanceAnnotatorController:
             result = resp.json()
             annotations = {}
             i = 0
-            mask_dict = utils.download_annotations(image_id)
-            for row in result["annotations"]:
-                # TODO: Add actual annotation names to database
-                annotation_name = row["name"]
-                class_name = row["class_name"]
-                mat = mask_dict.get(row["id"], None)
-                if mat is None:
-                    raise ApiException("Failed to download annotation with id %d." % row["id"], resp.status_code)
+            try:
+                mask_dict = utils.download_annotations(image_id)
+            except ApiException:
+                pass
+            else:
+                for row in result["annotations"]:
+                    # TODO: Add actual annotation names to database
+                    annotation_name = row["name"]
+                    class_name = row["class_name"]
+                    mat = mask_dict.get(row["id"], None)
+                    if mat is None:
+                        raise ApiException("Failed to download annotation with id %d." % row["id"], resp.status_code)
 
-                bbox = row["bbox"]
-                print("CLIENT: incoming bbox")
-                print("\t%s" % str(bbox))
+                    bbox = row["bbox"]
+                    print("CLIENT: incoming bbox")
+                    print("\t%s" % str(bbox))
 
-                annotations[annotation_name] = AnnotationState(
-                    annotation_name=annotation_name,
-                    class_name=class_name,
-                    mat=mat,
-                    bbox=bbox)
+                    annotations[annotation_name] = AnnotationState(
+                        annotation_name=annotation_name,
+                        class_name=class_name,
+                        mat=mat,
+                        bbox=bbox)
 
-                i += 1
-            image_model.annotations = annotations
+                    i += 1
+                image_model.annotations = annotations
             self.model.images.add(image_id, image_model)
 
     def fetch_class_labels(self, project_id):
