@@ -114,7 +114,7 @@ class InstanceAnnotatorController:
                         bbox=bbox)
 
                     i += 1
-                image_model.annotations = annotations
+            image_model.annotations = annotations
             self.model.images.add(image_id, image_model)
 
     def fetch_class_labels(self, project_id):
