@@ -1,3 +1,4 @@
+import cv2
 import numpy as np
 import time
 
@@ -27,7 +28,7 @@ class InstanceAnnotatorController:
 
         result = resp.json()
 
-        resp = utils.get_images_by_ids(result["ids"], image_data=False)
+        resp = utils.get_images_by_ids(result["ids"])
         if resp.status_code != 200:
             raise ApiException(
                 "Failed to retrieve image meta information.",
@@ -61,8 +62,7 @@ class InstanceAnnotatorController:
                     "Failed to lock image with id %d" %
                     image_id, resp.status_code)
 
-            resp = utils.get_image_by_id(
-                image_id, max_dim=ClientConfig.EDITOR_MAX_DIM)
+            resp = utils.get_image_by_id(image_id)
             if resp.status_code == 404:
                 raise ApiException(
                     "Image does not exist with id %d." %
@@ -73,15 +73,15 @@ class InstanceAnnotatorController:
                     image_id, resp.status_code)
 
             result = resp.json()
-            img_bytes = utils.decode_image(result["image_data"])
+
             image_model.id = result["id"]
             image_model.name = result["name"]
             image_model.is_locked = result["is_locked"]
-            image_model.image = utils.bytes2mat(img_bytes)
+
+            image_model.image = utils.download_image(image_id)
             image_model.shape = image_model.image.shape
 
-            resp = utils.get_image_annotation(
-                image_id, max_dim=ClientConfig.EDITOR_MAX_DIM)
+            resp = utils.get_image_annotation(image_id)
             if resp.status_code != 200:
                 raise ApiException(
                     "Failed to retrieve annotations for the image with id %d." %
@@ -90,12 +90,14 @@ class InstanceAnnotatorController:
             result = resp.json()
             annotations = {}
             i = 0
-            t0 = time.time()
+            mask_dict = utils.download_annotations(image_id)
             for row in result["annotations"]:
                 # TODO: Add actual annotation names to database
                 annotation_name = row["name"]
                 class_name = row["class_name"]
-                mask = utils.decode_mask(row["mask_data"], row["shape"][:2])
+                mat = mask_dict.get(row["id"], None)
+                if mat is None:
+                    raise ApiException("Failed to download annotation with id %d." % row["id"], resp.status_code)
 
                 bbox = row["bbox"]
                 print("CLIENT: incoming bbox")
@@ -104,12 +106,10 @@ class InstanceAnnotatorController:
                 annotations[annotation_name] = AnnotationState(
                     annotation_name=annotation_name,
                     class_name=class_name,
-                    mat=utils.mask2mat(mask),
+                    mat=mat,
                     bbox=bbox)
 
                 i += 1
-
-            t1 = time.time()
             image_model.annotations = annotations
             self.model.images.add(image_id, image_model)
 
@@ -195,17 +195,8 @@ class InstanceAnnotatorController:
 
             image_model.annotations = annotations
 
-            resp = utils.add_image_annotation(iid, image_model.annotations)
-            if resp.status_code == 200:
-                result = resp.json()
-                errors = []
-                for row in result["results"]:
-                    errors.append(row["error"]["message"])
-                errors = '\n'.join(errors)
-                msg = "The following errors occurred while saving annotations to the image with id %d:\n" % iid
-                msg += errors
-                raise ApiException(message=msg, code=resp.status_code)
-            elif resp.status_code != 201:
+            resp = utils.upload_annotations(iid, image_model.annotations)
+            if resp.status_code != 201:
                 msg = "Failed to save annotations to the image with id %d." % iid
                 raise ApiException(message=msg, code=resp.status_code)
 

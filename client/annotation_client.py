@@ -24,8 +24,6 @@ from client.utils import ApiException
 Config.set('input', 'mouse', 'mouse,disable_multitouch')
 
 
-
-
 class MyScreenManager(ScreenManager):
     """
     Defines the screens which should be included in the ScreenManager at launch.

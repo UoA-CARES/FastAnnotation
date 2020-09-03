@@ -89,16 +89,13 @@ bulk_annotations = api.model('bulk_annotations', {
     'annotations': fields.List(fields.Nested(annotation))
 })
 
-bulk_image_request = api.model('bulk_image_request', {'ids': fields.List(
-    fields.Integer, required=True, description="The list of image ids to retrieve")})
-
 
 @api.route("")
 class ImageList(Resource):
     @api.response(200, "OK", bulk_images)
     @api.response(400, "Invalid Payload")
     @api.response(500, "Unexpected Failure", api.models["generic_response"])
-    @api.expect(bulk_image_request)
+    @api.expect(api.models["bulk_id_request"])
     @api.param(
         'image-data',
         description='A flag indicating whether image data is required',
@@ -225,14 +222,14 @@ class Image(Resource):
             }
             code = 500
         else:
-            if response["image_ext"] == ".jpg":
-                img = cv2.imread(response["image_path"])
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                if max_dim is not None:
-                    img = utils.downscale_mat(img, max_dim)
-                img_bytes = utils.mat2bytes(img, response["image_ext"])
-                encoded_image = base64.b64encode(img_bytes)
-                response["image_data"] = encoded_image.decode('utf-8')
+            # if response["image_ext"] == ".jpg":
+            #     img = cv2.imread(response["image_path"])
+            #     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            #     if max_dim is not None:
+            #         img = utils.downscale_mat(img, max_dim)
+            #     img_bytes = utils.mat2bytes(img, response["image_ext"])
+            #     encoded_image = base64.b64encode(img_bytes)
+            #     response["image_data"] = encoded_image.decode('utf-8')
             code = 200
 
         if code == 200:
@@ -356,10 +353,6 @@ class Image(Resource):
 class ImageAnnotationList(Resource):
     @api.response(200, "OK", bulk_annotations)
     @api.response(500, "Unexpected Failure", api.models["generic_response"])
-    @api.param(
-        'max-dim',
-        description='A value indicating the maximum dimension acceptable for a returned image.',
-        type='integer')
     def get(self, iid):
         """
         Gets all the annotations associated with an image.
@@ -367,11 +360,6 @@ class ImageAnnotationList(Resource):
 
         query = "SELECT annotation_id, annotation_name, mask_path, info_path, class_name FROM instance_seg_meta "
         query += "WHERE image_id = %s"
-
-        try:
-            max_dim = int(request.args.get('max-dim'))
-        except (ValueError, TypeError):
-            max_dim = None
 
         try:
             result = db.query(query, (iid,))[0]
@@ -397,15 +385,6 @@ class ImageAnnotationList(Resource):
             response = []
             for row in result:
                 info = utils.load_info(row["info_path"])
-                mat = cv2.imread(row["mask_path"])
-                mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
-                if max_dim is not None:
-                    mat = utils.downscale_mat(mat, max_dim)
-                    info = utils.resize_info(info, mat.shape)
-                mask = utils.mat2mask(mat)
-
-                row["mask_data"] = utils.encode_mask(mask)
-
                 row["shape"] = info["source_shape"]
                 row["bbox"] = info["bbox"]
 

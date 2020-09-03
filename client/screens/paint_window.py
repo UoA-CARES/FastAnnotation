@@ -162,6 +162,7 @@ class PaintWindow(Widget):
     def _refresh(self):
         t0 = time.time()
         # Stack Operation
+
         stack = self._layer_manager.get_stack()
         t1 = time.time()
 
@@ -619,6 +620,9 @@ class BoxManager:
     def draw_boxes(self, image):
         bounds = self._box_table.get_row(BOUNDS_KEY)
         visible = self._box_table.get_row(VISIBLE_KEY)
+        if bounds.size <= 0:
+            return
+
         draw_boxes(image, bounds, visible, self.box_color, self.box_thickness)
 
         if self._selected_box is None:
