@@ -5,9 +5,9 @@ import base64
 import io
 import json
 import os
+import zipfile
 from tkinter import filedialog
 from urllib.request import urlretrieve
-
 import cv2
 import numpy as np
 import requests
@@ -19,6 +19,7 @@ from numba import njit, vectorize, uint8, prange
 
 from client.client_config import ClientConfig
 from definitions import ROOT_DIR
+
 
 class DynamicTable:
     def __init__(self, initial_capacity=10, growth_amount=10):
@@ -203,20 +204,77 @@ def update_image_meta_by_id(image_id, name=None, lock=None, labeled=None):
     return requests.put(url, headers=headers, data=payload)
 
 
-def get_image_by_id(image_id, max_dim=None):
+def get_image_by_id(image_id):
     url = ClientConfig.SERVER_URL + "images/" + str(image_id)
-    if isinstance(max_dim, int):
-        url += "?max-dim=%d" % max_dim
     headers = {"Accept": "application/json"}
 
     return requests.get(url, headers=headers)
 
 
-def get_images_by_ids(image_ids, image_data=False, max_dim=None):
+def download_image(image_id):
+    url = ClientConfig.SERVER_URL + "files/image/" + str(image_id)
+
+    resp = requests.get(url)
+    if resp.status_code == 404:
+        raise ApiException(
+            "Image does not exist with id %d." %
+            image_id, resp.status_code)
+    elif resp.status_code != 200:
+        raise ApiException(
+            "Failed to retrieve image with id %d." %
+            image_id, resp.status_code)
+
+    nparr = np.frombuffer(resp.content, np.uint8)
+    mat = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
+    return mat
+
+
+def download_annotations(image_id):
+    url = ClientConfig.SERVER_URL + "files/image/" + str(image_id) + "/annotations"
+
+    resp = requests.get(url)
+    if resp.status_code == 404:
+        raise ApiException(
+            "Image does not exist with id %d." %
+            image_id, resp.status_code)
+    elif resp.status_code != 200:
+        raise ApiException(
+            "Failed to retrieve image with id %d." %
+            image_id, resp.status_code)
+
+    z = zipfile.ZipFile(io.BytesIO(resp.content))
+
+    output = {}
+    for filename in z.namelist():
+        annotation_id, _ = os.path.splitext(filename)
+        nparr = np.frombuffer(z.read(filename), np.uint8)
+        mat = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        mat = cv2.cvtColor(mat, cv2.COLOR_BGR2RGB)
+        output[int(annotation_id)] = mat
+    return output
+
+
+def download_annotation(annotation_id):
+    url = ClientConfig.SERVER_URL + "files/annotation/" + str(annotation_id)
+    resp = requests.get(url)
+    if resp.status_code == 404:
+        raise ApiException(
+            "Annotation does not exist with id %d." %
+            annotation_id, resp.status_code)
+    elif resp.status_code != 200:
+        raise ApiException(
+            "Failed to retrieve annotation with id %d." %
+            annotation_id, resp.status_code)
+
+    nparr = np.frombuffer(resp.content, np.uint8)
+    mat = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    mat = cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY)
+    return mat
+
+
+def get_images_by_ids(image_ids):
     url = ClientConfig.SERVER_URL + "images"
-    url += "?image-data=%s" % str(image_data)
-    if isinstance(max_dim, int):
-        url += "&max-dim=%d" % max_dim
     headers = {"Accept": "application/json",
                "Content-Type": "application/json"}
     body = {"ids": image_ids}
@@ -243,6 +301,30 @@ def add_image_annotation(image_id, annotations):
     payload = json.dumps(payload)
 
     return requests.post(url, headers=headers, data=payload)
+
+
+import zipfile
+def upload_annotations(image_id, annotations, ext='.png'):
+    url = ClientConfig.SERVER_URL + "files/image/" + str(image_id) + "/annotations"
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, mode='w') as z:
+        for annotation in annotations.values():
+            img_bytes = mat2bytes(annotation.mat, ext)
+            z.writestr(annotation.annotation_name + ext, img_bytes)
+    data.seek(0)
+
+    payload = {"image_id": image_id, "annotations": []}
+    for annotation in annotations.values():
+        body = {
+            'name': annotation.annotation_name,
+            'bbox': np.array(annotation.bbox).tolist(),
+            'class_name': annotation.class_name,
+            'shape': annotation.mat.shape}
+        payload["annotations"].append(body)
+
+    payload = json.dumps(payload).encode('utf-8')
+
+    return requests.post(url, files={'file': data, 'info': payload})
 
 
 def delete_image_annotation(image_id, on_success=None, on_fail=None):
@@ -398,7 +480,7 @@ def collapse_bg(stack, bounds, visible, idx):
 def collapse_top(stack, bounds, visible, idx, bg):
     stack_idx = idx + 1
     if idx < 0 or not visible[stack_idx]:
-        return bg
+        return bg.copy()
     else:
         top = stack[stack_idx]
         top_bounds = bounds[idx]

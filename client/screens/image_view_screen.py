@@ -49,7 +49,14 @@ class ImageViewScreen(Screen):
         result = resp.json()
         resp = utils.get_images_by_ids(result["ids"], image_data=True, max_dim=ClientConfig.TILE_MAX_DIM)
         result = resp.json()
-        for row in result["images"]:
+
+        for iid in result["ids"]:
+            resp = utils.download_image(iid)
+            if resp.status_code != 200:
+                raise ApiException(
+                    "Failed to load image with id %d from server." % iid,
+                    resp.status_code)
+
             img = utils.decode_image(row["image_data"])
             self.add_thumbnail(img)
 
