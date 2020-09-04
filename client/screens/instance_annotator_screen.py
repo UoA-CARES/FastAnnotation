@@ -1,5 +1,3 @@
-size_hint_y: None
-height: 50
 import time
 from threading import Lock
 
