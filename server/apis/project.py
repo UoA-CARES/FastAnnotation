@@ -1,11 +1,12 @@
 import base64
 import os
 from pathlib import Path
+from shutil import copyfile, rmtree, make_archive
 
 import cv2
 import numpy as np
-from flask import request
-from flask_restplus import Namespace, Resource, fields
+from flask import request, Response
+from flask_restplus import Namespace, Resource, fields, marshal
 from mysql.connector.errors import DatabaseError
 
 from server.core.common_dtos import common_store
@@ -266,6 +267,7 @@ class ProjectImageList(Resource):
                     row["image_data"]),
                 np.uint8)
             img = cv2.imdecode(array, cv2.IMREAD_COLOR)
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
             img_dir = os.path.join(
                 ServerConfig.DATA_ROOT_DIR,
                 "images",
@@ -369,3 +371,105 @@ class ProjectImageList(Resource):
             code = 200
 
         return response, code
+
+
+@api.doc(params={"pid": "An id associated with a project."})
+@api.route("/<int:pid>/dataset")
+class ProjectDataset(Resource):
+    def get(self, pid):
+        q_labelled_images = "SELECT image_id FROM fadb.image "
+        q_labelled_images += "WHERE project_fid = %s"
+        q_labelled_images += " and is_labeled = " + str(True)
+
+        q_images = "SELECT image_id, image_path, image_name, image_ext FROM image "
+        q_images += "WHERE image_id IN ("
+        q_images += q_labelled_images
+        q_images += ")"
+
+        q_annotations = "SELECT image_id, annotation_id, annotation_name, mask_path, info_path FROM instance_seg_meta "
+        q_annotations += "WHERE image_id IN ("
+        q_annotations += q_labelled_images
+        q_annotations += ")"
+
+        root_path = os.path.join(ServerConfig.DATA_ROOT_DIR, "export", str(pid))
+        rmtree(root_path, ignore_errors=True)
+
+        jpgs_folder = os.path.join(
+            ServerConfig.DATA_ROOT_DIR,
+            "export",
+            str(pid),
+            "jpgs")
+        mask_folder = os.path.join(
+            ServerConfig.DATA_ROOT_DIR,
+            "export",
+            str(pid),
+            "trimaps")
+        info_folder = os.path.join(
+            ServerConfig.DATA_ROOT_DIR,
+            "export",
+            str(pid),
+            "xmls")
+
+        Path(jpgs_folder).mkdir(parents=True, exist_ok=True)
+        Path(mask_folder).mkdir(parents=True, exist_ok=True)
+        Path(info_folder).mkdir(parents=True, exist_ok=True)
+
+        try:
+            images, _ = db.query(q_images, (pid,))
+            annotations, _ = db.query(q_annotations, (pid,))
+
+            image_dict = {}
+            annotation_count = {}
+
+            for row in images:
+                image_dict[row["image_id"]] = row["image_name"]
+                annotation_count[row["image_name"]] = 0
+                new_path = os.path.join(
+                    jpgs_folder, row["image_name"] + row["image_ext"])
+                copyfile(row["image_path"], new_path)
+
+            for row in annotations:
+                image_name = image_dict[row["image_id"]]
+                annotation_count[image_name] += 1
+                count = annotation_count[image_name]
+
+                new_mask_path = os.path.join(
+                    mask_folder, "%s_%04d%s" %
+                    (image_name, count, ServerConfig.DEFAULT_MASK_EXT))
+                new_info_path = os.path.join(
+                    info_folder, "%s_%04d%s" %
+                    (image_name, count, ServerConfig.DEFAULT_INFO_EXT))
+
+                copyfile(row["mask_path"], new_mask_path)
+                copyfile(row["info_path"], new_info_path)
+
+            # Make Zip File
+            make_archive(root_path, 'zip', root_path)
+            zipname = root_path + ".zip"
+            with open(zipname, 'rb') as f:
+                data = f.readlines()
+            os.remove(zipname)
+            return Response(data, headers={
+                'Content-Type': 'application/zip',
+                'Content-Disposition': 'attachment; filename=%s.zip;' % str(pid)
+            })
+
+        except DatabaseError as e:
+            response = {
+                "action": "failed",
+                "error": {
+                    "code": 500,
+                    "message": e.msg
+                }
+            }
+            code = 500
+        except BaseException as e:
+            response = {
+                "action": "failed",
+                "error": {
+                    "code": 500,
+                    "message": str(e)
+                }
+            }
+            code = 500
+        return marshal(response, api.models['generic_response']), code

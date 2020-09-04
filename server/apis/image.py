@@ -1,5 +1,7 @@
 import base64
 import os
+import cv2
+import numpy as np
 
 from flask import request
 from flask_restplus import Namespace, Resource, fields, marshal
@@ -87,20 +89,21 @@ bulk_annotations = api.model('bulk_annotations', {
     'annotations': fields.List(fields.Nested(annotation))
 })
 
-bulk_image_request = api.model('bulk_image_request', {'ids': fields.List(
-    fields.Integer, required=True, description="The list of image ids to retrieve")})
-
 
 @api.route("")
 class ImageList(Resource):
     @api.response(200, "OK", bulk_images)
     @api.response(400, "Invalid Payload")
     @api.response(500, "Unexpected Failure", api.models["generic_response"])
-    @api.expect(bulk_image_request)
+    @api.expect(api.models["bulk_id_request"])
     @api.param(
         'image-data',
         description='A flag indicating whether image data is required',
         type='boolean')
+    @api.param(
+        'max-dim',
+        description='A value indicating the maximum dimension acceptable for a returned image.',
+        type='integer')
     def get(self):
         """
         A bulk operation for retrieving images by id.
@@ -112,6 +115,11 @@ class ImageList(Resource):
             image_data_flag = True
         else:
             image_data_flag = image_data_flag.lower() == "true"
+
+        try:
+            max_dim = int(request.args.get('max-dim'))
+        except (ValueError, TypeError):
+            max_dim = None
 
         query = "SELECT image_id, image_path, image_name, image_ext, is_locked, is_labeled FROM image "
         query += "WHERE image_id IN "
@@ -143,9 +151,13 @@ class ImageList(Resource):
                 if not image_data_flag:
                     pass
                 elif row["image_ext"].lower() in (".jpg", ".jpeg", ".png"):
-                    with open(row["image_path"], "rb") as img_file:
-                        encoded_image = base64.b64encode(img_file.read())
-                        row["image_data"] = encoded_image.decode('utf-8')
+                    img = cv2.imread(row["image_path"])
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    if max_dim is not None:
+                        img = utils.downscale_mat(img, max_dim)
+                    img_bytes = utils.mat2bytes(img, row["image_ext"])
+                    encoded_image = base64.b64encode(img_bytes)
+                    row["image_data"] = encoded_image.decode('utf-8')
                 images.append(row)
             response = {"images": images}
             code = 200
@@ -162,12 +174,21 @@ class Image(Resource):
     @api.response(200, "OK", image)
     @api.response(404, "Resource Not Found", api.models["generic_response"])
     @api.response(500, "Unexpected Failure", api.models["generic_response"])
+    @api.param(
+        'max-dim',
+        description='A value indicating the maximum dimension acceptable for a returned image.',
+        type='integer')
     def get(self, iid):
         """
         Gets an image as referenced by its identifier.
         """
         query = "SELECT image_id, image_path, image_name, image_ext, is_locked, is_labeled FROM image "
         query += "WHERE image_id = %s"
+
+        try:
+            max_dim = int(request.args.get('max-dim'))
+        except (ValueError, TypeError):
+            max_dim = None
 
         try:
             result = db.query(query, (iid,))[0]
@@ -201,10 +222,14 @@ class Image(Resource):
             }
             code = 500
         else:
-            if response["image_ext"] == ".jpg":
-                with open(response["image_path"], "rb") as img_file:
-                    encoded_image = base64.b64encode(img_file.read())
-                    response["image_data"] = encoded_image.decode('utf-8')
+            # if response["image_ext"] == ".jpg":
+            #     img = cv2.imread(response["image_path"])
+            #     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            #     if max_dim is not None:
+            #         img = utils.downscale_mat(img, max_dim)
+            #     img_bytes = utils.mat2bytes(img, response["image_ext"])
+            #     encoded_image = base64.b64encode(img_bytes)
+            #     response["image_data"] = encoded_image.decode('utf-8')
             code = 200
 
         if code == 200:
@@ -226,20 +251,20 @@ class Image(Resource):
         #TODO: Update to raise 409 when lock is requested on already locked object
 
         content = request.json
-
-        query = "UPDATE image SET"
+        query_params = []
         params = []
+
         if "name" in content:
-            query += " image_name = %s"
+            query_params.append("image_name = %s")
             params.append(content["name"])
         if "ext" in content:
-            query += " image_ext = %s"
+            query_params.append("image_ext = %s")
             params.append(content["ext"])
         if "is_locked" in content:
-            query += " is_locked = %s"
+            query_params.append("is_locked = %s")
             params.append(content["is_locked"])
         if "is_labeled" in content:
-            query += " is_labeled = %s"
+            query_params.append("is_labeled = %s")
             params.append(content["is_labeled"])
 
         if not params:
@@ -252,7 +277,7 @@ class Image(Resource):
             }
             return response, 400
 
-        query += " WHERE image_id = %s"
+        query = "UPDATE image SET {0} WHERE image_id = %s".format(", ".join(query_params))
         params.append(iid)
         try:
             db.query(query, tuple(params))
@@ -335,6 +360,7 @@ class ImageAnnotationList(Resource):
 
         query = "SELECT annotation_id, annotation_name, mask_path, info_path, class_name FROM instance_seg_meta "
         query += "WHERE image_id = %s"
+
         try:
             result = db.query(query, (iid,))[0]
         except DatabaseError as e:
@@ -358,10 +384,7 @@ class ImageAnnotationList(Resource):
         else:
             response = []
             for row in result:
-                mask = utils.load_mask(row["mask_path"])
                 info = utils.load_info(row["info_path"])
-                row["mask_data"] = utils.encode_mask(mask)
-
                 row["shape"] = info["source_shape"]
                 row["bbox"] = info["bbox"]
 
@@ -388,8 +411,14 @@ class ImageAnnotationList(Resource):
 
         content = request.json
 
+        q_get_image = "SELECT image_path FROM image "
+        q_get_image += "WHERE image_id = %s"
         query = "DELETE FROM instance_seg_meta WHERE image_id = %s"
+
+        orig_shape = None
         try:
+            image, _ = db.query(q_get_image, (iid,))
+            orig_shape = cv2.imread(image[0]["image_path"]).shape
             db.query(query, (iid,))
         except BaseException:
             pass
@@ -422,12 +451,14 @@ class ImageAnnotationList(Resource):
                 _, aid = db.query(
                     query, (row['name'], iid, mask_path, info_path, row["class_name"]))
 
-                utils.save_mask(mask, mask_path)
+                resize_shape = None if np.all(np.array(orig_shape) == row["shape"]) else orig_shape
+                utils.save_mask(mask, mask_path, resize_shape=resize_shape)
                 utils.save_info(
                     shape=row["shape"],
                     bbox=row["bbox"],
                     class_name=row["class_name"],
-                    filepath=info_path)
+                    filepath=info_path,
+                    resize_shape=resize_shape)
                 i += 1
             except DatabaseError as e:
                 response = {

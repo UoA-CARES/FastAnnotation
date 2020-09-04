@@ -34,6 +34,8 @@ class ProjectToolScreen(Screen):
                     image_paths.append(root + '/' + f)
         self._upload_images(self.app.current_project_id, image_paths)
 
+        self._upload_images(self.app.current_project_id, image_paths)
+
     @background
     def _upload_images(self, pid, image_paths):
         resp = utils.add_project_images(pid, image_paths)

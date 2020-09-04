@@ -1,37 +1,62 @@
 import os
+import configparser
 
 from database.database import Database
 from definitions import ROOT_DIR
 
 
 class ServerConfig:
-    DATABASE_HOST = "127.0.0.1"
-    DATABASE_USER = "root"
-    DATABASE_PASSWORD = "root"
-    DATABASE_NAME = "fadb"
-    DATABASE_POOL_SIZE = 3
+    CONFIG_FILE_SECTION = "SERVER"
+
+    SERVER_PORT = "5001"
+    SERVER_DEBUG = True
+    SERVER_PUBLIC = True
+
+    DATABASE_HOST = "localhost"
+    DATABASE_USER = ""
+    DATABASE_PASSWORD = ""
+    DATABASE_NAME = ""
     DATABASE_TIMEZONE = '+00:00'
+    DATABASE_POOL_SIZE = 3
 
-    DATA_ROOT_DIR = os.path.join(ROOT_DIR, "database", "DATA")
-    XML_TEMPLATE_PATH = os.path.join(ROOT_DIR, "server", "template.xml")
-    DEFAULT_IMAGE_EXT = ".jpg"
+    # Set in config.ini
+    DATA_ROOT_DIR = ""
+    XML_TEMPLATE_PATH = os.path.join(ROOT_DIR, "server", "data", "template.xml")
+    DEFAULT_IMAGE_EXT = ".png"
+    DEFAULT_MASK_EXT = ".png"
+    DEFAULT_INFO_EXT = ".xml"
 
-    # Used to white list filter combinations for Project Images
-    IMAGE_FILTER_MAP = {
-        "locked": {
-            True: "is_locked = 1",
-            False: "is_locked = 0"
-        },
-        "labelled": {
-            True: "is_labeled = 1",
-            False: "is_labeled = 0"
-        }
-    }
+    @classmethod
+    def load_config(cls, path):
+        def get_best_type(section, key):
+            output = section.get(key)
+            try:
+                output = section.getboolean(key)
+            except ValueError:
+                pass
 
-    IMAGE_ORDER_BY_MAP = {
-        "name": "image_name",
-        "id": "image_id"
-    }
+            try:
+                output = section.getfloat(key)
+            except ValueError:
+                pass
+
+            try:
+                output = section.getint(key)
+            except ValueError:
+                pass
+
+            return output
+
+        config = configparser.ConfigParser()
+        config.read(path)
+        try:
+            for k in config[cls.CONFIG_FILE_SECTION]:
+                try:
+                    setattr(cls, k.upper(), get_best_type(config[cls.CONFIG_FILE_SECTION], k))
+                except AttributeError:
+                    continue
+        except KeyError:
+            pass
 
 
 class DatabaseInstance:

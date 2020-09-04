@@ -16,6 +16,9 @@
                     title: app.current_project_name
                     with_previous: True
                     on_release: app.show_project_tools(app.current_project_name, app.current_project_id)
+                ActionButton:
+                    text: "Export"
+                    on_release: app.root.current_screen.export()
         BoxLayout:
             orientation: "horizontal"
             LeftControlColumn:
@@ -199,17 +202,16 @@
             text: "X"
             on_release: root.layer_delete_cb()
 
+<Painter>:
+
 <ImageCanvas>:
+    painter: painter
     image_id: self.image_id
     pen_size: self.pen_size
     alpha: self.alpha
     current_class: self.current_class
-    current_layer: self.current_layer
 
     scatter: scatter
-    image: image
-    layer_stack: layer_stack
-    draw_tool: draw_tool
     scroll_view: scroll_view
     canvas:
         Color:
@@ -220,60 +222,21 @@
     Scatter:
         id: scatter
         pos: (0,0)
+        size_hint: (None, None)
         ScrollView:
+            id: scroll_view
             scroll_type: ['bars', 'content']
             scroll_timeout: 5
             bar_width: '10dp'
-            id: scroll_view
             width: root.width / root.scatter.scale
             height: root.height / root.scatter.scale
             on_size: print("ScrollView Size: %s" % str(self.size))
             on_pos: print("ScrollView Pos: %s" % str(self.pos))
-            RelativeLayout:
+            Painter:
+                id: painter
                 pos: (0,0)
-                size: root.image.size
                 size_hint:(None, None)
-                Image:
-                    id: image
-                    keep_ratio: True
-                    pos: (0,0)
-                DrawTool:
-                    id: draw_tool
-                    pos: (0,0)
-                LayerStack:
-                    id: layer_stack
-                    pos: (0,0)
 
-
-<LayerStack>:
-    layer_list: self.layer_list
-    current_layer: self.current_layer
-
-<DrawTool>
-    layer: self.layer
-    pen_size: self.pen_size
-    layer_color: self.layer_color
-
-<DrawableLayer>:
-    paint_window: paint_window
-    mask_color: self.mask_color
-
-    bbox_layer: bbox_layer
-    bbox_color: self.bbox_color
-    bbox_thickness: self.bbox_thickness
-    bbox_bounds: self.bbox_bounds
-
-    PaintWindow:
-        id: paint_window
-        size: root.size
-    Widget:
-        id: bbox_layer
-        canvas:
-            Color:
-                rgba: root.bbox_color
-            Line:
-                width: root.bbox_thickness
-                rectangle: root.bbox_bounds
 
 
 <RightControlColumn>:
@@ -295,25 +258,32 @@
 
 <ImageQueueControl>:
     btn_save: btn_save
+    btn_label: btn_label
     cols: 1
     padding: 16
     spacing: 16
     Button:
         text: "Next"
         size_hint_y: None
-        height: 50
+        height: 40
         on_release: app.root.current_screen.load_next()
     Button:
         id: btn_save
         text: "Save"
         size_hint_y: None
-        height: 50
+        height: 40
         disabled: True
         on_release: app.root.current_screen.save_image()
+    ToggleButton:
+        id: btn_label
+        text: "Label" if self.state == "normal" else "Unlabel"
+        size_hint_y: None
+        height: 40
+        on_release: app.root.current_screen.label_image(self.state == "down")
     Button:
         text: "Refresh"
         size_hint_y: None
-        height: 50
+        height: 40
         on_release: app.root.current_screen.fetch_image_metas()
 
 <ImageQueue>:

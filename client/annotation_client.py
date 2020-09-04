@@ -1,6 +1,7 @@
 import os
 import sys
 import traceback
+import pathlib
 from concurrent.futures import ThreadPoolExecutor
 
 from kivy.app import App
@@ -16,7 +17,9 @@ from client.screens.image_view_screen import ImageViewScreen
 from client.screens.instance_annotator_screen import InstanceAnnotatorScreen
 from client.screens.project_select_screen import ProjectSelectScreen
 from client.screens.project_tool_screen import ProjectToolScreen
+
 from client.utils import ApiException
+
 
 Config.set('input', 'mouse', 'mouse,disable_multitouch')
 
@@ -94,7 +97,9 @@ def resourcePath():
 
 
 if __name__ == "__main__":
-    resource_add_path(resourcePath())  # add this line
+    resource_add_path(resourcePath())
+    CONFIG_PATH = os.path.join(pathlib.Path(sys.argv[0]).parent.absolute(), 'config.ini')
+    ClientConfig.load_config(CONFIG_PATH)
     app = AnnotationClientApp()
     try:
         app.run()

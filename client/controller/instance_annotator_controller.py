@@ -1,8 +1,11 @@
+import cv2
 import numpy as np
+import time
 
 import client.utils as utils
 from client.model.instance_annotator_model import ImageState, AnnotationState, LabelState
-from client.utils import ApiException
+from client.model.instance_annotator_model import LabelCache
+from client.utils import ApiException, ClientConfig
 
 
 class InstanceAnnotatorController:
@@ -25,7 +28,7 @@ class InstanceAnnotatorController:
 
         result = resp.json()
 
-        resp = utils.get_image_metas_by_ids(result["ids"])
+        resp = utils.get_images_by_ids(result["ids"])
         if resp.status_code != 200:
             raise ApiException(
                 "Failed to retrieve image meta information.",
@@ -49,63 +52,70 @@ class InstanceAnnotatorController:
         :return:
         """
 
-        image_model = self.model.images.get(image_id)
-        if not image_model:
-            image_model = ImageState()
+        with self.model.images.get(image_id) as image_model:
+            if not image_model:
+                image_model = ImageState()
 
-        resp = utils.update_image_meta_by_id(image_id, lock=True)
-        if resp.status_code != 200:
-            raise ApiException(
-                "Failed to lock image with id %d" %
-                image_id, resp.status_code)
+            resp = utils.update_image_meta_by_id(image_id, lock=True)
+            if resp.status_code != 200:
+                raise ApiException(
+                    "Failed to lock image with id %d" %
+                    image_id, resp.status_code)
 
-        resp = utils.get_image_by_id(image_id)
-        if resp.status_code == 404:
-            raise ApiException(
-                "Image does not exist with id %d." %
-                image_id, resp.status_code)
-        elif resp.status_code != 200:
-            raise ApiException(
-                "Failed to retrieve image with id %d." %
-                image_id, resp.status_code)
+            resp = utils.get_image_by_id(image_id)
+            if resp.status_code == 404:
+                raise ApiException(
+                    "Image does not exist with id %d." %
+                    image_id, resp.status_code)
+            elif resp.status_code != 200:
+                raise ApiException(
+                    "Failed to retrieve image with id %d." %
+                    image_id, resp.status_code)
 
-        result = resp.json()
-        img_bytes = utils.decode_image(result["image_data"])
-        image_model.id = result["id"]
-        image_model.name = result["name"]
-        image_model.is_locked = result["is_locked"]
-        image_model.image = utils.bytes2mat(img_bytes)
-        image_model.shape = image_model.image.shape
+            result = resp.json()
 
-        resp = utils.get_image_annotation(image_id)
-        if resp.status_code != 200:
-            raise ApiException(
-                "Failed to retrieve annotations for the image with id %d." %
-                image_id, resp.status_code)
+            image_model.id = result["id"]
+            image_model.name = result["name"]
+            image_model.is_locked = result["is_locked"]
 
-        result = resp.json()
-        annotations = {}
-        i = 0
-        for row in result["annotations"]:
-            # TODO: Add actual annotation names to database
-            annotation_name = row["name"]
-            class_name = row["class_name"]
-            mask = utils.decode_mask(row["mask_data"], row["shape"][:2])
+            image_model.image = utils.download_image(image_id)
+            image_model.shape = image_model.image.shape
 
-            bbox = row["bbox"]
-            print("CLIENT: incoming bbox")
-            print("\t%s" % str(bbox))
+            resp = utils.get_image_annotation(image_id)
+            if resp.status_code != 200:
+                raise ApiException(
+                    "Failed to retrieve annotations for the image with id %d." %
+                    image_id, resp.status_code)
 
-            annotations[annotation_name] = AnnotationState(
-                annotation_name=annotation_name,
-                class_name=class_name,
-                mat=utils.mask2mat(mask),
-                bbox=bbox)
+            result = resp.json()
+            annotations = {}
+            i = 0
+            try:
+                mask_dict = utils.download_annotations(image_id)
+            except ApiException:
+                pass
+            else:
+                for row in result["annotations"]:
+                    # TODO: Add actual annotation names to database
+                    annotation_name = row["name"]
+                    class_name = row["class_name"]
+                    mat = mask_dict.get(row["id"], None)
+                    if mat is None:
+                        raise ApiException("Failed to download annotation with id %d." % row["id"], resp.status_code)
 
-            i += 1
+                    bbox = row["bbox"]
+                    print("CLIENT: incoming bbox")
+                    print("\t%s" % str(bbox))
 
-        image_model.annotations = annotations
-        self.model.images.add(image_id, image_model)
+                    annotations[annotation_name] = AnnotationState(
+                        annotation_name=annotation_name,
+                        class_name=class_name,
+                        mat=mat,
+                        bbox=bbox)
+
+                    i += 1
+            image_model.annotations = annotations
+            self.model.images.add(image_id, image_model)
 
     def fetch_class_labels(self, project_id):
         """
@@ -115,15 +125,16 @@ class InstanceAnnotatorController:
         """
         print("Fetching Class Labels")
 
-        # TODO: These arent stored in the database yet
+        # TODO: These labels are project specific and should be editable by the user and stored in the database.
 
         data = [
-            LabelState("Trunk", [120, 80, 0, 255]),
-            LabelState("Cane", [150, 250, 0, 255]),
-            LabelState("Shoot", [0, 130, 200, 255]),
+            LabelState(LabelCache.BG_CLASS, [0, 0, 0, 255]),
+            LabelState("Trunk", [120, 80, 1, 255]),
+            LabelState("Cane", [150, 250, 1, 255]),
+            LabelState("Shoot", [1, 130, 200, 255]),
             LabelState("Node", [255, 100, 190, 255]),
-            LabelState("Wire", [255, 128, 0, 255]),
-            LabelState("Post", [128, 128, 0, 255])
+            LabelState("Wire", [255, 128, 1, 255]),
+            LabelState("Post", [128, 128, 1, 255])
         ]
 
         for label in data:
@@ -136,10 +147,9 @@ class InstanceAnnotatorController:
         :return:
         """
 
-        image_model = self.model.images.get(image_id)
-
-        if image_model is None or image_model.image is None:
-            self.fetch_image(image_id)
+        with self.model.images.get(image_id) as image_model:
+            if image_model is None or image_model.image is None:
+                self.fetch_image(image_id)  # MEM: 9.0 -> 10.7 (+1.7GB)
 
         if not self.model.images.contains(image_id):
             return
@@ -160,82 +170,82 @@ class InstanceAnnotatorController:
         """
 
         iid = image_canvas.image_id
-        image_model = self.model.images.get(iid)
+        with self.model.images.get(iid) as image_model:
+            if image_model is None:
+                raise ValueError(
+                    "Image Canvas points to image id %d, which is not valid." %
+                    iid)
 
-        if image_model is None:
-            raise ValueError(
-                "Image Canvas points to image id %d, which is not valid." %
-                iid)
+            # Build annotations
+            annotations = {}
+            i = 0
+            pw = image_canvas.painter.paint_window
+            for name in pw.get_all_names():
+                if not name:
+                    continue
+                box = pw.get_bound(name)
+                mat = pw.get_mask(name).copy()
+                color = pw.get_color(name)
+                class_name = self.model.labels.get_class_name(color)
+                if class_name is None:
+                    class_name = self.model.labels.get_default_name()
+                annotation = AnnotationState(annotation_name=name,
+                                             class_name=class_name,
+                                             mat=mat,
+                                             bbox=box)
+                annotations[name] = annotation
+                print("CLIENT: outgoing bbox")
+                print("\t%s" % str(box))
 
-        # Build annotations
-        annotations = {}
-        i = 0
-        for layer in image_canvas.layer_stack.get_all_layers():
-            annotation_name = layer.layer_name
-            mask = layer.mask
+            image_model.annotations = annotations
 
-            print("CLIENT: outgoing bbox")
-            print("\t%s" % str(layer.bbox_bounds))
+            resp = utils.upload_annotations(iid, image_model.annotations)
+            if resp.status_code != 201:
+                msg = "Failed to save annotations to the image with id %d." % iid
+                raise ApiException(message=msg, code=resp.status_code)
 
-            annotation = AnnotationState(annotation_name=annotation_name,
-                                         class_name=layer.class_name,
-                                         mat=utils.mask2mat(mask),
-                                         bbox=layer.bbox_bounds)
-            annotations[annotation_name] = annotation
-            i += 1
+            resp = utils.update_image_meta_by_id(iid, lock=False, labeled=image_model.is_labeled)
+            if resp.status_code != 200:
+                msg = "Failed to unlock the image with id %d." % iid
+                raise ApiException(message=msg, code=resp.status_code)
 
-        image_model.annotations = annotations
-
-        resp = utils.add_image_annotation(iid, image_model.annotations)
-        if resp.status_code == 200:
-            result = resp.json()
-            errors = []
-            for row in result["results"]:
-                errors.append(row["error"]["message"])
-            errors = '\n'.join(errors)
-            msg = "The following errors occurred while saving annotations to the image with id %d:\n" % iid
-            msg += errors
-            raise ApiException(message=msg, code=resp.status_code)
-        elif resp.status_code != 201:
-            msg = "Failed to save annotations to the image with id %d." % iid
-            raise ApiException(message=msg, code=resp.status_code)
-
-        resp = utils.update_image_meta_by_id(iid, lock=False)
-        if resp.status_code != 200:
-            msg = "Failed to unlock the image with id %d." % iid
-            raise ApiException(message=msg, code=resp.status_code)
-
-        image_model.is_locked = False
-        image_model.unsaved = False
-
-        self.model.images.add(iid, image_model)
+            self.model.images.add(iid, image_model)
+            self.update_image_meta(iid, unsaved=False, is_locked=False)
 
     def update_tool_state(self,
                           pen_size=None,
                           alpha=None,
-                          eraser=None,
                           current_iid=None,
-                          current_label=None,
-                          current_layer=None):
+                          current_label='',
+                          current_layer=''):
         if pen_size is not None:
             self.model.tool.set_pen_size(pen_size)
         if alpha is not None:
             self.model.tool.set_alpha(alpha)
-        if eraser is not None:
-            self.model.tool.set_eraser(eraser)
         if current_iid is not None:
             self.model.tool.set_current_image_id(current_iid)
-        if current_layer is not None:
+        if current_layer != '':
             self.model.tool.set_current_layer_name(current_layer)
             # If current layer changes update current_label aswell
             iid = self.model.tool.get_current_image_id()
-            img = self.model.images.get(iid)
-            if img is not None:
-                annotation = img.annotations.get(current_layer, None)
-                if annotation is not None:
-                    self.model.tool.set_current_label_name(annotation.class_name)
-        if current_label is not None:
+            with self.model.images.get(iid) as img:
+                if img is not None and img.annotations is not None:
+                    annotation = img.annotations.get(current_layer, None)
+                    if annotation is not None:
+                        self.model.tool.set_current_label_name(
+                            annotation.class_name)
+        if current_label != '':
             self.model.tool.set_current_label_name(current_label)
+
+    def load_annotations(self, iid=None, annotations=None):
+        if iid is None:
+            iid = self.model.tool.get_current_image_id()
+
+        with self.model.images.get(iid) as image:
+            if image is None or image.annotations is None:
+                return
+            image.annotations = annotations
+            self.model.images.add(iid, image)
 
     def update_annotation(
             self,
@@ -252,72 +262,91 @@ class InstanceAnnotatorController:
         if layer_name is None:
             layer_name = self.model.tool.get_current_layer_name()
 
-        image = self.model.images.get(iid)
-        if image is None or image.annotations is None:
-            return
+        with self.model.images.get(iid) as image:
+            if image is None or image.annotations is None:
+                return
+            annotation = image.annotations.get(layer_name, None)
+            if annotation is None:
+                return
 
-        annotation = image.annotations.get(layer_name, None)
-        if annotation is None:
-            return
+            if bbox is not None:
+                annotation.bbox = bbox
 
-        if bbox is not None:
-            annotation.bbox = bbox
+            if texture is not None:
+                annotation.mat = utils.texture2mat(texture)
 
-        if texture is not None:
-            annotation.mat = utils.texture2mat(texture)
+            if label_name is not None:
+                annotation.class_name = label_name
 
-        if label_name is not None:
-            annotation.class_name = label_name
+            if mask_enabled is not None:
+                annotation.mask_enabled = bool(mask_enabled)
 
-        if mask_enabled is not None:
-            annotation.mask_enabled = bool(mask_enabled)
+            if bbox_enabled is not None:
+                annotation.bbox_enabled = bool(bbox_enabled)
 
-        if bbox_enabled is not None:
-            annotation.bbox_enabled = bool(bbox_enabled)
-
-        image.annotations[layer_name] = annotation
-        self.model.images.add(iid, image)
+            image.annotations[layer_name] = annotation
+            self.model.images.add(iid, image)
 
     def update_image_meta(
             self,
-            iid,
+            iid=None,
             is_locked=None,
+            is_labeled=None,
             is_open=None,
             unsaved=None):
-        image = self.model.images.get(iid)
-        if image is None:
-            return
 
-        if is_locked is not None:
-            image.is_locked = is_locked
+        diff = False
 
-        if is_open is not None:
-            image.is_open = is_open
+        if iid is None:
+            iid = self.model.tool.get_current_image_id()
 
-        if unsaved is not None:
-            print("Controller: Marking as unsaved")
-            image.unsaved = unsaved
+        with self.model.images.get(iid) as image:
+            if image is None:
+                return
 
-        self.model.images.add(iid, image)
+            if is_locked is not None:
+                diff = diff or image.is_locked is not is_locked
+                image.is_locked = is_locked
+
+            if is_labeled is not None:
+                diff = diff or image.is_labeled is not is_labeled
+                image.is_labeled = is_labeled
+
+            if is_open is not None:
+                image.is_open = is_open
+
+            if unsaved is not None:
+                print("Controller: Marking as unsaved")
+                image.unsaved = unsaved
+
+            self.model.images.add(iid, image)
+
+            if diff:
+                resp = utils.update_image_meta_by_id(iid, lock=image.is_locked, labeled=image.is_labeled)
+                if resp.status_code != 200:
+                    raise ApiException(
+                        "Failed to update image with id %d" %
+                        iid, resp.status_code)
 
     def add_blank_layer(self, iid):
-        img = self.model.images.get(iid)
-        layer_name = img.get_unique_annotation_name()
-        class_name = self.model.tool.get_current_label_name()
-        mask = np.zeros(shape=img.shape, dtype=np.uint8)
-        bbox = (0, 0, 0, 0)
-        annotation = AnnotationState(layer_name, class_name, mask, bbox)
-        img.annotations[layer_name] = annotation
-        img.unsaved = True
-        self.model.images.add(iid, img)
-        self.model.tool.set_current_layer_name(layer_name)
-        print("Controller: Adding blank layer (%s)" % layer_name)
+        with self.model.images.get(iid) as img:
+            layer_name = img.get_unique_annotation_name()
+            class_name = self.model.tool.get_current_label_name()
+            mask = np.zeros(shape=img.shape, dtype=np.uint8)
+            bbox = (0, 0, 0, 0)
+            annotation = AnnotationState(layer_name, class_name, mask, bbox)
+            img.annotations[layer_name] = annotation
+            self.model.images.add(iid, img)
+            self.model.tool.set_current_layer_name(layer_name)
+            print("Controller: Adding blank layer (%s)" % layer_name)
+        self.update_image_meta(iid, unsaved=True)
 
     def delete_layer(self, iid, layer_name):
-        img = self.model.images.get(iid)
-        img.annotations.pop(layer_name, None)
-        img.unsaved = True
-        self.model.images.add(iid, img)
-        if self.model.tool.get_current_layer_name() is layer_name:
-            self.model.tool.set_current_layer_name(None)
-        print("Controller: Deleting layer (%s)" % layer_name)
+        with self.model.images.get(iid) as img:
+            img.annotations.pop(layer_name, None)
+            self.model.images.add(iid, img)
+            if self.model.tool.get_current_layer_name() is layer_name:
+                self.model.tool.set_current_layer_name(None)
+            print("Controller: Deleting layer (%s)" % layer_name)
+
+        self.update_image_meta(iid, unsaved=True)
