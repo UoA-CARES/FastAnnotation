@@ -280,9 +280,9 @@ class PaintWindow(Widget):
             name = self._layer_manager.get_selected()
         if name is None:
             return
-        layer_data = self._layer_manager.get(name)
 
         try:
+            layer_data = self._layer_manager.get(name)
             mat = layer_data[STACK_KEY]
             if np.any(color):
                 mat[np.all(mat != (0, 0, 0), axis=-1)] = color
