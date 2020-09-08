@@ -159,6 +159,7 @@ class InstanceAnnotatorController:
             print(self.model.active._list)
 
         self.model.tool.set_current_image_id(image_id)
+        self.model.tool.set_current_layer_name(None)
 
     def save_image(self, image_canvas):
         """
