@@ -226,8 +226,8 @@ class Image(Resource):
             #     img = cv2.imread(response["image_path"])
             #     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             #     if max_dim is not None:
-            #         img = utils.downscale_mat(img, max_dim)
-            #     img_bytes = utils.mat2bytes(img, response["image_ext"])
+            #         img = cython_util.downscale_mat(img, max_dim)
+            #     img_bytes = cython_util.mat2bytes(img, response["image_ext"])
             #     encoded_image = base64.b64encode(img_bytes)
             #     response["image_data"] = encoded_image.decode('utf-8')
             code = 200

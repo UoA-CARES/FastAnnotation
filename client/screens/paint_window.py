@@ -14,7 +14,8 @@ from skimage.draw import disk
 from skimage.segmentation import flood
 
 from client.client_config import ClientConfig
-from client.utils import collapse_bg, collapse_top, draw_boxes, fit_box, DynamicTable
+from client.utils import collapse_bg, collapse_top, draw_boxes, fit_box
+from core.dynamic_table import DynamicTable
 
 # Load corresponding kivy file
 Builder.load_file(
