@@ -280,6 +280,7 @@ class PaintWindow(Widget):
             name = self._layer_manager.get_selected()
         if name is None:
             return
+
         try:
             layer_data = self._layer_manager.get(name)
             mat = layer_data[STACK_KEY]
