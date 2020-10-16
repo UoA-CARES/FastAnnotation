@@ -127,15 +127,10 @@ class InstanceAnnotatorController:
 
         # TODO: These labels are project specific and should be editable by the user and stored in the database.
 
-        data = [
-            LabelState(LabelCache.BG_CLASS, [0, 0, 0, 255]),
-            LabelState("Trunk", [120, 80, 1, 255]),
-            LabelState("Cane", [150, 250, 1, 255]),
-            LabelState("Shoot", [1, 130, 200, 255]),
-            LabelState("Node", [255, 100, 190, 255]),
-            LabelState("Wire", [255, 128, 1, 255]),
-            LabelState("Post", [128, 128, 1, 255])
-        ]
+        data = [LabelState(LabelCache.BG_CLASS, [0, 0, 0, 255])]
+        resp = utils.get_project_labels(project_id)
+        for label in resp.json()["labels"]:
+            data.append(LabelState(label["name"], [label["r"], label["g"], label["b"], 255]))
 
         for label in data:
             self.model.labels.add(label.name, label)

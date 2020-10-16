@@ -57,3 +57,21 @@ CREATE TABLE `instance_seg_meta` (
   CONSTRAINT `image_fid` FOREIGN KEY (`image_id`) REFERENCES `image` (`image_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=137 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+--
+-- Table structure for table `instance_seg_labels`
+--
+
+DROP TABLE IF EXISTS `instance_seg_labels`;
+CREATE TABLE `instance_seg_labels` (
+  `label_id` int NOT NULL AUTO_INCREMENT,
+  `label_name` varchar(45) NOT NULL,
+  `label_r` int unsigned DEFAULT NULL,
+  `label_g` int unsigned DEFAULT NULL,
+  `label_b` int unsigned DEFAULT NULL,
+  `project_fid` int NOT NULL,
+  PRIMARY KEY (`label_id`),
+  UNIQUE KEY `label_name_UNIQUE` (`label_name`),
+  UNIQUE KEY `label_id_UNIQUE` (`label_id`),
+  KEY `project_fid_idx` (`project_fid`),
+  CONSTRAINT `project_label_FKEY` FOREIGN KEY (`project_fid`) REFERENCES `project` (`project_id`)
+) ENGINE=InnoDB AUTO_INCREMENT=8 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

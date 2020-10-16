@@ -63,8 +63,22 @@ image_upload = api.model('image_upload', {
 })
 
 bulk_image_upload = api.model('bulk_image_upload', {
-    'images': fields.List(fields.Nested(image_upload), required=True)
+    'images': fields.List(fields.Nested(image_upload), required=True),
 })
+
+
+label = api.model('label', {
+    'name': fields.String(required=True, description='The label name'),
+    'r': fields.Integer(required=True, description="The red value of the label"),
+    'g': fields.Integer(required=True, description="The green value of the label"),
+    'b': fields.Integer(required=True, description="The blue value of the label")
+})
+
+bulk_labels = api.model('bulk_labels', {
+    'labels': fields.List(fields.Nested(label), required=True)
+})
+
+
 
 
 @api.route("")
@@ -473,3 +487,83 @@ class ProjectDataset(Resource):
             }
             code = 500
         return marshal(response, api.models['generic_response']), code
+
+
+@api.route("/<int:pid>/labels")
+class ProjectLabelList(Resource):
+    def get(self, pid):
+        q_labels = "SELECT label_name, label_r, label_g, label_b from fadb.instance_seg_labels "
+        q_labels += "WHERE project_fid = %s"
+
+        try:
+            images, _ = db.query(q_labels, (pid,))
+            labels = []
+            for row in images:
+                label = {
+                    "name": row["label_name"],
+                    "r": row["label_r"],
+                    "g": row["label_g"],
+                    "b": row["label_b"]
+                }
+                labels.append(label)
+            code = 200
+            response = {"labels": labels}
+            return marshal(response, api.models['bulk_labels']), code
+        except DatabaseError as e:
+            response = {
+                "action": "failed",
+                "error": {
+                    "code": 500,
+                    "message": e.msg
+                }
+            }
+            code = 500
+        except BaseException as e:
+            response = {
+                "action": "failed",
+                "error": {
+                    "code": 500,
+                    "message": str(e)
+                }
+            }
+            code = 500
+        return marshal(response, api.models['generic_response']), code
+
+    @api.expect(bulk_labels)
+    def post(self, pid):
+        content = request.json["labels"]
+
+        q_add_labels = "INSERT INTO instance_seg_labels (project_fid, label_name, label_r, label_g, label_b)"
+        q_add_labels += "\nVALUES "
+        q_params = []
+        for row in content:
+            q_add_labels += "(%s,%s,%s,%s,%s),"
+            q_params.extend([pid, row["name"], row["r"], row["g"], row["b"]])
+        q_add_labels = q_add_labels[:-1]
+        q_add_labels += ";"
+
+        try:
+            db.query(q_add_labels, q_params)
+            response = {
+                "action": "created"
+            }
+            code = 201
+        except DatabaseError as e:
+            response = {
+                "action": "failed",
+                "error": {
+                    "code": 500,
+                    "message": e.msg
+                }
+            }
+            code = 500
+        except BaseException as e:
+            response = {
+                "action": "failed",
+                "error": {
+                    "code": 500,
+                    "message": str(e)
+                }
+            }
+            code = 500
+        return marshal(response, api.models['generic_response'], skip_none=True), code

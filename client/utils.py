@@ -186,6 +186,12 @@ def get_project_images(project_id, filter_details=None):
     return requests.get(url, headers=headers, data=payload)
 
 
+def get_project_labels(project_id):
+    url = ClientConfig.SERVER_URL + "projects/" + str(project_id) + "/labels"
+    headers = {"Accept": "application/json"}
+    return requests.get(url, headers=headers)
+
+
 def update_image_meta_by_id(image_id, name=None, lock=None, labeled=None):
     image_meta = {}
     if name is not None:
