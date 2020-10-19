@@ -132,6 +132,7 @@ class InstanceAnnotatorController:
         for label in resp.json()["labels"]:
             data.append(LabelState(label["name"], [label["r"], label["g"], label["b"], 255]))
 
+        self.model.labels.clear()
         for label in data:
             self.model.labels.add(label.name, label)
 

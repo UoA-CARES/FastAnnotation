@@ -274,7 +274,7 @@ class ClassPicker(GridLayout):
     def load_labels(self, labels):
         deleted_labels = set(self.label_dict.keys()) - set(l.name for l in labels)
         for name in deleted_labels:
-            l = next((x for x in labels if x.name == name), None)
+            l = self.label_dict.get(name, None)
             if l is None:
                 continue
 
