@@ -28,6 +28,7 @@ class ClientConfig:
 
     BBOX_SELECT = "#ff0000"
     BBOX_UNSELECT = "#ebcf1a"
+    BBOX_THICKNESS = 1
 
     DATA_DIR = os.path.join(ROOT_DIR, 'client', 'data')
 

@@ -101,6 +101,8 @@ class PaintWindow(Widget):
             255).astype(
                 np.uint8)[
                     :3]
+
+        self.box_thickness = ClientConfig.BBOX_THICKNESS
         self.queue_refresh()
 
     def on_box_color(self, instance, value):
