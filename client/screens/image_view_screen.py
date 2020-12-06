@@ -47,7 +47,7 @@ class ImageViewScreen(Screen):
                 resp.status_code)
 
         result = resp.json()
-        resp = utils.get_images_by_ids(result["ids"], image_data=True, max_dim=ClientConfig.TILE_MAX_DIM)
+        resp = utils.get_images_by_ids(result["ids"])
         result = resp.json()
 
         for iid in result["ids"]:
